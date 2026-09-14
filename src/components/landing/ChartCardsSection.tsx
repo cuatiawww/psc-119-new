@@ -4,12 +4,6 @@ import { useEffect, useRef, useState } from 'react'
 
 type ChartInstance = { destroy: () => void }
 
-declare global {
-  interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    Chart: new (canvas: HTMLCanvasElement, config: any) => ChartInstance
-  }
-}
 
 let chartJsLoaded = false
 const chartJsCallbacks: (() => void)[] = []
