@@ -366,11 +366,12 @@ export default function KrisisKesehatanPage() {
       loadCssOnce('/vendor/ol.css')
       await loadScriptOnce('/vendor/ol.js')
 
-      if (!window.ol || !isObject(window.ol)) {
+      const winOl = (window as any).ol
+      if (!winOl || !isObject(winOl)) {
         throw new Error('OpenLayers (window.ol) tidak tersedia di sistem.')
       }
 
-      const ol = window.ol
+      const ol = winOl
 
       const olProj = (ol.proj as JSONObject) ?? {}
       const olExtent = (ol.extent as JSONObject) ?? {}
@@ -996,7 +997,7 @@ export default function KrisisKesehatanPage() {
                       onClick={() => {
                         const pts = extractEventPoints(event.points)
                         if (pts.length && mapRef.current) {
-                           const ol = window.ol as any
+                           const ol = (window as any).ol
                            const fromLonLat = ol?.proj?.fromLonLat
                            const coord = fromLonLat?.([pts[0].lon, pts[0].lat])
                            if (coord) {
