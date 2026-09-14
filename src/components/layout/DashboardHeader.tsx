@@ -74,7 +74,7 @@ const sidebarMenu: SidebarMenuGroup[] = [
   {
     title: 'DASHBOARD PSC 119',
     items: [
-      { label: 'DASHBOARD UTAMA PSC 119', href: '/', icon: Flame },
+      { label: 'DASHBOARD PSC 119', href: '/', icon: Flame },
       { label: 'UNDUH LAPORAN PSC 119', href: '/unduh-laporan', icon: Download },
       { label: 'INFOGRAFIS AI (PDF)', href: '/infografis-ai', icon: FileText },
     ],
@@ -218,7 +218,7 @@ export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
   // Track expanded groups
   const isPantauanActive = pathname.startsWith('/pantauan')
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => ({
-    'DASHBOARD EOC': true,
+    'DASHBOARD PSC 119': true,
     'PANTAUAN': true,
     'TENTANG DASHBOARD': true,
   }))
@@ -256,7 +256,7 @@ export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
               />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-bold tracking-wide text-slate-800">DASHBOARD EOC</p>
+              <p className="text-sm font-bold tracking-wide text-slate-800">DASHBOARD PSC 119</p>
               <p className="mt-0.5 text-[11px] text-slate-500">Kementerian Kesehatan RI</p>
             </div>
           </div>
@@ -686,7 +686,7 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
                     ? 'border-teal-600 bg-teal-700 text-white shadow-teal-700/20'
                     : 'border-teal-200 bg-white/95 text-teal-700 hover:bg-teal-50'
                 }`}
-                title="Halaman Unduh Laporan Bencana"
+                title="Halaman Unduh Laporan PSC 119"
               >
                 <span className={`grid h-6 w-6 sm:h-7 sm:w-7 place-items-center rounded-lg ${
                   pathname === '/unduh-laporan' ? 'bg-teal-800 text-white' : 'bg-teal-50 text-teal-600'
