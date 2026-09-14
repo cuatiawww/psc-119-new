@@ -17,11 +17,11 @@ interface HeaderState {
 }
 
 export const useHeaderStore = create<HeaderState>((set) => ({
-  title: 'DASHBOARD EOC KRISIS KESEHATAN NASIONAL',
-  description: '',
+  title: 'DASHBOARD PSC 119 — SPGDT KEMENKES RI',
+  description: 'Sistem Informasi Terpadu Pemantauan Panggilan Gawat Darurat, Ambulans, dan Rujukan RS 119',
   lastUpdated: '',
-  sourceLabel: '',
-  sourceUrl: '',
+  sourceLabel: 'PSC 119 KEMENKES',
+  sourceUrl: 'https://psc.kemkes.go.id',
   setHeader: (data) => set({
     title: data.title,
     description: data.description || '',
@@ -30,10 +30,10 @@ export const useHeaderStore = create<HeaderState>((set) => ({
     sourceUrl: data.sourceUrl || '',
   }),
   resetHeader: () => set({
-    title: 'DASHBOARD EOC KRISIS KESEHATAN NASIONAL',
-    description: '',
+    title: 'DASHBOARD PSC 119 — SPGDT KEMENKES RI',
+    description: 'Sistem Informasi Terpadu Pemantauan Panggilan Gawat Darurat, Ambulans, dan Rujukan RS 119',
     lastUpdated: '',
-    sourceLabel: '',
-    sourceUrl: '',
+    sourceLabel: 'PSC 119 KEMENKES',
+    sourceUrl: 'https://psc.kemkes.go.id',
   }),
 }))

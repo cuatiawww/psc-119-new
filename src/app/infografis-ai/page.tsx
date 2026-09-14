@@ -373,11 +373,11 @@ export default function InfografisPage() {
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
               <span>Galeri Infografis & Dokumen AI</span>
               <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-teal-50 text-[#047D78] border border-teal-200">
-                EOC Kemenkes RI
+                PSC 119 SPGDT Kemenkes RI
               </span>
             </h1>
             <p className="text-sm sm:text-base text-slate-600 font-normal mt-1">
-              Kumpulan dokumen laporan resmi dan infografis hasil evaluasi AI EOC Kemenkes RI.
+              Kumpulan dokumen laporan resmi dan infografis hasil evaluasi AI Intelijen Dispatch PSC 119 SPGDT Kemenkes RI.
             </p>
           </div>
         </div>

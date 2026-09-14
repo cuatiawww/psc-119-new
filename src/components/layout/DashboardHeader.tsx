@@ -72,11 +72,10 @@ type SidebarMenuGroup = {
 
 const sidebarMenu: SidebarMenuGroup[] = [
   {
-    title: 'DASHBOARD EOC',
+    title: 'DASHBOARD PSC 119',
     items: [
-      { label: 'DASHBOARD EOC', href: '/', icon: Flame },
-      { label: 'GEMPA BUMI PROV. NTT', href: '/gempa-ntt', icon: Activity },
-      { label: 'UNDUH LAPORAN BENCANA', href: '/unduh-laporan', icon: Download },
+      { label: 'DASHBOARD UTAMA PSC 119', href: '/', icon: Flame },
+      { label: 'UNDUH LAPORAN PSC 119', href: '/unduh-laporan', icon: Download },
       { label: 'INFOGRAFIS AI (PDF)', href: '/infografis-ai', icon: FileText },
     ],
   },
@@ -108,8 +107,8 @@ const sidebarMenu: SidebarMenuGroup[] = [
 const notificationsData = [
   {
     id: 1,
-    title: 'Krisis Banjir Bandang',
-    description: 'Terjadi banjir bandang di Bandung. 12 korban luka, faskes tergenang.',
+    title: 'Panggilan Darurat KLL (Trauma)',
+    description: 'Tabrakan beruntun di Tol Cipularang KM 92. Tim Ambulans Gadar meluncur (ETA 6 mnt).',
     time: '2m',
     icon: Flame,
     iconBg: 'bg-red-50 text-red-600 border-red-100',
@@ -117,37 +116,37 @@ const notificationsData = [
   },
   {
     id: 2,
-    title: 'Siaga Gempa Bumi',
-    description: 'Terjadi gempa bumi di Sulawesi. 2 korban luka, faskes rusak sedang.',
-    time: '1h',
+    title: 'Panggilan Serangan Jantung (Non-Trauma)',
+    description: 'Pasien pria 58 th nyeri dada akut di Dago Bandung. Status: Pra-faskes stabil, rujukan RSHS.',
+    time: '12m',
     icon: Activity,
     iconBg: 'bg-orange-50 text-orange-600 border-orange-100',
     unread: false,
   },
   {
     id: 3,
-    title: 'Peringatan KLB Diare',
-    description: 'Kasus diare Tangerang melebihi ambang batas normal.',
-    time: '1j',
+    title: 'Rujukan Maternal Cito (KIA)',
+    description: 'Preeklampsia berat rujukan Puskesmas Ciawi ke RSUD Ciawi. Ambulans transport aktif.',
+    time: '45m',
     icon: Bell,
     iconBg: 'bg-purple-50 text-purple-600 border-purple-100',
     unread: true,
   },
   {
     id: 4,
-    title: 'Evakuasi Tanah Longsor',
-    description: 'Evakuasi pengungsi mandiri sedang berlangsung di posko Bogor.',
-    time: '3j',
+    title: 'Evakuasi Medis Kebakaran',
+    description: 'Evakuasi 3 korban luka bakar di Jakarta Timur berhasil distabilisasi di TKP.',
+    time: '1j',
     icon: MapPinned,
     iconBg: 'bg-blue-50 text-blue-600 border-blue-100',
     unread: false,
   },
   {
     id: 5,
-    title: 'Logistik Darurat NTT',
-    description: 'Faskes melaporkan kekurangan stok obat-obatan darurat.',
-    time: '1h',
-    icon: Settings,
+    title: 'Layanan Selesai Terverifikasi',
+    description: 'Kasus cedera olahraga di Surabaya tertangani tuntas oleh tim PSC 119 Surabaya.',
+    time: '2j',
+    icon: ShieldCheck,
     iconBg: 'bg-teal-50 text-teal-600 border-teal-100',
     unread: false,
   },
@@ -500,7 +499,7 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
                   {headerTitle}
                 </h1>
                 <p className="mt-2 max-w-[760px] text-xs leading-relaxed text-slate-600 md:text-sm lg:text-base hidden sm:block">
-                  {headerDesc || `Analisis spasial kejadian bencana dan dampaknya terhadap sumber daya kesehatan di wilayah ${activeRegion}.`}
+                  {headerDesc || `Sistem pemantauan terpadu panggilan gawat darurat, penugasan ambulans, dan rujukan rumah sakit PSC 119 di wilayah ${activeRegion}.`}
                 </p>
                 {(lastUpdated || (sourceLabel && sourceUrl)) && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500 font-semibold">

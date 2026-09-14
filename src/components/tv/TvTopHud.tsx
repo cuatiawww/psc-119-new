@@ -143,18 +143,18 @@ export default function TvTopHud({
           <div className="h-7 w-px bg-slate-200 hidden sm:block" />
           <div className="flex flex-col">
             <span className="font-extrabold tracking-wider text-sm text-[#047D78]">
-              DASHBOARD GEMPA BUMI - PROV. NTT
+              NATIONAL COMMAND CENTER PSC 119 & SPGDT
             </span>
             <span className="text-[10px] sm:text-[11px] font-semibold text-slate-600 max-w-[480px] truncate">
-              Analisis spasial kejadian bencana dan dampaknya terhadap sumber daya kesehatan di wilayah PROV. NUSA TENGGARA TIMUR.
+              Pemantauan spasial dispatch kedaruratan medis, armada ambulans, dan rujukan pra-faskes Kemenkes RI.
             </span>
           </div>
         </div>
 
         <div className="hidden lg:flex items-center gap-2 pl-3 border-l border-slate-200">
-          <span className="text-[10px] text-[#047D78] font-extrabold uppercase tracking-wider">Pemantauan Wilayah:</span>
+          <span className="text-[10px] text-[#047D78] font-extrabold uppercase tracking-wider">Pemantauan:</span>
           <span className="text-xs font-black text-[#047D78] bg-teal-50 border border-teal-300 px-2.5 py-0.5 rounded-xl truncate max-w-[280px]">
-            PROV. NTT (8 KABUPATEN TERDAMPAK)
+            450 PUSAT PSC 119 SE-INDONESIA
           </span>
         </div>
       </div>

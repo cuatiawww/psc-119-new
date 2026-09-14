@@ -31,8 +31,8 @@ export async function generateMetadata(): Promise<Metadata> {
     const payload = await res.json();
     if (payload?.success && payload?.settings) {
       return {
-        title: payload.settings.frontend_app_title || "Dashboard EOC - Kemenkes RI",
-        description: payload.settings.frontend_app_subtitle || "Sistem pemantauan terpadu untuk melihat capaian, sebaran, dan perkembangan fasilitas kesehatan di seluruh wilayah Indonesia.",
+        title: payload.settings.frontend_app_title || "Dashboard PSC 119 — SPGDT Kemenkes RI",
+        description: payload.settings.frontend_app_subtitle || "Sistem Pemantauan Terpadu Layanan Kedaruratan Medis & Panggilan Gawat Darurat 119 Kementerian Kesehatan RI.",
       };
     }
   } catch (error) {
@@ -40,8 +40,8 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 
   return {
-    title: "Dashboard EOC - Kemenkes RI",
-    description: "Sistem pemantauan terpadu untuk melihat capaian, sebaran, dan perkembangan fasilitas kesehatan di seluruh wilayah Indonesia.",
+    title: "Dashboard PSC 119 — SPGDT Kemenkes RI",
+    description: "Sistem Pemantauan Terpadu Layanan Kedaruratan Medis & Panggilan Gawat Darurat 119 Kementerian Kesehatan RI.",
   };
 }
 

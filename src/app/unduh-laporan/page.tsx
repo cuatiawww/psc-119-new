@@ -508,27 +508,22 @@ const MASTER_REGION_SUGGESTIONS: RegionSuggestion[] = [
 ]
 
 const ALL_JENIS_BENCANA: string[] = [
-  'Aksi Teror dan Sabotase',
-  'Angin Puting Beliung',
-  'Banjir',
-  'Banjir Bandang',
-  'Banjir dan Tanah Longsor',
-  'Gagal Teknologi',
-  'Gelombang Pasang/Badai',
-  'Gempa Bumi',
-  'Gempa Bumi dan Tsunami',
+  'Trauma KLL',
+  'Trauma Non Kll',
+  'Trauma Gigitan / Sengatan Hewan Berbisa',
+  'Non Trauma - Jantung',
+  'Non Trauma - Stroke',
+  'Non Trauma - Hipertensi',
+  'Non Trauma Lainnya',
+  'Ambulan Gadar',
+  'Ambulan Transport',
+  'KIA - IBU',
+  'KIA - ANAK',
   'Kebakaran',
-  'Kebakaran Hutan dan Lahan',
-  'Kejadian Luar Biasa (KLB) - Keracunan',
-  'Kejadian Luar Biasa (KLB) - Penyakit',
-  'Kecelakaan Industri',
-  'Kecelakaan Transportasi Darat',
-  'Kecelakaan Transportasi Laut-Udara',
-  'Kekeringan',
-  'Konflik Sosial atau Kerusuhan Sosial',
-  'Letusan Gunung Api',
-  'Tanah Longsor',
-  'Tsunami',
+  'Bencana',
+  'Rujukan',
+  'Keperawatan',
+  'Edukasi',
   'Lainnya',
 ]
 
@@ -538,54 +533,16 @@ const PROVINCE_CODE_MAPPING: Record<string, string> = {
   '8559': 'PAPUA PEGUNUNGAN',
   '8560': 'PAPUA BARAT DAYA',
   '2': 'PAPUA SELATAN',
-  '3': 'PAPUA TENGAH',
-  '4': 'PAPUA PEGUNUNGAN',
-  '5': 'PAPUA BARAT DAYA',
-  '54': 'ACEH',
-  '55': 'SUMATERA UTARA',
-  '390': 'SUMATERA BARAT',
-  '391': 'RIAU',
-  '392': 'JAMBI',
-  '393': 'SUMATERA SELATAN',
-  '394': 'BENGKULU',
-  '395': 'LAMPUNG',
-  '396': 'KEPULAUAN BANGKA BELITUNG',
-  '397': 'KEPULAUAN RIAU',
-  '398': 'DKI JAKARTA',
-  '399': 'JAWA BARAT',
-  '400': 'JAWA TENGAH',
-  '401': 'D.I. YOGYAKARTA',
-  '402': 'JAWA TIMUR',
-  '403': 'BANTEN',
-  '404': 'BALI',
-  '405': 'NUSA TENGGARA BARAT',
-  '406': 'NUSA TENGGARA TIMUR',
-  '407': 'KALIMANTAN BARAT',
-  '408': 'KALIMANTAN TENGAH',
-  '409': 'KALIMANTAN SELATAN',
-  '410': 'KALIMANTAN TIMUR',
-  '7627': 'KALIMANTAN UTARA',
-  '411': 'SULAWESI UTARA',
-  '3338': 'SULAWESI TENGAH',
-  '413': 'SULAWESI SELATAN',
-  '414': 'SULAWESI TENGGARA',
-  '415': 'GORONTALO',
-  '419': 'SULAWESI BARAT',
-  '420': 'MALUKU',
-  '421': 'MALUKU UTARA',
-  '422': 'PAPUA',
-  '423': 'PAPUA BARAT',
+  '12': 'PAPUA TENGAH',
+  '15': 'PAPUA PEGUNUNGAN',
+  '34': 'PAPUA BARAT DAYA',
 }
 
-function resolveProvinceName(rawName?: string): string {
-  if (!rawName) return 'Lainnya'
-  const trimmed = rawName.trim()
+function resolveProvinceName(input?: string): string {
+  if (!input) return 'NASIONAL'
+  const trimmed = String(input).trim()
   if (PROVINCE_CODE_MAPPING[trimmed]) {
     return PROVINCE_CODE_MAPPING[trimmed]
-  }
-  // If it's pure number that wasn't in the map
-  if (/^\d+$/.test(trimmed)) {
-    return 'Lainnya'
   }
   let normalized = trimmed.toUpperCase()
   if (normalized === 'DI YOGYAKARTA' || normalized === 'DIY') normalized = 'D.I. YOGYAKARTA'
@@ -599,125 +556,125 @@ export default function UnduhLaporanPage() {
   // Initialize Header store titles on mount
   useEffect(() => {
     setHeader({
-      title: 'REKAP & UNDUH LAPORAN KEJADIAN BENCANA',
-      description: 'Pusat filter terpadu dan ekstraksi matriks laporan kejadian bencana kesehatan real-time untuk kebutuhan unduh data (Excel, PDF, CSV).',
+      title: 'REKAP & UNDUH LOG DISPATCH PSC 119',
+      description: 'Pusat filter terpadu dan ekstraksi data log dispatch panggilan gawat darurat medis, armada ambulans, dan rujukan SPGDT Kemenkes RI real-time (Excel, PDF, CSV).',
       lastUpdated: 'Baru Saja'
     })
   }, [setHeader])
 
-  // DEFAULT SAMPLE REPORTS (Fallback saat API belum terhubung)
+  // DEFAULT SAMPLE REPORTS (Fallback data panggilan PSC 119)
   const DEFAULT_SAMPLE_REPORTS: LaporanItem[] = [
     {
       id: 1,
-      kode_laporan: 'LAP-2026-001',
-      tgl_kejadian: '2026-08-20T08:30:00Z',
-      tgl_kejadian_formatted: '20 Agu 2026',
+      kode_laporan: 'PSC-119-2026-088921',
+      tgl_kejadian: '2026-09-12T08:30:00Z',
+      tgl_kejadian_formatted: '12 Sep 2026',
       jam_kejadian: '08:30 WIB',
-      tgl_perkembangan: '2026-08-20T10:00:00Z',
-      tgl_perkembangan_formatted: '20 Agu 2026',
-      jam_perkembangan: '10:00 WIB',
-      tingkat_bencana: 'Kab/Kota',
-      provinsi: 'NUSA TENGGARA TIMUR',
-      kabupaten: 'KAB. FLORES TIMUR',
-      kecamatan: 'Wulanggitang',
-      desa: 'Klatanlo',
-      jenis_bencana: 'Erupsi Gunung Api',
-      korban_meninggal: 9,
-      korban_luka_berat: 31,
-      korban_luka_ringan: 64,
+      tgl_perkembangan: '2026-09-12T08:42:00Z',
+      tgl_perkembangan_formatted: '12 Sep 2026',
+      jam_perkembangan: '08:42 WIB',
+      tingkat_bencana: 'Emergency (P1)',
+      provinsi: 'JAWA BARAT',
+      kabupaten: 'PSC 119 KAB. BANDUNG',
+      kecamatan: 'Bojongsoang',
+      desa: 'Jl. Terusan Buahbatu No. 45',
+      jenis_bencana: 'Trauma KLL',
+      korban_meninggal: 0,
+      korban_luka_berat: 1,
+      korban_luka_ringan: 1,
       korban_hilang: 0,
-      penduduk_terdampak: 10295,
-      pengungsi: 4421,
-      faskes_terdampak: 3,
+      penduduk_terdampak: 2,
+      pengungsi: 1,
+      faskes_terdampak: 1,
       status_verifikasi: 'Diverifikasi',
-      deskripsi: 'Aktivitas erupsi vulkanik disertai lontaran material pijar. Pos kesehatan darurat EMT Tipe 1 diaktifkan di lokasi penampungan pengungsi.',
-      petugas: 'Tim Reaksi Cepat EOC',
-      lat: -8.538,
-      lng: 122.784,
+      deskripsi: 'Kecelakaan tabrakan motor vs pickup. Tim Ambulans Gadar tiba di TKP (Respon: 8 menit). Pasien fraktur femur kanan distabilisasi dan dirujuk ke RSUD Al-Ihsan.',
+      petugas: 'Dispatcher PSC 119 Bandung',
+      lat: -6.974,
+      lng: 107.632,
     },
     {
       id: 2,
-      kode_laporan: 'LAP-2026-002',
-      tgl_kejadian: '2026-08-22T03:15:00Z',
-      tgl_kejadian_formatted: '22 Agu 2026',
-      jam_kejadian: '03:15 WIB',
-      tgl_perkembangan: '2026-08-22T06:00:00Z',
-      tgl_perkembangan_formatted: '22 Agu 2026',
-      jam_perkembangan: '06:00 WIB',
-      tingkat_bencana: 'Kab/Kota',
-      provinsi: 'JAWA BARAT',
-      kabupaten: 'KAB. CIANJUR',
-      kecamatan: 'Cugenang',
-      desa: 'Gasol',
-      jenis_bencana: 'Gempa Bumi',
-      korban_meninggal: 4,
-      korban_luka_berat: 18,
-      korban_luka_ringan: 42,
-      korban_hilang: 1,
-      penduduk_terdampak: 3820,
-      pengungsi: 1250,
-      faskes_terdampak: 2,
+      kode_laporan: 'PSC-119-2026-088922',
+      tgl_kejadian: '2026-09-12T09:15:00Z',
+      tgl_kejadian_formatted: '12 Sep 2026',
+      jam_kejadian: '09:15 WIB',
+      tgl_perkembangan: '2026-09-12T09:28:00Z',
+      tgl_perkembangan_formatted: '12 Sep 2026',
+      jam_perkembangan: '09:28 WIB',
+      tingkat_bencana: 'Emergency (P1)',
+      provinsi: 'JAWA TIMUR',
+      kabupaten: 'PSC 119 KOTA SURABAYA',
+      kecamatan: 'Wonokromo',
+      desa: 'Jl. Darmo Permai',
+      jenis_bencana: 'Non Trauma - Jantung',
+      korban_meninggal: 0,
+      korban_luka_berat: 1,
+      korban_luka_ringan: 0,
+      korban_hilang: 0,
+      penduduk_terdampak: 1,
+      pengungsi: 1,
+      faskes_terdampak: 1,
       status_verifikasi: 'Diverifikasi',
-      deskripsi: 'Guncangan seismik dangkal mengakibatkan kerusakan dinding puskesmas pembantu dan rumah warga. Triase trauma aktif.',
-      petugas: 'Dinkes Cianjur',
-      lat: -6.817,
-      lng: 107.139,
+      deskripsi: 'Pasien pria 62 tahun mengalami nyeri dada hebat menjalar ke lengan kiri (Suspek STEMI). Paramedis ambulans memberikan terapi O2 & nitrat, dirujuk ke RSUD Dr. Soetomo.',
+      petugas: 'Dispatcher PSC 119 Surabaya',
+      lat: -7.295,
+      lng: 112.738,
     },
     {
       id: 3,
-      kode_laporan: 'LAP-2026-003',
-      tgl_kejadian: '2026-08-24T14:20:00Z',
-      tgl_kejadian_formatted: '24 Agu 2026',
-      jam_kejadian: '14:20 WIB',
-      tgl_perkembangan: '2026-08-24T16:00:00Z',
-      tgl_perkembangan_formatted: '24 Agu 2026',
-      jam_perkembangan: '16:00 WIB',
-      tingkat_bencana: 'Kab/Kota',
-      provinsi: 'SUMATERA BARAT',
-      kabupaten: 'KAB. PADANG PARIAMAN',
-      kecamatan: 'Nan Sabaris',
-      desa: 'Kurai Taji',
-      jenis_bencana: 'Banjir Bandang',
-      korban_meninggal: 2,
-      korban_luka_berat: 7,
-      korban_luka_ringan: 25,
+      kode_laporan: 'PSC-119-2026-088923',
+      tgl_kejadian: '2026-09-12T10:40:00Z',
+      tgl_kejadian_formatted: '12 Sep 2026',
+      jam_kejadian: '10:40 WIB',
+      tgl_perkembangan: '2026-09-12T10:55:00Z',
+      tgl_perkembangan_formatted: '12 Sep 2026',
+      jam_perkembangan: '10:55 WIB',
+      tingkat_bencana: 'Urgent (P2)',
+      provinsi: 'DKI JAKARTA',
+      kabupaten: 'PSC 119 DKI JAKARTA',
+      kecamatan: 'Kebayoran Baru',
+      desa: 'Jl. Senopati',
+      jenis_bencana: 'Ambulan Gadar',
+      korban_meninggal: 0,
+      korban_luka_berat: 0,
+      korban_luka_ringan: 1,
       korban_hilang: 0,
-      penduduk_terdampak: 5120,
-      pengungsi: 890,
+      penduduk_terdampak: 1,
+      pengungsi: 1,
       faskes_terdampak: 1,
       status_verifikasi: 'Diverifikasi',
-      deskripsi: 'Luapan sungai merendam permukiman warga hingga ketinggian 1.5 meter. Pendistribusian kaporit dan penjernih air PAC digencarkan.',
-      petugas: 'Dinkes Prov Sumbar',
-      lat: -0.627,
-      lng: 100.222,
+      deskripsi: 'Lansia pingsan di area publik akibat hipoglikemia. Pemberian dekstrosa intravena oleh paramedis di ambulans. Kondisi sadar penuh, observasi di RS Pusat Pertamina.',
+      petugas: 'Dispatcher AGD 119 Jakarta',
+      lat: -6.238,
+      lng: 106.812,
     },
     {
       id: 4,
-      kode_laporan: 'LAP-2026-004',
-      tgl_kejadian: '2026-08-25T11:00:00Z',
-      tgl_kejadian_formatted: '25 Agu 2026',
-      jam_kejadian: '11:00 WIB',
-      tgl_perkembangan: '2026-08-25T13:30:00Z',
-      tgl_perkembangan_formatted: '25 Agu 2026',
-      jam_perkembangan: '13:30 WIB',
-      tingkat_bencana: 'Kab/Kota',
-      provinsi: 'JAWA TIMUR',
-      kabupaten: 'KAB. PROBOLINGGO',
-      kecamatan: 'Sukapura',
-      desa: 'Ngadisari',
-      jenis_bencana: 'Tanah Longsor',
-      korban_meninggal: 1,
-      korban_luka_berat: 5,
-      korban_luka_ringan: 14,
+      kode_laporan: 'PSC-119-2026-088924',
+      tgl_kejadian: '2026-09-12T11:20:00Z',
+      tgl_kejadian_formatted: '12 Sep 2026',
+      jam_kejadian: '11:20 WIB',
+      tgl_perkembangan: '2026-09-12T11:35:00Z',
+      tgl_perkembangan_formatted: '12 Sep 2026',
+      jam_perkembangan: '11:35 WIB',
+      tingkat_bencana: 'Emergency (P1)',
+      provinsi: 'DI YOGYAKARTA',
+      kabupaten: 'PSC 119 KAB. SLEMAN',
+      kecamatan: 'Depok',
+      desa: 'Jl. Kaliurang KM 5',
+      jenis_bencana: 'KIA - IBU',
+      korban_meninggal: 0,
+      korban_luka_berat: 1,
+      korban_luka_ringan: 0,
       korban_hilang: 0,
-      penduduk_terdampak: 1420,
-      pengungsi: 320,
-      faskes_terdampak: 0,
+      penduduk_terdampak: 2,
+      pengungsi: 1,
+      faskes_terdampak: 1,
       status_verifikasi: 'Diverifikasi',
-      deskripsi: 'Tebing longsor menutup akses jalan menuju puskesmas pembantu. Nakes mobile dikerahkan menjangkau warga terdampak.',
-      petugas: 'Puskesmas Sukapura',
-      lat: -7.934,
-      lng: 112.966,
+      deskripsi: 'Ibu hamil G2P1A0 usia kehamilan 38 minggu mengalami kejang eklampsia. Ambulans PONEK meluncur, terapi MgSO4 intra-transport, rujukan cito ke RSUP Dr. Sardjito.',
+      petugas: 'Dispatcher PSC 119 Sleman',
+      lat: -7.762,
+      lng: 110.384,
     }
   ]
 
@@ -1148,12 +1105,14 @@ export default function UnduhLaporanPage() {
     let totalMeninggal = 0
     let totalLuka = 0
     let totalTerdampak = 0
+    let totalPengungsi = 0
     let totalFaskes = 0
 
     filteredReports.forEach((r) => {
       totalMeninggal += r.korban_meninggal
       totalLuka += r.korban_luka_berat + r.korban_luka_ringan
-      totalTerdampak += r.penduduk_terdampak + r.pengungsi
+      totalTerdampak += r.penduduk_terdampak
+      totalPengungsi += r.pengungsi
       totalFaskes += r.faskes_terdampak
     })
 
@@ -1162,6 +1121,7 @@ export default function UnduhLaporanPage() {
       totalMeninggal,
       totalLuka,
       totalTerdampak,
+      totalPengungsi,
       totalFaskes,
     }
   }, [filteredReports])
@@ -1182,26 +1142,26 @@ export default function UnduhLaporanPage() {
 
     const headers = [
       'No',
-      'Kode Laporan',
-      'Tanggal Kejadian',
-      'Jam Kejadian',
-      'Tanggal Perkembangan',
-      'Tingkat Bencana',
+      'No Tiket 119',
+      'Tanggal Panggilan',
+      'Jam Panggilan',
+      'Waktu Update',
+      'Triase / Prioritas',
       'Provinsi',
-      'Kabupaten/Kota',
+      'Pusat PSC 119 / Wilayah',
       'Kecamatan',
-      'Desa/Kelurahan',
-      'Jenis Bencana',
-      'Meninggal',
-      'Luka Berat',
-      'Luka Ringan',
-      'Hilang',
-      'Penduduk Terdampak',
-      'Pengungsi',
-      'Faskes Terdampak',
-      'Status Verifikasi',
-      'Petugas Pelapor',
-      'Deskripsi Narasi',
+      'Alamat TKP / Lokasi',
+      'Kategori Layanan',
+      'Korban Meninggal / DOA',
+      'Gawat Darurat (Merah)',
+      'Non-Gawat (Kuning/Hijau)',
+      'Korban Hilang',
+      'Pasien Tertangani',
+      'Ambulans Dispatched',
+      'RS Rujukan',
+      'Status Penanganan',
+      'Dispatcher Pelapor',
+      'Deskripsi Penanganan Medis',
     ]
 
     const csvRows = [headers.join(',')]
@@ -1239,12 +1199,12 @@ export default function UnduhLaporanPage() {
     const link = document.createElement('a')
     link.href = url
     const timestamp = new Date().toISOString().slice(0, 10)
-    link.setAttribute('download', `Laporan_Kejadian_Bencana_Kemenkes_${timestamp}.csv`)
+    link.setAttribute('download', `Laporan_Log_Panggilan_PSC119_${timestamp}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
 
-    showToast(`Berhasil mengunduh ${filteredReports.length} data dalam format Excel/CSV!`)
+    showToast(`Berhasil mengunduh ${filteredReports.length} data panggilan PSC 119 dalam format Excel/CSV!`)
   }
 
   // EXPORT SUMMARY PDF
@@ -1280,7 +1240,7 @@ export default function UnduhLaporanPage() {
     if (isSingleKabSelected) {
       groupByLabel = 'KECAMATAN'
     } else if (isSingleProvSelected) {
-      groupByLabel = 'KABUPATEN / KOTA'
+      groupByLabel = 'PUSAT PSC 119'
     }
 
     const regionMap: Record<string, RegionGroup> = {}
@@ -1290,7 +1250,7 @@ export default function UnduhLaporanPage() {
       if (isSingleKabSelected) {
         key = (r.kecamatan || 'KECAMATAN LAINNYA').toUpperCase()
       } else if (isSingleProvSelected) {
-        key = (r.kabupaten || 'KABUPATEN LAINNYA').toUpperCase()
+        key = (r.kabupaten || 'PUSAT PSC LAINNYA').toUpperCase()
       }
 
       if (!regionMap[key]) {
@@ -1338,27 +1298,26 @@ export default function UnduhLaporanPage() {
           <strong style="color: #047D78; text-transform: uppercase;">${g.name}</strong>
         </td>
         <td style="text-align: center; border: 1px solid #cbd5e1; padding: 7px 8px; font-size: 10px; font-weight: 900; color: #0f172a;">
-          ${g.total_laporan} Kejadian
+          ${g.total_laporan} Panggilan
         </td>
         <td style="border: 1px solid #cbd5e1; padding: 7px 8px; font-size: 10px; font-weight: 700; color: #334155;">
           ${g.bencana_dominan}
         </td>
         <td style="text-align: center; border: 1px solid #cbd5e1; padding: 7px 8px; font-size: 10px;">
           ${g.korban_meninggal > 0 
-            ? `<span style="background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 2px 6px; border-radius: 4px; font-weight: 900; font-size: 9.5px; display: inline-block;">MD: ${g.korban_meninggal} Jiwa</span>`
+            ? `<span style="background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 2px 6px; border-radius: 4px; font-weight: 900; font-size: 9.5px; display: inline-block;">DOA: ${g.korban_meninggal} Jiwa</span>`
             : `<span style="color: #64748b; font-size: 9px;">0</span>`
           }
         </td>
         <td style="text-align: center; border: 1px solid #cbd5e1; padding: 7px 8px; font-size: 10px;">
-          <span style="color: #d97706; font-weight: 600; font-size: 9px;">Luka: ${g.korban_luka}</span> | 
-          <span style="color: #4f46e5; font-weight: 600; font-size: 9px;">Hilang: ${g.korban_hilang}</span>
+          <span style="color: #d97706; font-weight: 600; font-size: 9px;">Gadar: ${g.korban_luka}</span>
         </td>
         <td style="text-align: center; border: 1px solid #cbd5e1; padding: 7px 8px; font-size: 10px;">
-          <strong>${(g.penduduk_terdampak + g.pengungsi).toLocaleString('id-ID')}</strong> Jiwa<br/>
-          <small style="color: #64748b; font-size: 8.5px;">(Terdampak: ${g.penduduk_terdampak}, Pengungsi: ${g.pengungsi})</small>
+          <strong>${g.pengungsi} Unit</strong> Ambulans<br/>
+          <small style="color: #64748b; font-size: 8.5px;">Pasien: ${g.penduduk_terdampak}</small>
         </td>
         <td style="text-align: center; border: 1px solid #cbd5e1; padding: 7px 8px; font-size: 10px; font-weight: bold;">
-          ${g.faskes_terdampak} Unit
+          ${g.faskes_terdampak} RS Rujukan
         </td>
       </tr>
     `).join('')
@@ -1368,12 +1327,12 @@ export default function UnduhLaporanPage() {
         <td colspan="2" style="text-align: right; padding: 8px 10px; border: 1px solid #036662; text-transform: uppercase; letter-spacing: 0.5px;">
           TOTAL REKAPITULASI (${sortedRegions.length} ${groupByLabel})
         </td>
-        <td style="text-align: center; padding: 8px; border: 1px solid #036662;">${metrics.totalReports} Kejadian</td>
+        <td style="text-align: center; padding: 8px; border: 1px solid #036662;">${metrics.totalReports} Panggilan</td>
         <td style="padding: 8px; border: 1px solid #036662; text-align: center;">-</td>
         <td style="text-align: center; padding: 8px; border: 1px solid #036662;">${metrics.totalMeninggal > 0 ? `${metrics.totalMeninggal} Jiwa` : '0'}</td>
-        <td style="text-align: center; padding: 8px; border: 1px solid #036662;">Luka: ${metrics.totalLuka} | Hilang: ${totalHilang}</td>
-        <td style="text-align: center; padding: 8px; border: 1px solid #036662;">${metrics.totalTerdampak.toLocaleString('id-ID')} Jiwa</td>
-        <td style="text-align: center; padding: 8px; border: 1px solid #036662;">${metrics.totalFaskes} Unit</td>
+        <td style="text-align: center; padding: 8px; border: 1px solid #036662;">Gadar: ${metrics.totalLuka}</td>
+        <td style="text-align: center; padding: 8px; border: 1px solid #036662;">${metrics.totalTerdampak.toLocaleString('id-ID')} Pasien</td>
+        <td style="text-align: center; padding: 8px; border: 1px solid #036662;">${metrics.totalFaskes} RS Rujukan</td>
       </tr>
     `
 
@@ -1382,7 +1341,7 @@ export default function UnduhLaporanPage() {
       <html lang="id">
         <head>
           <meta charset="UTF-8">
-          <title>Rekap Laporan Bencana Kesehatan - EOC Kemenkes RI</title>
+          <title>Rekap Laporan Dispatch Kedaruratan Medis - PSC 119 SPGDT Kemenkes RI</title>
           <style>
             @page {
               size: A4 portrait;
@@ -1408,7 +1367,7 @@ export default function UnduhLaporanPage() {
         <body>
           <div class="no-print" style="position: sticky; top: 0; z-index: 9999; background: #047D78; color: white; padding: 10px 16px; margin: -20px -20px 20px -20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
             <div style="display: flex; align-items: center; gap: 10px;">
-              <span style="font-weight: 800; font-size: 13px;">Preview Rekap Laporan Bencana EOC Kemenkes RI</span>
+              <span style="font-weight: 800; font-size: 13px;">Preview Rekap Laporan Dispatch PSC 119 SPGDT Kemenkes RI</span>
               <span style="background: rgba(255,255,255,0.2); font-size: 10px; padding: 3px 9px; border-radius: 12px; font-weight: 600;">HTML View</span>
             </div>
             <button onclick="window.print()" style="background: #ffffff; color: #047D78; font-weight: bold; border: none; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
@@ -1417,12 +1376,12 @@ export default function UnduhLaporanPage() {
           </div>
 
           <h2>KEMENTERIAN KESEHATAN REPUBLIK INDONESIA</h2>
-          <p>PUSAT KRISIS KESEHATAN — REKAPITULASI LAPORAN KEJADIAN BENCANA (BERDASARKAN ${groupByLabel})</p>
+          <p>PUSAT KOMANDO NASIONAL PSC 119 — SISTEM PENANGGULANGAN GAWAT DARURAT TERPADU (BERDASARKAN ${groupByLabel})</p>
           <div class="meta-box">
-            <strong>Total Data Terfilter:</strong> ${filteredReports.length} Laporan (${sortedRegions.length} ${groupByLabel}) | 
-            <strong>Total Korban Meninggal:</strong> ${metrics.totalMeninggal} | 
-            <strong>Total Pengungsi/Terdampak:</strong> ${metrics.totalTerdampak} | 
-            <strong>Faskes Terdampak:</strong> ${metrics.totalFaskes} Unit<br/>
+            <strong>Total Panggilan Terfilter:</strong> ${filteredReports.length} Panggilan (${sortedRegions.length} ${groupByLabel}) | 
+            <strong>Kasus Gawat Darurat:</strong> ${metrics.totalLuka} Pasien | 
+            <strong>Armada Ambulans Dispatched:</strong> ${metrics.totalPengungsi} Unit | 
+            <strong>RS Rujukan Terlibat:</strong> ${metrics.totalFaskes} Unit<br/>
             <small style="color: #64748b;">Dicetak pada: ${new Date().toLocaleString('id-ID')} WIB</small>
           </div>
           <table>
@@ -1430,12 +1389,12 @@ export default function UnduhLaporanPage() {
               <tr>
                 <th style="width: 32px; text-align: center;">NO</th>
                 <th>WILAYAH (${groupByLabel})</th>
-                <th style="text-align: center;">TOTAL KEJADIAN</th>
-                <th>BENCANA DOMINAN</th>
-                <th style="text-align: center;">MENINGGAL (MD)</th>
-                <th style="text-align: center;">LUKA & HILANG</th>
-                <th style="text-align: center;">TERDAMPAK / PENGUNGSI</th>
-                <th style="text-align: center;">FASKES TERDAMPAK</th>
+                <th style="text-align: center;">TOTAL PANGGILAN</th>
+                <th>KASUS DOMINAN</th>
+                <th style="text-align: center;">DOA / MENINGGAL</th>
+                <th style="text-align: center;">GAWAT DARURAT (P1/P2)</th>
+                <th style="text-align: center;">AMBULANS DISPATCH</th>
+                <th style="text-align: center;">RS RUJUKAN</th>
               </tr>
             </thead>
             <tbody>
@@ -1452,7 +1411,7 @@ export default function UnduhLaporanPage() {
   // CREATE DASHBOARD REPORT (EXCLUSIVE AI-POWERED OFFICIAL EXECUTIVE REPORT)
   const handleCreateDashboardHTML = async () => {
     if (filteredReports.length === 0) {
-      showToast('Tidak ada data terfilter untuk membuat laporan dashboard.')
+      showToast('Tidak ada data terfilter untuk membuat laporan dispatch.')
       return
     }
 
@@ -1461,14 +1420,14 @@ export default function UnduhLaporanPage() {
     try {
       printWindow = window.open('', '_blank')
       if (printWindow) {
-        printWindow.document.write(`<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>Menyiapkan Laporan Resmi EOC Kemenkes RI...</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f8fafc;color:#047D78;}.box{text-align:center;padding:36px 44px;background:#ffffff;border-radius:20px;border:1px solid #e2e8f0;box-shadow:0 10px 30px rgba(0,0,0,0.06);max-width:440px;}.spinner{width:42px;height:42px;border:4px solid #e2e8f0;border-top-color:#047D78;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px;}@keyframes spin{to{transform:rotate(360deg);}}h3{margin:0 0 8px;font-size:16px;font-weight:800;color:#0f172a;}p{margin:0;font-size:13px;color:#64748b;line-height:1.5;}</style></head><body><div class="box"><div class="spinner"></div><h3>Menyiapkan Dokumen Laporan Resmi...</h3><p>Mohon tunggu, analisis intelijen surveilans dan visualisasi data sedang dikompilasi oleh sistem EOC.</p></div></body></html>`)
+        printWindow.document.write(`<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>Menyiapkan Laporan Resmi PSC 119 Kemenkes RI...</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f8fafc;color:#047D78;}.box{text-align:center;padding:36px 44px;background:#ffffff;border-radius:20px;border:1px solid #e2e8f0;box-shadow:0 10px 30px rgba(0,0,0,0.06);max-width:440px;}.spinner{width:42px;height:42px;border:4px solid #e2e8f0;border-top-color:#047D78;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px;}@keyframes spin{to{transform:rotate(360deg);}}h3{margin:0 0 8px;font-size:16px;font-weight:800;color:#0f172a;}p{margin:0;font-size:13px;color:#64748b;line-height:1.5;}</style></head><body><div class="box"><div class="spinner"></div><h3>Menyiapkan Dokumen Laporan Resmi PSC 119...</h3><p>Mohon tunggu, analisis intelijen dispatch kedaruratan medis dan indikator response time SPGDT sedang dikompilasi oleh sistem.</p></div></body></html>`)
       }
     } catch (winErr) {
       console.warn('[CreateDashboard] Pre-opening window blocked:', winErr)
     }
 
     setIsGeneratingAiDashboard(true)
-    setAiProgressStep('Menginisialisasi parameter statistik, indikator korban & faskes siaga...')
+    setAiProgressStep('Menginisialisasi parameter statistik panggilan, triase medis & ambulans siaga...')
 
     try {
 
@@ -2501,41 +2460,42 @@ export default function UnduhLaporanPage() {
           <main class="content-area">
             
             <!-- DOCUMENT HEADER -->
-            <div class="stat-resmi-badge">Statistik Resmi Kementerian Kesehatan Republik Indonesia</div>
-            <h1 class="main-report-title">Laporan Pengawasan Krisis Kesehatan dan Kebencanaan : ${reportDateStr} (Minggu ke ${currentWeekNum})</h1>
-            <p class="main-report-subtitle">Diperbaharui ${reportDateStr} ${reportTimeStr} WIB | Emergency Operations Center (EOC 24 Jam)</p>
+            <!-- DOCUMENT HEADER -->
+            <div class="stat-resmi-badge">Pusat Komando Nasional PSC 119 & SPGDT — Kementerian Kesehatan Republik Indonesia</div>
+            <h1 class="main-report-title">Laporan Pengawasan Dispatch Kedaruratan Medis PSC 119 : ${reportDateStr} (Minggu ke ${currentWeekNum})</h1>
+            <p class="main-report-subtitle">Diperbaharui ${reportDateStr} ${reportTimeStr} WIB | Sistem Penanggulangan Gawat Darurat Terpadu (SPGDT 24 Jam)</p>
 
             <div class="coverage-box">
-              Berlaku di Indonesia — Cakupan Evaluasi: ${filterWilayahText} | Filter Bahaya: ${filterBencanaText}
+              Berlaku di Indonesia — Wilayah Terfilter: ${filterWilayahText} | Kategori Layanan: ${filterBencanaText}
             </div>
 
             <!-- KPI SUMMARY CARDS -->
             <div class="kpi-grid">
               <div class="kpi-card" style="background: #f0fdf4; border-color: #bbf7d0;">
-                <div class="kpi-lbl" style="color: #166534;">Total Kejadian</div>
+                <div class="kpi-lbl" style="color: #166534;">Total Panggilan 119</div>
                 <div class="kpi-val" style="color: #047D78;">${totalReports}</div>
               </div>
               <div class="kpi-card" style="background: #fef2f2; border-color: #fecaca;">
-                <div class="kpi-lbl" style="color: #991b1b;">Meninggal (MD)</div>
+                <div class="kpi-lbl" style="color: #991b1b;">DOA / Meninggal</div>
                 <div class="kpi-val" style="color: #dc2626;">${totalMeninggal} <span style="font-size: 8px;">Jiwa</span></div>
               </div>
               <div class="kpi-card" style="background: #fffbeb; border-color: #fef3c7;">
-                <div class="kpi-lbl" style="color: #92400e;">Luka & Hilang</div>
-                <div class="kpi-val" style="color: #d97706;">${totalLuka + totalHilang} <span style="font-size: 8px;">Jiwa</span></div>
+                <div class="kpi-lbl" style="color: #92400e;">Gawat Darurat (P1/P2)</div>
+                <div class="kpi-val" style="color: #d97706;">${totalLuka} <span style="font-size: 8px;">Pasien</span></div>
               </div>
               <div class="kpi-card" style="background: #f0f9ff; border-color: #bae6fd;">
-                <div class="kpi-lbl" style="color: #075985;">Terdampak/Pengungsi</div>
-                <div class="kpi-val" style="color: #0284c7;">${(totalTerdampak + totalPengungsi).toLocaleString('id-ID')} <span style="font-size: 8px;">Jiwa</span></div>
+                <div class="kpi-lbl" style="color: #075985;">Ambulans Dispatched</div>
+                <div class="kpi-val" style="color: #0284c7;">${totalPengungsi.toLocaleString('id-ID')} <span style="font-size: 8px;">Unit</span></div>
               </div>
               <div class="kpi-card" style="background: #fdf4ff; border-color: #f5d0fe;">
-                <div class="kpi-lbl" style="color: #86198f;">Faskes Terdampak</div>
-                <div class="kpi-val" style="color: #a21caf;">${totalFaskes} <span style="font-size: 8px;">Unit</span></div>
+                <div class="kpi-lbl" style="color: #86198f;">RS Rujukan SPGDT</div>
+                <div class="kpi-val" style="color: #a21caf;">${totalFaskes} <span style="font-size: 8px;">Faskes</span></div>
               </div>
             </div>
 
             <!-- SECTION: RINGKASAN EKSEKUTIF (AI PARAGRAPHS) -->
             <section id="sec-ringkasan-eksekutif">
-              <h2 class="section-title">Ringkasan Eksekutif Analisis Situasi</h2>
+              <h2 class="section-title">Ringkasan Eksekutif Dispatch & Respon Kedaruratan Medis</h2>
               <div style="margin-bottom: 24px;">
                 ${formatAiParagraphs(aiData.ringkasan_laporan)}
               </div>
@@ -2543,7 +2503,7 @@ export default function UnduhLaporanPage() {
 
             <!-- SECTION 1: POIN UTAMA -->
             <section id="sec-poin-utama">
-              <h2 class="section-title">Poin Utama & Sintesis Strategis</h2>
+              <h2 class="section-title">Poin Utama & Rekomendasi Taktis Dispatch</h2>
               <ul style="padding-left: 20px; margin: 0 0 24px 0;">
                 ${aiBulletsHtml}
               </ul>
@@ -2551,8 +2511,8 @@ export default function UnduhLaporanPage() {
 
             <!-- SECTION 2: LAPORAN PENGAWASAN KASUS & AKTIVITAS INDIKATOR -->
             <section id="sec-pengawasan-kasus" class="page-break">
-              <h2 class="section-title">Laporan Pengawasan Kasus dan Indikator Aktivitas</h2>
-              <p class="section-subtitle">Disaster & Crisis Health Activity Indicators Matrix</p>
+              <h2 class="section-title">Indikator Kinerja & Standar Pelayanan Minimal (SPM) 119</h2>
+              <p class="section-subtitle">National Emergency Medical Dispatch & Response Time Indicators</p>
               
               <table>
                 <thead>
@@ -2743,16 +2703,16 @@ export default function UnduhLaporanPage() {
             <section id="sec-pengesahan" class="no-page-break-inside" style="border-top: 1px solid #cbd5e1; padding-top: 20px; margin-top: 30px;">
               <div style="display: flex; justify-content: space-between; align-items: flex-end;">
                 <div style="font-size: 11px; color: #64748b; line-height: 1.4;">
-                  <b>Pusat Krisis Kesehatan — Kementerian Kesehatan RI</b><br/>
-                  Gedung dr. Suwardjono Surjaningrat, Jl. H.R. Rasuna Said Blok X-5 Kav. 4-9 Jakarta<br/>
-                  Dokumen Resmi Sistem Informasi Penanggulangan Krisis Kesehatan (SIPKK)
+                  <b>Pusat Komando Nasional PSC 119 — Kementerian Kesehatan RI</b><br/>
+                  Gedung Suwardjono Surjaningrat, Jl. H.R. Rasuna Said Blok X-5 Kav. 4-9 Jakarta<br/>
+                  Dokumen Resmi Sistem Penanggulangan Gawat Darurat Terpadu (SPGDT 119)
                 </div>
-                <div style="text-align: center; width: 220px;">
+                <div style="text-align: center; width: 240px;">
                   <div style="font-size: 11px; color: #475569; margin-bottom: 4px;">Jakarta, ${reportDateStr}</div>
-                  <div style="font-size: 11.5px; font-weight: bold; color: #0f172a;">Tim Komando EOC Kemenkes RI</div>
+                  <div style="font-size: 11.5px; font-weight: bold; color: #0f172a;">Tim Komando Nasional PSC 119</div>
                   <div style="height: 50px;"></div>
                   <div style="font-weight: 800; border-top: 1px solid #1e293b; padding-top: 4px; font-size: 12px; color: #0f172a;">
-                    Kepala Pusat Krisis Kesehatan
+                    Kepala Pusat Komando PSC 119 Kemenkes RI
                   </div>
                 </div>
               </div>
@@ -2775,15 +2735,15 @@ export default function UnduhLaporanPage() {
         const a = document.createElement('a')
         a.href = blobUrl
         a.target = '_blank'
-        a.download = `Laporan_Resmi_EOC_${new Date().toISOString().slice(0, 10)}.html`
+        a.download = `Laporan_Resmi_PSC119_${new Date().toISOString().slice(0, 10)}.html`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
         setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
-        showToast('Pop-up browser terblokir. File Laporan Resmi EOC berhasil diunduh.')
+        showToast('Pop-up browser terblokir. File Laporan Resmi PSC 119 berhasil diunduh.')
       }
 
-      showToast('Berhasil membuat Laporan Resmi EOC Kemenkes RI!')
+      showToast('Berhasil membuat Laporan Resmi Eksekutif PSC 119 Kemenkes RI!')
     } catch (err: any) {
       console.error('[CreateDashboard] Error generating report:', err)
       showToast(`Gagal menyusun laporan: ${err?.message || 'Terjadi kesalahan sistem'}`)
@@ -2805,7 +2765,7 @@ export default function UnduhLaporanPage() {
       <html lang="id">
         <head>
           <meta charset="UTF-8">
-          <title>Formulir Laporan ${item.kode_laporan}</title>
+          <title>Lembar Dispatch Panggilan 119 - ${item.kode_laporan}</title>
           <style>
             @page {
               size: A4 portrait;
@@ -2833,7 +2793,7 @@ export default function UnduhLaporanPage() {
         <body>
           <div class="no-print" style="position: sticky; top: 0; z-index: 9999; background: #047D78; color: white; padding: 10px 16px; margin: -20px -20px 20px -20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
             <div style="display: flex; align-items: center; gap: 10px;">
-              <span style="font-weight: 800; font-size: 13px;">Preview Laporan ${item.kode_laporan}</span>
+              <span style="font-weight: 800; font-size: 13px;">Preview Lembar Dispatch #${item.kode_laporan}</span>
               <span style="background: rgba(255,255,255,0.2); font-size: 10px; padding: 3px 9px; border-radius: 12px; font-weight: 600;">HTML View</span>
             </div>
             <button onclick="window.print()" style="background: #ffffff; color: #047D78; font-weight: bold; border: none; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
@@ -2843,42 +2803,42 @@ export default function UnduhLaporanPage() {
 
           <div class="header">
             <h3>KEMENTERIAN KESEHATAN REPUBLIK INDONESIA</h3>
-            <h4>PUSAT KRISIS KESEHATAN — DOKUMEN LAPORAN BENCANA</h4>
-            <span class="badge">${item.kode_laporan} — ${item.status_verifikasi}</span>
+            <h4>PUSAT KOMANDO NASIONAL PSC 119 — LEMBAR LOG DISPATCH PANGGILAN DARURAT</h4>
+            <span class="badge">TIKET #${item.kode_laporan} — Status: ${item.status_verifikasi}</span>
           </div>
 
           <div class="section">
-            <div class="section-title">I. INFORMASI KEJADIAN & LOKASI HIERARKI</div>
+            <div class="section-title">I. INFORMASI PANGGILAN & TRIASE MEDIS PRA-FASKES</div>
             <table class="info">
-              <tr><td class="lbl">Jenis Bencana:</td><td><strong>${item.jenis_bencana}</strong></td></tr>
-              <tr><td class="lbl">Waktu Kejadian:</td><td>${item.tgl_kejadian_formatted} (${item.jam_kejadian})</td></tr>
-              <tr><td class="lbl">Tingkat Bencana:</td><td>${item.tingkat_bencana}</td></tr>
+              <tr><td class="lbl">Kategori Layanan:</td><td><strong>${item.jenis_bencana}</strong></td></tr>
+              <tr><td class="lbl">Waktu Panggilan:</td><td>${item.tgl_kejadian_formatted} (${item.jam_kejadian})</td></tr>
+              <tr><td class="lbl">Triase / Prioritas:</td><td><strong>${item.tingkat_bencana}</strong></td></tr>
+              <tr><td class="lbl">Pusat PSC 119:</td><td>${item.kabupaten}</td></tr>
               <tr><td class="lbl">Provinsi:</td><td>PROV. ${item.provinsi}</td></tr>
-              <tr><td class="lbl">Kabupaten/Kota:</td><td>${item.kabupaten}</td></tr>
-              <tr><td class="lbl">Kecamatan:</td><td>Kec. ${item.kecamatan}</td></tr>
-              <tr><td class="lbl">Desa/Kelurahan:</td><td>${item.desa}</td></tr>
+              <tr><td class="lbl">Kecamatan / TKP:</td><td>Kec. ${item.kecamatan}</td></tr>
+              <tr><td class="lbl">Alamat / Lokasi:</td><td>${item.desa}</td></tr>
             </table>
           </div>
 
           <div class="section">
-            <div class="section-title">II. DAMPAK KESEHATAN & FASILITAS</div>
+            <div class="section-title">II. PASIEN & MOBILISASI AMBULANS</div>
             <table class="info">
-              <tr><td class="lbl">Meninggal Dunia:</td><td>${item.korban_meninggal} Jiwa</td></tr>
-              <tr><td class="lbl">Luka Berat:</td><td>${item.korban_luka_berat} Jiwa</td></tr>
-              <tr><td class="lbl">Luka Ringan:</td><td>${item.korban_luka_ringan} Jiwa</td></tr>
-              <tr><td class="lbl">Penduduk Terdampak:</td><td>${item.penduduk_terdampak} Jiwa</td></tr>
-              <tr><td class="lbl">Pengungsi:</td><td>${item.pengungsi} Jiwa</td></tr>
-              <tr><td class="lbl">Faskes Terdampak:</td><td>${item.faskes_terdampak} Unit</td></tr>
+              <tr><td class="lbl">DOA / Meninggal di TKP:</td><td>${item.korban_meninggal} Jiwa</td></tr>
+              <tr><td class="lbl">Gawat Darurat (Merah):</td><td>${item.korban_luka_berat} Pasien</td></tr>
+              <tr><td class="lbl">Non-Gawat (Kuning/Hijau):</td><td>${item.korban_luka_ringan} Pasien</td></tr>
+              <tr><td class="lbl">Total Pasien Terlibat:</td><td>${item.penduduk_terdampak} Pasien</td></tr>
+              <tr><td class="lbl">Armada Ambulans Dispatched:</td><td>${item.pengungsi} Unit</td></tr>
+              <tr><td class="lbl">RS Rujukan SPGDT:</td><td>${item.faskes_terdampak > 0 ? 'Terhubung Sistem Rujukan' : 'Penanganan Tuntas di TKP'}</td></tr>
             </table>
           </div>
 
           <div class="section">
-            <div class="section-title">III. NARASI DAN REKOMENDASI PENANGANAN</div>
+            <div class="section-title">III. TINDAKAN MEDIS & DISPATCH LOG</div>
             <div class="narasi">${item.deskripsi}</div>
           </div>
 
           <div class="footer-sig">
-            <p>Petugas Pelapor:<br/><strong>${item.petugas}</strong></p>
+            <p>Dispatcher Pelapor:<br/><strong>${item.petugas}</strong></p>
           </div>
         </body>
       </html>
@@ -2935,8 +2895,8 @@ export default function UnduhLaporanPage() {
           <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm hover:shadow-md transition">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Laporan Terfilter</p>
-                <h3 className="mt-1 text-2xl font-extrabold text-[#047D78]">{metrics.totalReports} <span className="text-xs font-semibold text-slate-500">Laporan</span></h3>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Panggilan 119</p>
+                <h3 className="mt-1 text-2xl font-extrabold text-[#047D78]">{metrics.totalReports} <span className="text-xs font-semibold text-slate-500">Panggilan</span></h3>
               </div>
               <div className="grid h-11 w-11 place-items-center rounded-xl bg-teal-50 text-[#047D78] border border-teal-100">
                 <FileText className="h-5 w-5" />
@@ -2944,7 +2904,7 @@ export default function UnduhLaporanPage() {
             </div>
             <p className="mt-2 text-[11px] text-slate-500 flex items-center gap-1">
               <Sparkles className="h-3 w-3 text-teal-600" />
-              {activeFilterCount > 0 ? `${activeFilterCount} kriteria filter aktif` : 'Menampilkan seluruh database'}
+              {activeFilterCount > 0 ? `${activeFilterCount} kriteria filter aktif` : 'Menampilkan seluruh database live PSC 119'}
             </p>
           </div>
 
@@ -2952,44 +2912,44 @@ export default function UnduhLaporanPage() {
           <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm hover:shadow-md transition">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Korban Jiwa (MD / Luka)</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Kasus Gadar (P1 / P2)</p>
                 <h3 className="mt-1 text-2xl font-extrabold text-rose-600">
-                  {metrics.totalMeninggal} <span className="text-xs font-semibold text-slate-500">MD</span> / {metrics.totalLuka} <span className="text-xs font-semibold text-slate-500">Luka</span>
+                  {metrics.totalLuka} <span className="text-xs font-semibold text-slate-500">Pasien</span> / {metrics.totalMeninggal} <span className="text-xs font-semibold text-slate-500">DOA</span>
                 </h3>
               </div>
               <div className="grid h-11 w-11 place-items-center rounded-xl bg-rose-50 text-rose-600 border border-rose-100">
                 <ShieldAlert className="h-5 w-5" />
               </div>
             </div>
-            <p className="mt-2 text-[11px] text-slate-500">Terlibat dalam {metrics.totalReports} kejadian terfilter</p>
+            <p className="mt-2 text-[11px] text-slate-500">Distabilisasi di TKP & dirujuk ke IGD</p>
           </div>
 
           {/* Card 3 */}
           <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm hover:shadow-md transition">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Penduduk Terdampak</p>
-                <h3 className="mt-1 text-2xl font-extrabold text-amber-600">{metrics.totalTerdampak.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-500">Jiwa</span></h3>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Ambulans Dispatched</p>
+                <h3 className="mt-1 text-2xl font-extrabold text-amber-600">{metrics.totalPengungsi.toLocaleString('id-ID')} <span className="text-xs font-semibold text-slate-500">Unit</span></h3>
               </div>
               <div className="grid h-11 w-11 place-items-center rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
-                <Users className="h-5 w-5" />
+                <MapPin className="h-5 w-5" />
               </div>
             </div>
-            <p className="mt-2 text-[11px] text-slate-500">Mencakup pengungsi & warga terpapar</p>
+            <p className="mt-2 text-[11px] text-slate-500">Armada Ambulans Gadar & Transport</p>
           </div>
 
           {/* Card 4 */}
           <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm hover:shadow-md transition">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Faskes Terdampak</p>
-                <h3 className="mt-1 text-2xl font-extrabold text-cyan-700">{metrics.totalFaskes} <span className="text-xs font-semibold text-slate-500">Unit Faskes</span></h3>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">RS Rujukan & Faskes SPGDT</p>
+                <h3 className="mt-1 text-2xl font-extrabold text-cyan-700">{metrics.totalFaskes} <span className="text-xs font-semibold text-slate-500">Faskes</span></h3>
               </div>
               <div className="grid h-11 w-11 place-items-center rounded-xl bg-cyan-50 text-cyan-700 border border-cyan-100">
                 <Building2 className="h-5 w-5" />
               </div>
             </div>
-            <p className="mt-2 text-[11px] text-slate-500">Puskesmas, Pustu, Klinik, RSUD</p>
+            <p className="mt-2 text-[11px] text-slate-500">RSUD, RSUP, & Puskesmas Pembina</p>
           </div>
         </div>
 
@@ -3431,11 +3391,19 @@ export default function UnduhLaporanPage() {
                     type="button"
                     onClick={handleCreateDashboardHTML}
                     className="inline-flex items-center gap-1.5 rounded-xl border border-teal-600 bg-[#047D78] hover:bg-[#036662] px-3.5 py-2 text-xs font-bold text-white transition shadow-md cursor-pointer active:scale-95"
-                    title="Generate & cetak laporan HTML/PDF lengkap Kop Kemenkes & 3 Chart"
+                    title="Generate & cetak laporan resmi Kop Kemenkes & Analisis AI"
                   >
                     <Sparkles className="h-4 w-4 text-teal-200" />
-                    <span>Create Dashboard (AI Laporan Resmi)</span>
+                    <span>Laporan Eksekutif PSC 119 (AI)</span>
                   </button>
+                  <Link
+                    href="/"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-3.5 py-2 text-xs font-bold text-slate-700 transition shadow-sm"
+                    title="Buka Peta Spasial & Dasbor Utama PSC 119"
+                  >
+                    <Home className="h-4 w-4 text-[#047D78]" />
+                    <span>Dashboard Peta 119</span>
+                  </Link>
                 </div>
               </div>
 
@@ -3464,7 +3432,7 @@ export default function UnduhLaporanPage() {
 
                   {selectedTypes.map((jenis) => (
                     <span key={jenis} className="inline-flex items-center gap-1 rounded-lg bg-[#047D78] text-white px-2 py-0.5 text-xs font-semibold">
-                      Bencana: {jenis}
+                      Layanan: {jenis}
                       <button onClick={() => handleTypeToggle(jenis)} className="hover:text-rose-200">
                         <X className="h-3 w-3" />
                       </button>
@@ -3572,13 +3540,13 @@ export default function UnduhLaporanPage() {
                   <thead>
                     <tr className="bg-[#047D78] text-white uppercase text-[10px] tracking-wider font-extrabold">
                       <th className="py-3 px-3 border-b border-[#036662] text-center w-10">NO</th>
-                      <th className="py-3 px-3 border-b border-[#036662]">TGL KEJADIAN</th>
-                      <th className="py-3 px-3 border-b border-[#036662]">TGL PERKEMBANGAN</th>
-                      <th className="py-3 px-3 border-b border-[#036662]">LEVEL / LOKASI (PROV, KAB, KEC, DESA)</th>
-                      <th className="py-3 px-3 border-b border-[#036662]">JENIS BENCANA</th>
-                      <th className="py-3 px-3 border-b border-[#036662] text-center">KORBAN</th>
-                      <th className="py-3 px-3 border-b border-[#036662] text-center">PENDUDUK TERDAMPAK</th>
-                      <th className="py-3 px-3 border-b border-[#036662] text-center">FASKES TERDAMPAK</th>
+                      <th className="py-3 px-3 border-b border-[#036662]">WAKTU PANGGILAN</th>
+                      <th className="py-3 px-3 border-b border-[#036662]">UPDATE DISPATCH</th>
+                      <th className="py-3 px-3 border-b border-[#036662]">PUSAT PSC 119 & LOKASI TKP</th>
+                      <th className="py-3 px-3 border-b border-[#036662]">KATEGORI LAYANAN</th>
+                      <th className="py-3 px-3 border-b border-[#036662] text-center">PASIEN / KORBAN</th>
+                      <th className="py-3 px-3 border-b border-[#036662] text-center">AMBULANS DISPATCH</th>
+                      <th className="py-3 px-3 border-b border-[#036662] text-center">RS RUJUKAN</th>
                       <th className="py-3 px-3 border-b border-[#036662] text-center">DETAIL</th>
                     </tr>
                   </thead>
@@ -3601,7 +3569,7 @@ export default function UnduhLaporanPage() {
                       <tr>
                         <td colSpan={9} className="py-12 text-center text-slate-400">
                           <Info className="mx-auto h-8 w-8 opacity-40 mb-2" />
-                          <p className="text-sm font-semibold">Tidak ada laporan kejadian yang sesuai dengan kriteria filter lokasi/bencana.</p>
+                          <p className="text-sm font-semibold">Tidak ada log panggilan PSC 119 yang sesuai dengan kriteria filter lokasi/kategori layanan.</p>
                           <button
                             type="button"
                             onClick={handleResetFilters}

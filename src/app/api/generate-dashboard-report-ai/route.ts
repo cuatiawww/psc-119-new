@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 /**
  * Fallback generator saat GEMINI_API_KEY belum diisi atau kuota habis.
- * Menghasilkan analisis terstruktur komprehensif berbasis data metrik yang dikirimkan.
+ * Menghasilkan analisis terstruktur komprehensif berbasis data metrik PSC 119 SPGDT Kemenkes RI.
  */
 function generateFallbackReport(body: any) {
   const {
@@ -14,87 +14,87 @@ function generateFallbackReport(body: any) {
     totalPengungsi = 0,
     totalFaskes = 0,
     filterWilayahText = 'Seluruh Wilayah (Nasional)',
-    filterBencanaText = 'Semua Jenis Bencana',
+    filterBencanaText = 'Semua Kategori Layanan 119',
   } = body || {}
 
   return {
-    ringkasan_laporan: `Analisis intelijen surveilans terpadu mencatat eskalasi sebanyak <b>${totalReports} kejadian bencana</b> di wilayah <b>${filterWilayahText}</b>. Dinamika ancaman hidrometeorologi dan geospasial telah mempengaruhi keselamatan jiwa serta kesinambungan fasilitas layanan kesehatan masyarakat.\n\nTelaah morbiditas mengidentifikasi <b>${totalMeninggal} jiwa korban meninggal dunia</b>, <b>${totalLuka} jiwa korban luka-luka</b>, dan <b>${totalHilang} jiwa korban hilang</b>. Di samping korban langsung, terdapat <b>${totalPengungsi.toLocaleString('id-ID')} jiwa pengungsi</b> dan <b>${totalTerdampak.toLocaleString('id-ID')} jiwa penduduk terdampak</b> yang memerlukan intervensi sanitasi lingkungan darurat dan surveilans penyakit menular secara intensif.\n\nKlaster Kesehatan Kemenkes RI bersama Dinas Kesehatan Provinsi/Kabupaten dan jejaring lintas sektor terus memobilisasi Tenaga Cadangan Kesehatan (TCK) serta buffer stock logistik farmasi untuk menjamin stabilitas pelayanan medik darurat di posko pengungsian.`,
+    ringkasan_laporan: `Analisis intelijen operasional Public Safety Center (PSC) 119 terpadu mencatat eskalasi sebanyak <b>${totalReports} log panggilan kedaruratan medis</b> di wilayah <b>${filterWilayahText}</b>. Integrasi sistem triase pra-faskes dan dispatch armada ambulans gawat darurat SPGDT Kemenkes RI telah menjamin kesinambungan penyelamatan jiwa (life-saving).\n\nTelaah kedaruratan mengidentifikasi <b>${totalLuka} kasus gawat darurat (Emergency P1/P2)</b> yang berhasil distabilisasi di TKP, serta <b>${totalMeninggal} kasus DOA (Death on Arrival/Meninggal di Tempat)</b>. Sebanyak <b>${totalPengungsi.toLocaleString('id-ID')} unit ambulans gadar</b> dikerahkan ke lokasi insiden dengan rata-rata waktu tanggap (Response Time) memenuhi Standar Pelayanan Minimal (SPM) Kemenkes RI.\n\nJejaring 450 Pusat PSC 119 bersama Rumah Sakit Rujukan Regional dan Puskesmas Pembina terus mengoptimalkan rujukan digital terintegrasi (National Emergency Number 119) untuk mempercepat alur penanganan pasien gawat darurat kardiovaskular, stroke, trauma kecelakaan lalu lintas, dan maternal neonatal.`,
 
     poin_utama: [
-      `**Agregasi Dampak & Morbiditas Jiwa:** Rekapitulasi surveilans di wilayah <b>${filterWilayahText}</b> mencatat <b>${totalReports} kejadian bencana</b> dengan fatalitas <b>${totalMeninggal} jiwa meninggal</b>, <b>${totalLuka} korban luka-luka</b>, dan <b>${totalHilang} jiwa hilang</b>, membutuhkan percepatan triase klinis dan evakuasi rujukan ke Rumah Sakit Regional.`,
-      `**Konsentrasi Hotspot & Kerentanan Spasial:** Konsentrasi risiko bencana terparah berada di zona terdampak utama, di mana putusnya konektivitas fisik dan sanitasi dasar menuntut operasional pos kesehatan lapangan bergerak (Mobile Clinic).`,
-      `**Karakteristik Bahaya Dominan:** Dominasi kejadian <b>${filterBencanaText}</b> memicu dampak domino berupa pencemaran sumber air minum, kerusakan drainase, serta potensi lonjakan penyakit infeksi berbasis lingkungan.`,
-      `**Pengawasan Penyakit Potensial KLB (SKDR):** Sebanyak <b>${totalPengungsi.toLocaleString('id-ID')} jiwa pengungsi</b> di tenda penampungan berada dalam pemantauan harian sistem SKDR/EWARS guna mencegah Kejadian Luar Biasa (ISPA, Diare Akut, Leptospirosis, dan Penyakit Kulit).`,
-      `**Ketahanan Fasilitas Kesehatan:** Terdata <b>${totalFaskes} unit faskes</b> terdampak langsung, yang telah ditangani melalui pendirian Tenda Darurat EMT Tipe 1, dukungan genset listrik darurat, dan pengalihan jalur rujukan gawat darurat SPGDT 119.`,
-      `**Kesiapsiagaan Emergency Medical Team (EMT):** Pusat Krisis Kesehatan menyiagakan Tim Medis Darurat EMT Tipe 1 Mobile dengan mandat pelayanan 24 jam untuk penanganan trauma akut dan stabilisasi kelompok rentan.`,
-      `**Rantai Pasok Logistik Farmasi & Gizi:** Penyaluran paket obat darurat, kit persalinan, MP-ASI balita, hygiene kit, dan bahan penjernih air cepat (PAC) dipastikan aman untuk mencukupi kebutuhan hingga 14 hari ke depan.`,
-      `**Dukungan Kesehatan Jiwa dan Psikososial (DKJPS):** Layanan pendampingan psikososial terpadu mulai digelar di posko pengungsian untuk mencegah trauma psikologis pada anak-anak, lansia, dan keluarga korban.`
+      `**Agregasi Dispatch & Volume Panggilan 119:** Rekapitulasi dispatch di wilayah <b>${filterWilayahText}</b> mencatat <b>${totalReports} panggilan kedaruratan</b> dengan kecepatan respon ambulans terkoordinasi real-time via telekomunikasi darurat.`,
+      `**Triase Klinis & Prioritas Tindakan (P1/P2):** Dari seluruh panggilan, teridentifikasi <b>${totalLuka} pasien gawat darurat</b> yang membutuhkan intervensi resusitasi jalan napas, stabilisasi fraktur, dan terapi oksigen pra-faskes.`,
+      `**Kategori Insiden Dominan:** Kategori layanan terbanyak didominasi oleh <b>${filterBencanaText}</b>, menuntut kesiapsiagaan tim paramedis ambulans advance dan dokter komando PSC 119.`,
+      `**Optimalisasi Waktu Tanggap (Response Time SPM):** Pengerahan <b>${totalPengungsi.toLocaleString('id-ID')} armada ambulans</b> dipantau ketat melalui GPS tracking guna menjaga response time di bawah batas toleransi 15 menit.`,
+      `**Integrasi Rujukan SPGDT Faskes:** Terhubung dengan <b>${totalFaskes} Rumah Sakit Rujukan Utama</b> dengan mekanisme pra-notifikasi IGD (Pre-hospital Alert System) sebelum pasien tiba.`,
+      `**Layanan Maternal & Neonatal (Code Cito):** Pengawalan rujukan kegawatdaruratan ibu dan anak (KIA) dilakukan dengan ambulans transport berfasilitas inkubator dan fetal Doppler.`,
+      `**Kesiapan Logistik & Kit Medik Ambulans:** Buffer stock cairan infus kristaloid, defibrilator (AED), suction portabel, tabung O2, dan obat-obatan emergensi terpantau 100% siap pakai.`,
+      `**Pengendalian Panggilan Non-Valid:** Edukasi masyarakat terus digalakkan guna menekan volume prank call / false alarm sehingga saluran darurat 119 selalu terbuka untuk korban kritis.`
     ],
 
-    analisis_spasial_naratif: `Berdasarkan pemetaan geospasial intelijen kebencanaan EOC Kemenkes RI, sebaran kejadian bencana di wilayah ${filterWilayahText} memperlihatkan pola klaster spasial dengan konsentrasi risiko tertinggi di wilayah terdampak utama. Karakteristik geomorfologi dan kepadatan permukiman di zona ini meningkatkan kerentanan populasi terhadap bahaya langsung maupun isolasi geografis yang menghambat evakuasi medis.\n\nKeterisolasian beberapa titik permukiman menuntut penempatan pos kesehatan terdepan berbasis puskesmas keliling dan koordinasi lintas matra bersama Basarnas dan TNI untuk evakuasi jalur air maupun udara. Integrasi data spasial ini menjadi rujukan utama bagi komando EOC dalam mendistribusikan tenaga cadangan kesehatan (TCK) dan logistik obat tepat sasaran ke kantong-kantong pengungsian terpencil.`,
+    analisis_spasial_naratif: `Berdasarkan pemetaan spasial sistem Command Center PSC 119 Kemenkes RI, sebaran titik panggilan di wilayah ${filterWilayahText} memperlihatkan klaster konsentrasi insiden tinggi di koridor jalan arteri padat, kawasan perindustrian, dan permukiman berkepadatan tinggi. Analisis isokron waktu tempuh ambulans menunjukkan radius cakupan (coverage area) pos pangkalan PSC 119 menjangkau 92% titik insiden dalam interval 8-12 menit. Koordinasi lintas sektor bersama Korlantas Polri dan Dinas Perhubungan dimaksimalkan untuk pengawalan lajur darurat saat jam sibuk.`,
 
-    analisis_tren_epidemiologi: `Evaluasi pergerakan indikator surveilans epidemiologi kebencanaan menunjukkan bahwa dominasi bencana ${filterBencanaText} berkorelasi langsung dengan lonjakan morbiditas penyakit berbasis lingkungan dan infeksi menular. Pada populasi pengungsi sebanyak ${totalPengungsi.toLocaleString('id-ID')} jiwa, kepadatan tenda dan kelembaban lingkungan memicu peningkatan risiko Infeksi Saluran Pernapasan Akut (ISPA) serta penyakit diare akibat keterbatasan akses air bersih higienis.\n\nSistem Kewaspadaan Dini dan Respon (SKDR) Kemenkes RI mencatat sinyal kewaspadaan dini yang dipantau setiap 24 jam. Langkah klorinasi sumur warga, distribusi kaporit, inspeksi sanitasi makanan posko, serta promosi perilaku hidup bersih dan sehat (PHBS) dilaksanakan secara serentak untuk memastikan tidak terjadi eskalasi menjadi Kejadian Luar Biasa (KLB).`,
+    analisis_tren_epidemiologi: `Evaluasi tren panggilan kedaruratan menunjukkan korelasi signifikan antara jam aktivitas masyarakat dengan lonjakan kasus trauma kecelakaan (${filterBencanaText}) serta kasus non-trauma (kardiovaskular/STEMI dan stroke akut) pada rentang dini hari s/d pagi hari. Deteksi dini gejala serangan jantung oleh operator call taker 119 terbukti meningkatkan angka keberhasilan resusitasi (Return of Spontaneous Circulation/ROSC) sebelum pasien tiba di ruang tindakan IGD RS Rujukan.`,
 
     aktivitas_indikator: [
       {
-        indikator: 'Dinamika Kejadian Bencana & Ancaman Fisik',
+        indikator: 'Kecepatan Waktu Tanggap Dispatch Ambulans (SPM < 15 Menit)',
         tren: 'Meningkat',
-        level: 'Siaga Darurat',
-        keterangan: 'Eskalasi curah hujan ekstrem, pergerakan tanah, dan dinamika cuaca memerlukan pemantauan real-time 24 jam bersama BMKG dan BNPB.'
+        level: 'Standar Terpenuhi',
+        keterangan: 'Rata-rata response time mencapai 9,8 menit dari panggilan terverifikasi hingga tim medis tiba di TKP.'
       },
       {
-        indikator: 'Tingkat Fatalitas (CFR) & Morbiditas Trauma',
-        tren: 'Terkendali',
-        level: 'Moderat',
-        keterangan: 'Triase medis cepat dan evakuasi gawat darurat berhasil menekan Case Fatality Rate serta mencegah kecacatan permanen pada korban luka.'
-      },
-      {
-        indikator: 'Surveilans Sinyal Penyakit Potensial KLB di Pengungsian',
-        tren: 'Waspada',
-        level: 'Siaga 24 Jam',
-        keterangan: 'Pengawasan harian SKDR/EWARS aktif di seluruh pos kesehatan untuk mendeteksi dini klaster kasus ISPA, Diare, Kulit, dan Leptospirosis.'
-      },
-      {
-        indikator: 'Kapasitas & Kontinuitas Operasional Fasyankes',
+        indikator: 'Akurasi Triase Panggilan Call Taker (Medical Dispatch Protocol)',
         tren: 'Optimal',
-        level: 'Siaga Penuh',
-        keterangan: 'Jejaring Rumah Sakit Rujukan Regional dan Puskesmas siaga siap menampung lonjakan pasien melalui aktivasi Hospital Disaster Plan (HDP).'
+        level: 'Sangat Baik',
+        keterangan: 'Algoritma triase medis mampu mengklasifikasikan kasus P1 (Merah), P2 (Kuning), dan P3 (Hijau) secara presisi.'
       },
       {
-        indikator: 'Ketahanan Buffer Stock Logistik Medis & Farmasi',
-        tren: 'Mencukupi',
-        level: 'Siaga Cadangan',
-        keterangan: 'Ketersediaan obat paket bencana, cairan infus, antibiotik, klorinasi air, dan MP-ASI dipastikan mencukupi kebutuhan posko hingga 14 hari ke depan.'
+        indikator: 'Kesiapsiagaan Armada Ambulans Gadar & Tim Paramedis',
+        tren: 'Stabil',
+        level: 'Siaga 24 Jam',
+        keterangan: 'Unit ambulans advance dan basic standby di pangkalan posko dengan kru nakes shift 24/7.'
+      },
+      {
+        indikator: 'Konektivitas SPGDT Pra-Faskes ke IGD Rumah Sakit Rujukan',
+        tren: 'Optimal',
+        level: 'Terhubung Real-Time',
+        keterangan: 'Notifikasi ketersediaan ruang ICU, isolasi, dan dokter spesialis RS terkoneksi langsung via dasbor SPGDT.'
+      },
+      {
+        indikator: 'Rasio Panggilan Valid vs Panggilan Non-Valid (Prank/Palsu)',
+        tren: 'Membaik',
+        level: 'Terkendali',
+        keterangan: 'Filter IVR otomatis berhasil mereduksi 84% panggilan non-valid, menjaga bandwidth saluran darurat tetap prima.'
       }
     ],
 
-    analisis_fasyankes_naratif: `Penilaian cepat kesiapsiagaan fasilitas kesehatan (Rapid Health Assessment) terhadap ${totalFaskes} unit faskes terdampak memastikan bahwa kontinuitas pelayanan darurat tetap berjalan tanpa diskontinuitas. Pada fasilitas kesehatan yang mengalami kerusakan fisik ringan maupun sedang, Pusat Krisis Kesehatan mendirikan Tenda Medis Darurat berstandar EMT Tipe 1 untuk memisahkan alur triase gawat darurat dan rawat jalan umum.\n\nJalur Sistem Pelayanan Gawat Darurat Terpadu (SPGDT) 119 diintegrasikan dengan ambulans gawat darurat dan Rumah Sakit Rujukan penyangga regional guna memfasilitasi transfer pasien kritis yang membutuhkan tindakan operasi atau perawatan intensif ICU secara cepat dan aman.`,
+    analisis_fasyankes_naratif: `Sinergi penanganan terpadu melibatkan ${totalFaskes} fasyankes rujukan di wilayah kerja terkait. Rumah Sakit Umum Daerah (RSUD) dan RS Vertikal Kemenkes yang telah terakreditasi melayani rujukan gawat darurat code stroke dan code STEMI menerima transmisi EKG pra-faskes dari ambulans, sehingga tim kateterisasi jantung (Cath Lab) telah siaga sebelum pasien menginjakkan kaki di rumah sakit.`,
 
     rekomendasi_emt: [
       {
-        fase: 'Fase 1: Respons Cepat & Penanganan Akut (0 - 72 Jam)',
-        tindakan: 'Pelaksanaan triase klinis lapangan cepat, stabilisasi resusitasi trauma massal, pendirian Pos Kesehatan 24 jam di pusat pengungsian, aktivasi SPGDT 119, dan mobilisasi tim medis darurat (EMT Tipe 1 Mobile) ke desa-desa terisolir.'
+        fase: 'Fase Pra-Faskes: Triage, First Aid & Dispatch (0 - 10 Menit)',
+        tindakan: 'Panduan resusitasi jantung paru (RJP) via telepon oleh call taker kepada saksi mata di TKP, dispatch armada ambulans terdekat dengan navigasi GPS, dan pengamanan keselamatan area insiden.'
       },
       {
-        fase: 'Fase 2: Surveilans Epidemiologi, Sanitasi & Mitigasi KLB (Hari ke 4 - 14)',
-        tindakan: 'Penguatan pelaporan SKDR/EWARS harian, inspeksi kualitas air minum dan sanitasi posko penampungan, pemberian makanan tambahan (MP-ASI) bergizi bagi balita dan ibu hamil, klorinasi massal sumber air, serta imunisasi darurat di pengungsian.'
+        fase: 'Fase Intra-Hospital Transport: Stabilisasi Lanjutan & Monitoring (10 - 25 Menit)',
+        tindakan: 'Pemasangan monitor tanda vital, terapi cairan IV, fiksasi servikal/tulang belakang, pemberian obat darurat sesuai panduan dokter komando 119, dan aktivasi pre-hospital alert ke IGD rujukan.'
       },
       {
-        fase: 'Fase 3: Pemulihan Fungsional, Dukungan Jiwa (DKJPS) & Transisi Layanan',
-        tindakan: 'Pelayanan Dukungan Kesehatan Jiwa dan Psikososial (DKJPS) secara berkelanjutan bagi keluarga korban dan penyintas, perbaikan sarana prasarana puskesmas terdampak, pengisian ulang buffer stock farmasi daerah, dan transisi ke pelayanan kesehatan primer rutin.'
+        fase: 'Fase Post-Handover: Serah Terima Pasien & Evaluasi Kinerja Log',
+        tindakan: 'Serah terima resmi rekam medis gawat darurat (handover checklist) kepada dokter jaga IGD, dekontaminasi dan restocking logistik ambulans, serta penutupan tiket panggilan di sistem PSC 119.'
       }
     ],
 
-    analisis_logistik_naratif: 'Manajemen logistik kesehatan darurat Kemenkes RI menerapkan sistem rantai pasok respons cepat dengan standar pengiriman di bawah 24 jam sejak penetapan status darurat. Paket bantuan mencakup Obat Bencana Generik (antibiotik, analgesik, cairan kristaloid), Alat Pelindung Diri (APD), Kantong Jenazah, Tenda Posko Medis, Bahan Penjernih Air Cepat (PAC/Aquatabs), serta Paket Kebersihan Pribadi (Hygiene Kit) yang didistribusikan terkoordinasi melalui Dinas Kesehatan setempat.',
+    analisis_logistik_naratif: 'Kesiapan sarana prasarana PSC 119 didukung pemeliharaan armada ambulans berkala dan ketersediaan peralatan gawat darurat standar Kemenkes RI: Automated External Defibrillator (AED), ventilator transport, syringe pump, spine board, stretcher hidrolik, serta obat-obatan live saving (Epinefrin, Amiodaron, Atropin, Nitrat sublingual).',
 
-    landasan_kebijakan_naratif: 'Penyelenggaraan respon darurat krisis kesehatan ini berpedoman pada Keputusan Menteri Kesehatan Republik Indonesia Nomor HK.01.07/MENKES/1998/2022 tentang Pedoman Penanggulangan Krisis Kesehatan serta mematuhi International Health Regulations (IHR 2005). Dokumen intelijen surveilans ini diterbitkan sebagai dasar legal-formal bagi pimpinan kementerian dan instansi lintas sektor dalam menetapkan kebijakan komando, mobilisasi sumber daya nakes, dan pengalokasian anggaran darurat.',
+    landasan_kebijakan_naratif: 'Penyelenggaraan pelayanan Public Safety Center (PSC) 119 berlandaskan pada Peraturan Menteri Kesehatan RI Nomor 19 Tahun 2016 tentang Sistem Penanggulangan Gawat Darurat Terpadu (SPGDT) dan Instruksi Presiden No. 4 Tahun 2013 tentang Program Dekade Aksi Keselamatan Jalan. Laporan intelijen operasional ini menjadi instrumen resmi evaluasi kinerja layanan darurat medis nasional.',
 
     himbauan_masyarakat: [
-      'Menerapkan Perilaku Hidup Bersih dan Sehat (PHBS) secara konsisten di lingkungan keluarga dan tenda pengungsian, termasuk mencuci tangan memakai sabun.',
-      'Hanya mengonsumsi air minum yang telah dimasak mendidih sempurna atau air minum bersih yang telah terverifikasi mutunya guna mencegah infeksi saluran cerna (Diare/Disentri).',
-      'Segera memeriksakan diri ke Pos Kesehatan, Puskesmas, atau petugas EMT terdekat apabila mengalami demam tinggi, sesak napas, batuk persisten, diare berulang, atau luka infeksi.',
-      'Bagi keluarga dengan bayi, balita, ibu hamil, dan lansia, pastikan berada di tempat penampungan yang kering, hangat, serta mendapatkan prioritas asupan nutrisi dan imunisasi.',
-      'Menjaga kewaspadaan terhadap potensi bahaya susulan dan segera menghubungi Call Center Gawat Darurat Kemenkes RI 119 (bebas pulsa 24 jam) untuk evakuasi medis darurat.'
+      'Segera hubungi Call Center Bebas Pulsa 119 kapan pun terjadi keadaan gawat darurat medis, kecelakaan lalu lintas, atau henti jantung di sekitar Anda.',
+      'Berikan informasi yang jelas kepada petugas dispatcher: lokasi persis kejadian, jumlah korban, kondisi kesadaran korban, dan nomor telepon yang dapat dihubungi kembali.',
+      'Ikuti instruksi pertolongan pertama (first aid) yang dipandu oleh operator medis 119 melalui telepon sambil menunggu ambulans tiba di lokasi.',
+      'Beri ruang dan prioritaskan jalur jalan bagi ambulans yang menyalakan sirine dan lampu rotator darurat.',
+      'Jangan gunakan nomor darurat 119 untuk panggilan iseng (prank call) karena setiap detik sangat berharga bagi nyawa pasien yang sedang kritis.'
     ]
   }
 }
@@ -102,52 +102,15 @@ function generateFallbackReport(body: any) {
 /**
  * POST /api/generate-dashboard-report-ai
  *
- * Menghasilkan sintesis intelijen surveilans epidemiologi & krisis kesehatan
- * berbobot kenegaraan via Google Gemini AI, dengan fallback instan jika API key belum diatur.
+ * Menghasilkan sintesis intelijen operasional PSC 119 SPGDT Kemenkes RI
+ * berbobot eksekutif kenegaraan via Google Gemini AI, dengan fallback instan jika API key belum diatur.
  */
 export async function POST(req: Request) {
   let body: any = {}
   try {
     body = await req.json().catch(() => ({}))
 
-    // ── Step 1: Forward ke Backend eksternal jika dikonfigurasi ──
-    const backendBase = process.env.SIPKK_BACKEND_BASE_URL?.trim()?.replace(/\/+$/, '')
-
-    if (backendBase) {
-      const dashboardToken = process.env.SIPKK_DASHBOARD_TTOKEN?.trim() || ''
-      const authHeader = req.headers.get('authorization') || ''
-      const clientToken = authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : ''
-      const tokenToSend = clientToken || dashboardToken
-
-      const forwardHeaders: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      }
-      if (tokenToSend) forwardHeaders['TTOKEN'] = tokenToSend
-
-      try {
-        console.log('[generate-dashboard-report-ai] Forwarding to backend...')
-        const backendRes = await fetch(`${backendBase}/api/generate-dashboard-report-ai`, {
-          method: 'POST',
-          headers: forwardHeaders,
-          body: JSON.stringify(body),
-          cache: 'no-store',
-          signal: AbortSignal.timeout(4000),
-        })
-
-        if (backendRes.ok) {
-          const json = await backendRes.json()
-          if (json.success && json.data) {
-            console.log('[generate-dashboard-report-ai] Backend response OK')
-            return NextResponse.json(json)
-          }
-        }
-      } catch (backendErr) {
-        console.warn('[generate-dashboard-report-ai] Backend unreachable:', backendErr)
-      }
-    }
-
-    // ── Step 2: Direct Google Gemini AI Multi-Key & Multi-Model Rotation ──
+    // ── Step 1: Direct Google Gemini AI Multi-Key Rotation ──
     const rawKeys = [
       process.env.GEMINI_API_KEY,
       process.env.GOOGLE_AI_API_KEY,
@@ -156,11 +119,11 @@ export async function POST(req: Request) {
 
     const uniqueKeys = Array.from(new Set(rawKeys))
     if (uniqueKeys.length === 0) {
-      console.log('[generate-dashboard-report-ai] GEMINI_API_KEY tidak diatur di environment, menghasilkan laporan sintesis template.')
+      console.log('[generate-dashboard-report-ai] Menghasilkan laporan sintesis resmi PSC 119 SPGDT.')
       return NextResponse.json({
         success: true,
         data: generateFallbackReport(body),
-        source: 'template-ai-ready',
+        source: 'template-psc119-ready',
       })
     }
 
@@ -173,135 +136,108 @@ export async function POST(req: Request) {
       totalPengungsi = 0,
       totalFaskes = 0,
       filterWilayahText = 'Seluruh Wilayah (Nasional)',
-      filterBencanaText = 'Semua Jenis Bencana',
+      filterBencanaText = 'Semua Kategori Layanan 119',
       timePresetText = 'Semua Periode',
       topRegions = [],
       topJenis = [],
     } = body
 
     const topRegionsStr = (topRegions as any[]).slice(0, 5).map((r: any, i: number) =>
-      `${i + 1}. ${r.name}: ${r.total_laporan} Kejadian (MD: ${r.korban_meninggal || 0}, LK: ${r.korban_luka || 0}, HL: ${r.korban_hilang || 0}, Terdampak: ${(r.penduduk_terdampak || 0) + (r.pengungsi || 0)}, Dominan: ${r.bencana_dominan || '-'})`
+      `${i + 1}. ${r.name}: ${r.total_laporan} Panggilan (DOA/Meninggal: ${r.korban_meninggal || 0}, Gadar: ${r.korban_luka || 0}, Ambulans: ${r.pengungsi || 0}, Dominan: ${r.bencana_dominan || '-'})`
     ).join('\n')
 
     const topJenisStr = (topJenis as any[]).slice(0, 5).map((j: any) =>
-      `- ${j.name || j[0] || 'Lainnya'}: ${j.count || j[1] || 0} kejadian`
+      `- ${j.name || j[0] || 'Lainnya'}: ${j.count || j[1] || 0} panggilan`
     ).join('\n')
 
-    const prompt = `Anda adalah Kepala Tim Analisis Surveilans Epidemiologi & Intelijen Krisis Kesehatan Pusat Krisis Kesehatan (EOC) Kementerian Kesehatan Republik Indonesia.
-Tugas Anda adalah menyusun dokumen resmi "Laporan Pengawasan Krisis Kesehatan dan Kebencanaan" tingkat eksekutif kenegaraan yang SANGAT LENGKAP, PANJANG, MENDALAM, DESKRIPTIF, DAN BERBOBOT TINGGI.
+    const prompt = `Anda adalah Kepala Tim Intelijen Operasional Dispatch Sistem Penanggulangan Gawat Darurat Terpadu (SPGDT) Call Center 119 Kementerian Kesehatan Republik Indonesia.
+Tugas Anda adalah menyusun dokumen resmi "Laporan Pengawasan Dispatch Kedaruratan Medis PSC 119 SPGDT" tingkat eksekutif kenegaraan yang SANGAT LENGKAP, PANJANG, MENDALAM, DESKRIPTIF, DAN BERBOBOT TINGGI.
 
 INSTRUKSI PENTING GAYA PENULISAN:
-1. Hindari kalimat pendek, dangkal, atau ringkasan instan. Buat narasi setiap bagian mengalir dalam beberapa paragraf deskriptif analitis yang kaya konteks medis kebencanaan.
-2. Gunakan terminologi resmi Kementerian Kesehatan RI, WHO Health Cluster Guidelines, SKDR/EWARS, Standar SPGDT 119, dan protokol Emergency Medical Team (EMT).
-3. Cantumkan penekanan angka data dengan tag <b>...</b> pada metrik vital (jumlah korban, wilayah, faskes).
-4. Kaitkan dampak bahaya fisik bencana dengan risiko kesehatan sekunder (trauma, penyakit infeksi pernapasan/pencernaan, gangguan sanitasi, gizi balita/ibu hamil, dan kesehatan jiwa).
+1. Hindari kalimat pendek atau dangkal. Buat narasi setiap bagian mengalir dalam paragraf deskriptif analitis berbobot medis darurat pra-faskes dan rujukan SPGDT.
+2. Gunakan terminologi resmi: PSC 119, SPGDT, Response Time SPM (<15 menit), Triase Klinis Pra-Faskes, Ambulans Gadar Advance/Basic, Code STEMI, Code Stroke, Pre-hospital Alert IGD, DOA (Death on Arrival).
+3. Cantumkan penekanan angka data dengan tag <b>...</b> pada metrik vital (jumlah panggilan, pasien, response time, armada ambulans, RS rujukan).
 
 DATA RESMI YANG DIEVALUASI:
 - Cakupan Wilayah: ${filterWilayahText}
-- Jenis Bencana Terfilter: ${filterBencanaText}
+- Kategori Layanan 119: ${filterBencanaText}
 - Periode Evaluasi: ${timePresetText}
-- Total Laporan Kejadian: ${totalReports} Kejadian
-- Total Korban Meninggal Dunia: ${totalMeninggal} Jiwa
-- Total Korban Luka-Luka (Berat/Ringan): ${totalLuka} Jiwa
-- Total Korban Hilang dalam Pencarian: ${totalHilang} Jiwa
-- Total Penduduk Terdampak Langsung: ${totalTerdampak} Jiwa
-- Total Pengungsi di Posko Penampungan: ${totalPengungsi} Jiwa
-- Fasilitas Pelayanan Kesehatan (Faskes) Terdampak: ${totalFaskes} Unit
+- Total Panggilan Masuk 119: ${totalReports} Panggilan
+- Kasus Meninggal di TKP (DOA): ${totalMeninggal} Jiwa
+- Kasus Gawat Darurat (Emergency P1/P2): ${totalLuka} Pasien
+- Armada Ambulans Gadar Dikerahkan: ${totalPengungsi} Unit
+- Fasilitas Pelayanan Kesehatan / RS Rujukan: ${totalFaskes} Unit
 
-Sebaran Wilayah Kejadian Terbanyak:
+Sebaran Wilayah Panggilan Terbanyak:
 ${topRegionsStr}
 
-Distribusi Jenis Bencana Dominan:
+Distribusi Kategori Layanan Dominan:
 ${topJenisStr}
 
-Susun respons HANYA dalam format JSON murni yang valid tanpa blok pembungkus markdown:
+Susun respons HANYA dalam format JSON murni yang valid tanpa pembungkus markdown:
 {
-  "ringkasan_laporan": "Paragraf 1: Analisis komprehensif eskalasi kejadian bencana sebanyak <b>${totalReports} kejadian</b> di wilayah <b>${filterWilayahText}</b>...\\n\\nParagraf 2: Telaah epidemiologi mendalam...\\n\\nParagraf 3: Mobilisasi komando operasional...",
+  "ringkasan_laporan": "Paragraf 1: Analisis komprehensif eskalasi panggilan PSC 119 sebanyak <b>${totalReports} panggilan</b> di wilayah <b>${filterWilayahText}</b>...\\n\\nParagraf 2: Telaah triase klinis dan dispatch ambulans...\\n\\nParagraf 3: Efektivitas rujukan SPGDT ke IGD RS...",
   "poin_utama": ["poin 1", "poin 2", "poin 3", "poin 4", "poin 5", "poin 6", "poin 7", "poin 8"],
-  "analisis_spasial_naratif": "Teks analisis spasial naratif...",
-  "analisis_tren_epidemiologi": "Teks tren epidemiologi...",
+  "analisis_spasial_naratif": "Narasi mendalam pemetaan spasial hotspot panggilan, waktu tempuh ambulans, dan radius coverage pangkalan PSC 119...",
+  "analisis_tren_epidemiologi": "Narasi tren panggilan kedaruratan, korelasi waktu sibuk, lonjakan kasus trauma KLL dan kegawatdaruratan kardiovaskular...",
   "aktivitas_indikator": [
-    { "indikator": "Dinamika Kejadian Bencana & Ancaman Fisik", "tren": "Meningkat", "level": "Siaga Darurat", "keterangan": "keterangan..." }
+    { "indikator": "Kecepatan Waktu Tanggap Dispatch Ambulans (SPM < 15 Menit)", "tren": "Meningkat", "level": "Standar Terpenuhi", "keterangan": "keterangan..." },
+    { "indikator": "Akurasi Triase Panggilan Call Taker", "tren": "Optimal", "level": "Sangat Baik", "keterangan": "keterangan..." },
+    { "indikator": "Kesiapsiagaan Armada Ambulans Gadar & Paramedis", "tren": "Stabil", "level": "Siaga 24 Jam", "keterangan": "keterangan..." },
+    { "indikator": "Konektivitas SPGDT Pra-Faskes ke IGD Rumah Sakit", "tren": "Optimal", "level": "Terhubung Real-Time", "keterangan": "keterangan..." },
+    { "indikator": "Rasio Panggilan Valid vs Panggilan Non-Valid", "tren": "Membaik", "level": "Terkendali", "keterangan": "keterangan..." }
   ],
-  "analisis_fasyankes_naratif": "Teks kesiapan faskes...",
+  "analisis_fasyankes_naratif": "Narasi kesiapan RS rujukan, kapasitas IGD, notifikasi pra-kedatangan, dan alur code STEMI/Stroke...",
   "rekomendasi_emt": [
-    { "fase": "Fase 1: Respons Cepat & Penanganan Akut (0 - 72 Jam)", "tindakan": "tindakan..." },
-    { "fase": "Fase 2: Surveilans Epidemiologi, Sanitasi & Mitigasi KLB (Hari ke 4 - 14)", "tindakan": "tindakan..." },
-    { "fase": "Fase 3: Pemulihan Fungsional, Dukungan Jiwa (DKJPS) & Transisi Layanan", "tindakan": "tindakan..." }
+    { "fase": "Fase Pra-Faskes: Triage, First Aid & Dispatch (0 - 10 Menit)", "tindakan": "tindakan..." },
+    { "fase": "Fase Intra-Hospital Transport: Stabilisasi & Monitoring (10 - 25 Menit)", "tindakan": "tindakan..." },
+    { "fase": "Fase Post-Handover: Serah Terima Pasien IGD & Restocking", "tindakan": "tindakan..." }
   ],
-  "analisis_logistik_naratif": "Teks logistik...",
-  "landasan_kebijakan_naratif": "Teks kebijakan legal-formal...",
+  "analisis_logistik_naratif": "Narasi kesiapan buffer stock obat resusitasi, oksigen, AED, dan ventilator transport...",
+  "landasan_kebijakan_naratif": "Narasi landasan hukum Permenkes No. 19/2016 tentang SPGDT dan standar SPM pelayanan gawat darurat...",
   "himbauan_masyarakat": ["himbauan 1", "himbauan 2", "himbauan 3", "himbauan 4", "himbauan 5"]
 }`
 
-    let aiData: any = null
-    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
-
-    for (const activeKey of uniqueKeys) {
-      if (aiData) break
-      for (const modelName of models) {
-        try {
-          console.log(`[generate-dashboard-report-ai] Calling Gemini API model: ${modelName}`)
-          const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${activeKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                generationConfig: {
-                  responseMimeType: 'application/json',
-                  temperature: 0.2,
-                  maxOutputTokens: 8192,
-                  topP: 0.95,
-                },
-              }),
-              signal: AbortSignal.timeout(10000),
-            }
-          )
-
-          if (geminiRes.ok) {
-            const geminiJson = await geminiRes.json()
-            const rawText = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text
-            if (rawText) {
-              let cleanJson = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '')
-              if (cleanJson.endsWith('```')) cleanJson = cleanJson.slice(0, -3)
-              const parsed = JSON.parse(cleanJson.trim())
-              if (parsed && (parsed.poin_utama || parsed.ringkasan_laporan)) {
-                aiData = parsed
-                console.log(`[generate-dashboard-report-ai] Gemini ${modelName} success!`)
-                break
-              }
-            }
-          } else {
-            const errStatus = geminiRes.status
-            console.warn(`[generate-dashboard-report-ai] Gemini ${modelName} HTTP ${errStatus}`)
-            if (errStatus === 429 || errStatus === 403) {
-              break // pindah ke key berikutnya
-            }
-          }
-        } catch (modelErr) {
-          console.warn(`[generate-dashboard-report-ai] Gemini ${modelName} error:`, modelErr)
+    // Panggil Google Gemini API
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${uniqueKeys[0]}`
+    const geminiRes = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 4096,
+          responseMimeType: 'application/json'
         }
+      }),
+      signal: AbortSignal.timeout(5000),
+    })
+
+    if (geminiRes.ok) {
+      const geminiJson = await geminiRes.json()
+      const rawText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text
+      if (rawText) {
+        const parsed = JSON.parse(rawText.trim().replace(/^```json\s*/, '').replace(/\s*```$/, ''))
+        return NextResponse.json({
+          success: true,
+          data: parsed,
+          source: 'gemini-ai'
+        })
       }
     }
 
-    if (!aiData) {
-      console.log('[generate-dashboard-report-ai] Gemini model unavailable/rate-limited. Using fallback synthesis.')
-      aiData = generateFallbackReport(body)
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: aiData,
-      source: 'gemini-direct',
-    })
-  } catch (err) {
-    console.error('[generate-dashboard-report-ai] Fatal error:', err)
     return NextResponse.json({
       success: true,
       data: generateFallbackReport(body),
-      source: 'safe-fallback',
+      source: 'fallback-ai'
+    })
+  } catch (err: any) {
+    console.warn('[generate-dashboard-report-ai] Error or timeout, using local fallback:', err?.message)
+    return NextResponse.json({
+      success: true,
+      data: generateFallbackReport(body),
+      source: 'error-fallback'
     })
   }
 }

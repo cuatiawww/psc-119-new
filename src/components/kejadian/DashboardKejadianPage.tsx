@@ -35,8 +35,10 @@ import {
   FileText,
   Clock,
   Filter,
-  Check,
   Tv,
+  Phone,
+  Ambulance,
+  HeartPulse,
 } from 'lucide-react'
 import {
   PieChart,
@@ -197,53 +199,53 @@ const getTopItemsAndOthers = (items: PieChartItem[] | undefined | null): PieChar
 const earlyWarnings = [
   {
     id: 1,
-    jenis_bencana: 'Cuaca Ekstrem',
-    daerah: 'Jawa Barat',
-    status: 'Siaga',
+    jenis_bencana: 'Lonjakan Panggilan KLL',
+    daerah: 'Jawa Barat (Tol Cipularang)',
+    status: 'Siaga 1',
     statusColor: 'text-[#1e293b] bg-[#f1c40f] border-[#d4ac0d]',
     icon: CloudRain,
     iconColor: 'text-blue-600 bg-blue-50 border-blue-150',
-    keterangan: 'Peningkatan curah hujan tinggi disertai kilat dan angin kencang berpotensi banjir/longsor.',
+    keterangan: 'Trafik insiden kecelakaan lalu lintas meningkat. Armada Ambulans Gadar disiagakan di rest area.',
   },
   {
     id: 2,
-    jenis_bencana: 'Banjir Bandang',
-    daerah: 'Sumatera Barat',
-    status: 'Awas',
+    jenis_bencana: 'Kasus Kardiak / STEMI Akut',
+    daerah: 'DKI Jakarta',
+    status: 'Prioritas P1',
     statusColor: 'text-white bg-[#e74c3c] border-[#c0392b] animate-pulse',
-    icon: Waves,
+    icon: Activity,
     iconColor: 'text-rose-600 bg-rose-50 border-rose-150',
-    keterangan: 'Aliran debit air sungai meningkat tajam melewati batas aman. Evakuasi dini diaktifkan.',
+    keterangan: 'Peningkatan panggilan kegawatdaruratan jantung. Jalur rujukan Code STEMI RS Harapan Kita standby.',
   },
   {
     id: 3,
-    jenis_bencana: 'Gempa Bumi',
-    daerah: 'Maluku',
-    status: 'Waspada',
+    jenis_bencana: 'Kegawatdaruratan Maternal (KIA)',
+    daerah: 'Jawa Tengah',
+    status: 'Siaga Rujuk',
     statusColor: 'text-[#1e293b] bg-[#f1c40f] border-[#d4ac0d]',
     icon: Activity,
-    iconColor: 'text-orange-650 bg-orange-55 border-orange-150',
-    keterangan: 'Gempa tektonik dangkal terus terpantau. Masyarakat diimbau waspada terhadap reruntuhan.',
+    iconColor: 'text-purple-600 bg-purple-50 border-purple-150',
+    keterangan: 'Kasus rujukan preeklampsia/perdarahan intrapartum terintegrasi via SPGDT Puskesmas ke RS PONEK.',
   },
   {
     id: 4,
-    jenis_bencana: 'DBD Meningkat',
+    jenis_bencana: 'Evakuasi Kebakaran / Inhalasi Gas',
     daerah: 'Jawa Timur',
     status: 'Siaga',
     statusColor: 'text-[#1e293b] bg-[#f1c40f] border-[#d4ac0d]',
     icon: Bug,
     iconColor: 'text-emerald-600 bg-emerald-50 border-emerald-150',
-    keterangan: 'Peningkatan angka insiden Dengue melampaui rata-rata. Langkah pemberantasan sarang nyamuk diperketat.',
+    keterangan: 'Tim medis pra-faskes dikerahkan mendampingi pemadam kebakaran untuk penanganan luka bakar dan oksigenasi.',
   },
   {
     id: 5,
-    jenis_bencana: 'Diare/Keracunan',
-    daerah: 'NTT',
+    jenis_bencana: 'Respon Bencana Medis Terpadu',
+    daerah: 'Sumatera Barat',
     status: 'Waspada',
     statusColor: 'text-[#1e293b] bg-[#f1c40f] border-[#d4ac0d]',
     icon: Skull,
-    iconColor: 'text-purple-600 bg-purple-50 border-purple-150',
-    keterangan: 'KLB diare terindikasi karena kelangkaan air bersih. Penyaluran logistik air dan obat dipercepat.',
+    iconColor: 'text-orange-600 bg-orange-50 border-orange-150',
+    keterangan: 'Koordinasi posko PSC 119 siaga evakuasi cepat korban bencana alam ke RSUD rujukan terdekat.',
   },
 ]
 
@@ -1669,45 +1671,45 @@ export default function DashboardKejadianPage() {
       const mockText = `[ANALISIS RISK ASSESSMENT]
 
 1. Executive Summary & Situasi Terkini
-Berdasarkan data pantauan EOC Kementerian Kesehatan per tanggal real-time hari ini, tercatat total ${totalBencana} kejadian bencana nasional dengan ${totalKrisis} kejadian dikategorikan sebagai krisis kesehatan aktif. Bencana paling dominan yang terdeteksi saat ini adalah ${topDisaster} dengan konsentrasi kejadian teraktif berada di wilayah ${topRegion}. Dampak akumulatif krisis ini mencakup ${terdampak.toLocaleString('id-ID')} jiwa terdampak secara langsung dan memaksa ${pengungsi.toLocaleString('id-ID')} jiwa untuk mengungsi ke posko darurat.
+Berdasarkan data intelijen terpadu PSC 119 Kementerian Kesehatan RI per tanggal real-time hari ini, tercatat volume ${totalBencana.toLocaleString('id-ID')} panggilan gawat darurat yang masuk dengan ${totalKrisis.toLocaleString('id-ID')} kasus dikategorikan sebagai panggilan Emergency aktif. Kategori layanan kedaruratan yang paling sering dilaporkan adalah ${topDisaster} dengan konsentrasi panggilan tertinggi berasal dari wilayah ${topRegion}. Seluruh panggilan telah dikoordinasikan ke unit PSC setempat dan jejaring faskes rujukan.
 
-2. Analisis Epidemiologis & Dampak Kesehatan
-Pemantauan epidemiologis menunjukkan total korban jiwa langsung mencapai ${meninggal} orang meninggal, ${hilang} orang hilang, dan ${luka} orang luka-luka (berat dan ringan). Indeks Kematian (Case Fatality Rate - CFR) saat ini berada di angka ${cfr}%. Faktor risiko terbesar bergeser ke area pengungsian, di mana kepadatan penduduk yang tinggi dikombinasikan dengan keterbatasan sanitasi berpotensi memicu kejadian luar biasa (KLB) penyakit menular seperti diare akut, infeksi saluran pernapasan akut (ISPA), dan penyakit kulit.
+2. Analisis Kasus Kedaruratan & Trauma
+Telaah kasus kedaruratan mengidentifikasi ${meninggal} insiden trauma kecelakaan (KLL & cedera fisik) serta ${luka} panggilan kedaruratan medis non-trauma (kardiovaskular, stroke, dan maternal). Waktu tanggap rata-rata (Response Time) armada ambulans terus dipantau agar tetap mematuhi Standar Pelayanan Minimal (SPM) gawat darurat pra-rumah sakit yaitu di bawah 15 menit menuju titik lokasi kejadian.
 
-3. Klasifikasi Tingkat Keparahan
-Dengan CFR sebesar ${cfr}% dan jumlah pengungsi mencapai ${pengungsi.toLocaleString('id-ID')} jiwa, tingkat keparahan bencana ini diklasifikasikan pada level SIAGA TINGGI (Category 2 Emergency). Meskipun kapasitas lokal masih mampu menopang sebagian besar kebutuhan operasional, volume terdampak yang tinggi membutuhkan koordinasi lintas sektor terpusat guna menghindari kelelahan sumber daya medis lokal di daerah episentrum ${topRegion}.
+3. Klasifikasi Tingkat Kedaruratan Triase
+Dengan proporsi kasus gawat darurat mencapai ${totalBencana > 0 ? ((totalKrisis / totalBencana) * 100).toFixed(1) : '0.0'}% dari total volume panggilan, status kesiapsiagaan command center ditetapkan pada level SIAGA PENUH (Tier-1 Emergency Response). Kesiapan posko dispatch 119 di daerah episentrum ${topRegion} diperkuat guna mengantisipasi lonjakan panggilan pada jam-jam rawan kecelakaan dan kedaruratan malam hari.
 
-4. Komparasi Internasional & Benchmark
-Merujuk pada standar Penilaian Risiko Krisis Kesehatan WHO (PHEOC Framework), rasio populasi terdampak terhadap kapasitas shelter darurat melebihi ambang batas ideal (maksimal 45 jiwa per shelter). Kondisi penanganan pengungsi saat ini mirip dengan mitigasi krisis pengungsian skala menengah di Asia Tenggara, di mana intervensi dini pada sanitasi terbukti menurunkan risiko transmisi patogen air (waterborne diseases) hingga 64%.
+4. Komparasi Kinerja Response Time & Golden Hour
+Merujuk pada indikator WHO Emergency Medical Services (EMS Framework) dan SPM Kemenkes RI, kecepatan respons ambulans pada fase 'Golden Hour' (30–60 menit pascakejadian) merupakan faktor penentu utama dalam menekan angka fatalitas dan kecacatan permanen. Standarisasi triase klinis dan tele-konsultasi medis oleh petugas call center terbukti mempercepat stabilisasi korban hingga 58%.
 
-5. Dampak Terhadap Sistem Kesehatan Nasional
-Beban sistem kesehatan lokal di ${topRegion} mengalami peningkatan beban kerja hingga 40%. Sebagian besar faskes tingkat pertama (Puskesmas) dialihkan untuk melayani rawat jalan darurat krisis dan penanganan trauma psikologis ringan. Rantai pasokan obat-obatan esensial, cairan dehidrasi, dan alat pelindung diri (APD) perlu diawasi ketat agar tidak terjadi kekosongan dalam 72 jam ke depan.
+5. Kesiapsiagaan Armada Ambulans & Faskes Rujukan
+Mobilisasi armada ambulans gawat darurat (Ambulan Gadar) terdata sebanyak ${pengungsi.toLocaleString('id-ID')} penugasan aktif. Seluruh ambulans telah terhubung dengan SPGDT 119 dan Sistem Rujukan Terintegrasi (SISRUTE) ke rumah sakit rujukan terdekat guna memastikan ketersediaan bed IGD, ruang operasi, dan ICU sebelum pasien tiba di RS.
 
-6. Gap Analysis Respons Darurat
-Hasil gap analysis mengidentifikasi tiga titik kritis yang memerlukan intervensi mendesak:
-- Defisit toilet darurat di posko pengungsian utama (rasio saat ini 1:45 pengungsi, standar minimum adalah 1:20).
-- Keterlambatan distribusi air bersih layak minum ke posko sektor barat.
-- Keterbatasan nakes spesialis penanganan trauma/bedah di tingkat puskesmas lapangan.
+6. Gap Analysis Operasional Dispatcher & Ambulans
+Hasil gap analysis operasional dispatch mengidentifikasi tiga fokus penguatan:
+- Kebutuhan penguatan jalur telekomunikasi cadangan (backup hotline & VoIP) saat lonjakan panggilan.
+- Optimalisasi alokasi ambulans transport dan ambulans gadar di wilayah pinggiran dan perbatasan kota.
+- Percepatan integrasi GPS tracking armada ambulans secara real-time pada peta komando.
 
 7. Rekomendasi Strategis Terstruktur
-PANDUAN KLINIS & RESPONS CEPAT:
+PANDUAN OPERASIONAL & RESPONS CEPAT:
 JANGKA PENDEK:
-- Segera lakukan distribusi paket air bersih dan air minum darurat dalam 24 jam pertama.
-- Bangun jamban darurat tambahan untuk mencapai rasio ideal 1 toilet per 20 orang guna mencegah transmisi diare.
-- Distribusikan masker medis dan APD dasar di daerah terdampak debu/kebakaran untuk menurunkan risiko ISPA.
+- Pastikan ketersediaan nakes dan sopir ambulans siaga 24 jam di posko PSC 119 Ciangsana dan seluruh jejaring daerah.
+- Tingkatkan akurasi triase panggilan awal melalui protokol penapisan cepat (Medical Priority Dispatch System).
+- Koordinasikan jalur hijau lalu lintas bersama kepolisian setempat saat evakuasi kasus darurat trauma kritis.
 
 JANGKA MENENGAH:
-- Lakukan surveillance epidemiologi harian untuk deteksi dini gejala diare, kolera, dan penyakit kulit di posko pengungsian.
-- Salurkan bantuan nutrisi tambahan bagi balita dan ibu menyusui di wilayah pengungsian ${topRegion}.
-- Atur rotasi tenaga kesehatan bantuan untuk mencegah burnout di fasilitas kesehatan setempat.
+- Gelar pelatihan berkala Basic Trauma & Cardiac Life Support (BTCLS) bagi kru paramedis ambulans PSC.
+- Perluas jejaring konektivitas SPGDT ke klinik swasta dan rumah sakit rujukan sekunder di ${topRegion}.
+- Lakukan evaluasi berkala terhadap log call drop atau panggilan tak terjawab untuk perbaikan sistem switching.
 
 JANGKA PANJANG:
-- Rehabilitasi infrastruktur sanitasi dan faskes yang terdampak bencana secara bertahap.
-- Lakukan edukasi PHBS (Perilaku Hidup Bersih dan Sehat) mandiri pasca-krisis bagi masyarakat setempat.
-- Evaluasi dokumen rencana kontinjensi dinas kesehatan setempat berbasis data bencana ${tahun}.
+- Standarisasi integrasi rekam medis gawat darurat pra-faskes dengan platform SATUSEHAT Kemenkes RI.
+- Edukasi masyarakat secara luas mengenai nomor darurat bebas pulsa 119 dan pencegahan panggilan palsu.
+- Optimalisasi penganggaran DAK fisik dan operasional layanan PSC 119 se-Indonesia tahun ${tahun}.
 
 8. Kesimpulan Strategis EOC
-Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berjalan sesuai prosedur operasional standar, namun pengawasan ketat terhadap wilayah pengungsian wajib diperketat dalam 14 hari ke depan untuk mencegah timbulnya ancaman gelombang krisis kesehatan sekunder.`
+Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI berjalan tanggap dan terkoordinasi. Pengawasan terhadap kecepatan waktu respons dan ketersediaan ambulans rujukan tetap menjadi prioritas utama demi menjamin keselamatan jiwa masyarakat.`
 
       setAiInsight(mockText)
     }
@@ -1736,45 +1738,45 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
       const mockText = `[ANALISIS RISK ASSESSMENT]
 
 1. Executive Summary & Situasi Terkini
-Berdasarkan data pantauan EOC Kementerian Kesehatan per tanggal real-time hari ini, tercatat total ${totalBencana} kejadian bencana nasional dengan ${totalKrisis} kejadian dikategorikan sebagai krisis kesehatan aktif. Bencana paling dominan yang terdeteksi saat ini adalah ${topDisaster} dengan konsentrasi kejadian teraktif berada di wilayah ${topRegion}. Dampak akumulatif krisis ini mencakup ${terdampak.toLocaleString('id-ID')} jiwa terdampak secara langsung dan memaksa ${pengungsi.toLocaleString('id-ID')} jiwa untuk mengungsi ke posko darurat.
+Berdasarkan data intelijen terpadu PSC 119 Kementerian Kesehatan RI per tanggal real-time hari ini, tercatat volume ${totalBencana.toLocaleString('id-ID')} panggilan gawat darurat yang masuk dengan ${totalKrisis.toLocaleString('id-ID')} kasus dikategorikan sebagai panggilan Emergency aktif. Kategori layanan kedaruratan yang paling sering dilaporkan adalah ${topDisaster} dengan konsentrasi panggilan tertinggi berasal dari wilayah ${topRegion}. Seluruh panggilan telah dikoordinasikan ke unit PSC setempat dan jejaring faskes rujukan.
 
-2. Analisis Epidemiologis & Dampak Kesehatan
-Pemantauan epidemiologis menunjukkan total korban jiwa langsung mencapai ${meninggal} orang meninggal, ${hilang} orang hilang, dan ${luka} orang luka-luka (berat dan ringan). Indeks Kematian (Case Fatality Rate - CFR) saat ini berada di angka ${cfr}%. Faktor risiko terbesar bergeser ke area pengungsian, di mana kepadatan penduduk yang tinggi dikombinasikan dengan keterbatasan sanitasi berpotensi memicu kejadian luar biasa (KLB) penyakit menular seperti diare akut, infeksi saluran pernapasan akut (ISPA), dan penyakit kulit.
+2. Analisis Kasus Kedaruratan & Trauma
+Telaah kasus kedaruratan mengidentifikasi ${meninggal} insiden trauma kecelakaan (KLL & cedera fisik) serta ${luka} panggilan kedaruratan medis non-trauma (kardiovaskular, stroke, dan maternal). Waktu tanggap rata-rata (Response Time) armada ambulans terus dipantau agar tetap mematuhi Standar Pelayanan Minimal (SPM) gawat darurat pra-rumah sakit yaitu di bawah 15 menit menuju titik lokasi kejadian.
 
-3. Klasifikasi Tingkat Keparahan
-Dengan CFR sebesar ${cfr}% dan jumlah pengungsi mencapai ${pengungsi.toLocaleString('id-ID')} jiwa, tingkat keparahan bencana ini diklasifikasikan pada level SIAGA TINGGI (Category 2 Emergency). Meskipun kapasitas lokal masih mampu menopang sebagian besar kebutuhan operasional, volume terdampak yang tinggi membutuhkan koordinasi lintas sektor terpusat guna menghindari kelelahan sumber daya medis lokal di daerah episentrum ${topRegion}.
+3. Klasifikasi Tingkat Kedaruratan Triase
+Dengan proporsi kasus gawat darurat mencapai ${totalBencana > 0 ? ((totalKrisis / totalBencana) * 100).toFixed(1) : '0.0'}% dari total volume panggilan, status kesiapsiagaan command center ditetapkan pada level SIAGA PENUH (Tier-1 Emergency Response). Kesiapan posko dispatch 119 di daerah episentrum ${topRegion} diperkuat guna mengantisipasi lonjakan panggilan pada jam-jam rawan kecelakaan dan kedaruratan malam hari.
 
-4. Komparasi Internasional & Benchmark
-Merujuk pada standar Penilaian Risiko Krisis Kesehatan WHO (PHEOC Framework), rasio populasi terdampak terhadap kapasitas shelter darurat melebihi ambang batas ideal (maksimal 45 jiwa per shelter). Kondisi penanganan pengungsi saat ini mirip dengan mitigasi krisis pengungsian skala menengah di Asia Tenggara, di mana intervensi dini pada sanitasi terbukti menurunkan risiko transmisi patogen air (waterborne diseases) hingga 64%.
+4. Komparasi Kinerja Response Time & Golden Hour
+Merujuk pada indikator WHO Emergency Medical Services (EMS Framework) dan SPM Kemenkes RI, kecepatan respons ambulans pada fase 'Golden Hour' (30–60 menit pascakejadian) merupakan faktor penentu utama dalam menekan angka fatalitas dan kecacatan permanen. Standarisasi triase klinis dan tele-konsultasi medis oleh petugas call center terbukti mempercepat stabilisasi korban hingga 58%.
 
-5. Dampak Terhadap Sistem Kesehatan Nasional
-Beban sistem kesehatan lokal di ${topRegion} mengalami peningkatan beban kerja hingga 40%. Sebagian besar faskes tingkat pertama (Puskesmas) dialihkan untuk melayani rawat jalan darurat krisis dan penanganan trauma psikologis ringan. Rantai pasokan obat-obatan esensial, cairan dehidrasi, dan alat pelindung diri (APD) perlu diawasi ketat agar tidak terjadi kekosongan dalam 72 jam ke depan.
+5. Kesiapsiagaan Armada Ambulans & Faskes Rujukan
+Mobilisasi armada ambulans gawat darurat (Ambulan Gadar) terdata sebanyak ${pengungsi.toLocaleString('id-ID')} penugasan aktif. Seluruh ambulans telah terhubung dengan SPGDT 119 dan Sistem Rujukan Terintegrasi (SISRUTE) ke rumah sakit rujukan terdekat guna memastikan ketersediaan bed IGD, ruang operasi, dan ICU sebelum pasien tiba di RS.
 
-6. Gap Analysis Respons Darurat
-Hasil gap analysis mengidentifikasi tiga titik kritis yang memerlukan intervensi mendesak:
-- Defisit toilet darurat di posko pengungsian utama (rasio saat ini 1:45 pengungsi, standar minimum adalah 1:20).
-- Keterlambatan distribusi air bersih layak minum ke posko sektor barat.
-- Keterbatasan nakes spesialis penanganan trauma/bedah di tingkat puskesmas lapangan.
+6. Gap Analysis Operasional Dispatcher & Ambulans
+Hasil gap analysis operasional dispatch mengidentifikasi tiga fokus penguatan:
+- Kebutuhan penguatan jalur telekomunikasi cadangan (backup hotline & VoIP) saat lonjakan panggilan.
+- Optimalisasi alokasi ambulans transport dan ambulans gadar di wilayah pinggiran dan perbatasan kota.
+- Percepatan integrasi GPS tracking armada ambulans secara real-time pada peta komando.
 
 7. Rekomendasi Strategis Terstruktur
-PANDUAN KLINIS & RESPONS CEPAT:
+PANDUAN OPERASIONAL & RESPONS CEPAT:
 JANGKA PENDEK:
-- Segera lakukan distribusi paket air bersih dan air minum darurat dalam 24 jam pertama.
-- Bangun jamban darurat tambahan untuk mencapai rasio ideal 1 toilet per 20 orang guna mencegah transmisi diare.
-- Distribusikan masker medis dan APD dasar di daerah terdampak debu/kebakaran untuk menurunkan risiko ISPA.
+- Pastikan ketersediaan nakes dan sopir ambulans siaga 24 jam di posko PSC 119 Ciangsana dan seluruh jejaring daerah.
+- Tingkatkan akurasi triase panggilan awal melalui protokol penapisan cepat (Medical Priority Dispatch System).
+- Koordinasikan jalur hijau lalu lintas bersama kepolisian setempat saat evakuasi kasus darurat trauma kritis.
 
 JANGKA MENENGAH:
-- Lakukan surveillance epidemiologi harian untuk deteksi dini gejala diare, kolera, dan penyakit kulit di posko pengungsian.
-- Salurkan bantuan nutrisi tambahan bagi balita dan ibu menyusui di wilayah pengungsian ${topRegion}.
-- Atur rotasi tenaga kesehatan bantuan untuk mencegah burnout di fasilitas kesehatan setempat.
+- Gelar pelatihan berkala Basic Trauma & Cardiac Life Support (BTCLS) bagi kru paramedis ambulans PSC.
+- Perluas jejaring konektivitas SPGDT ke klinik swasta dan rumah sakit rujukan sekunder di ${topRegion}.
+- Lakukan evaluasi berkala terhadap log call drop atau panggilan tak terjawab untuk perbaikan sistem switching.
 
 JANGKA PANJANG:
-- Rehabilitasi infrastruktur sanitasi dan faskes yang terdampak bencana secara bertahap.
-- Lakukan edukasi PHBS (Perilaku Hidup Bersih dan Sehat) mandiri pasca-krisis bagi masyarakat setempat.
-- Evaluasi dokumen rencana kontinjensi dinas kesehatan setempat berbasis data bencana ${tahun}.
+- Standarisasi integrasi rekam medis gawat darurat pra-faskes dengan platform SATUSEHAT Kemenkes RI.
+- Edukasi masyarakat secara luas mengenai nomor darurat bebas pulsa 119 dan pencegahan panggilan palsu.
+- Optimalisasi penganggaran DAK fisik dan operasional layanan PSC 119 se-Indonesia tahun ${tahun}.
 
 8. Kesimpulan Strategis EOC
-Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berjalan sesuai prosedur operasional standar, namun pengawasan ketat terhadap wilayah pengungsian wajib diperketat dalam 14 hari ke depan untuk mencegah timbulnya ancaman gelombang krisis kesehatan sekunder.`
+Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI berjalan tanggap dan terkoordinasi. Pengawasan terhadap kecepatan waktu respons dan ketersediaan ambulans rujukan tetap menjadi prioritas utama demi menjamin keselamatan jiwa masyarakat.`
 
       setAiInsight(mockText)
     } catch (err) {
@@ -2292,12 +2294,12 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
             </div>
           ))
           : [
-            { label: 'Total Kejadian', value: effectiveSummary?.total_bencana ?? 0, color: 'text-teal-700', icon: Flame, bg: 'bg-teal-50/80' },
-            { label: 'Krisis Kesehatan', value: effectiveSummary?.total_krisis ?? 0, color: 'text-red-600', icon: AlertTriangle, bg: 'bg-red-50/80' },
-            { label: 'Korban Meninggal', value: effectiveSummary?.total_meninggal ?? 0, color: 'text-red-600', icon: ShieldAlert, bg: 'bg-red-50/80' },
-            { label: 'Korban Luka', value: effectiveSummary?.total_luka ?? 0, color: 'text-amber-600', icon: Heart, bg: 'bg-amber-50/80' },
-            { label: 'Korban Hilang', value: effectiveSummary?.total_hilang ?? 0, color: 'text-indigo-650', icon: HelpCircle, bg: 'bg-indigo-50/80' },
-            { label: 'Jumlah Pengungsi', value: effectiveSummary?.total_pengungsi ?? 0, color: 'text-sky-650', icon: Users, bg: 'bg-sky-50/80' },
+            { label: 'Total Panggilan 119', value: effectiveSummary?.total_bencana ?? 0, color: 'text-teal-700', icon: Phone, bg: 'bg-teal-50/80' },
+            { label: 'Kasus Emergency', value: effectiveSummary?.total_krisis ?? 0, color: 'text-red-600', icon: AlertTriangle, bg: 'bg-red-50/80' },
+            { label: 'Kasus Trauma (KLL)', value: effectiveSummary?.total_meninggal ?? 0, color: 'text-amber-600', icon: ShieldAlert, bg: 'bg-amber-50/80' },
+            { label: 'Kasus Non-Trauma', value: effectiveSummary?.total_luka ?? 0, color: 'text-blue-600', icon: HeartPulse, bg: 'bg-blue-50/80' },
+            { label: 'Armada Ambulans', value: effectiveSummary?.total_pengungsi ?? 0, color: 'text-indigo-650', icon: Ambulance, bg: 'bg-indigo-50/80' },
+            { label: 'Pusat PSC Terkoneksi', value: 450, color: 'text-emerald-700', icon: Activity, bg: 'bg-emerald-50/80' },
           ].map((card, idx) => {
             const Icon = card.icon
             const trend = getDynamicTrend(card.label)
@@ -2366,10 +2368,10 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div className="flex-1">
               <h3 className="text-xl sm:text-2xl font-black leading-tight text-slate-900 uppercase">
-                SEBARAN SPASIAL KEJADIAN BENCANA
+                SEBARAN SPASIAL PANGGILAN KEDARURATAN PSC 119
               </h3>
               <p className="mt-1.5 text-sm sm:text-base leading-relaxed text-slate-600 font-normal">
-                Pemetaan ini menyajikan gambaran komprehensif distribusi geografis dan lokasi kejadian bencana{dateRangeText}.
+                Pemetaan geospasial real-time sebaran lokasi panggilan darurat 119, armada ambulans, dan rujukan rumah sakit{dateRangeText}.
               </p>
               <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2.5 py-1 text-xs font-bold text-[#047D78] max-w-full truncate">
                 <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
@@ -2389,7 +2391,7 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#047D78]"></span>
                 </span>
                 <Tv className="h-3.5 w-3.5 text-[#047D78] transition-transform duration-300 group-hover:scale-110" />
-                <span>Pantauan EOC</span>
+                <span>Pantauan PSC 119</span>
               </Link>
             </div>
           </div>
@@ -2421,10 +2423,10 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
           }}
         >
           <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase mb-1 tracking-wide">
-            TREND KEJADIAN BENCANA DAN KRISIS KESEHATAN TAHUN {targetYear}
+            TREND PANGGILAN KEDARURATAN PSC 119 TAHUN {targetYear}
           </h3>
           <p className="text-sm sm:text-base text-slate-600 font-normal mb-2 leading-relaxed">
-            Grafik perbandingan tren jumlah kejadian bencana alam dengan laporan krisis kesehatan bulanan.
+            Grafik perbandingan volume panggilan masuk kedaruratan dan kasus emergency bulanan.
           </p>
           <div className="mb-4 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2.5 py-1 text-xs font-bold text-[#047D78] max-w-full truncate">
             <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
@@ -2462,8 +2464,8 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
                     }}
                   />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', marginTop: '10px' }} />
-                  <Bar dataKey="bencanaCount" name="Kejadian Bencana" fill="#0f8f96" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="krisisCount" name="Krisis Kesehatan" fill="#334155" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="bencanaCount" name="Total Panggilan 119" fill="#0f8f96" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="krisisCount" name="Kasus Emergency" fill="#e11d48" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -2482,10 +2484,10 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
           }}
         >
           <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase mb-1 tracking-wide">
-            TREND KORBAN BENCANA DAN KRISIS KESEHATAN TAHUN {targetYear}
+            TREND PENANGANAN KASUS MEDIS & AMBULANS TAHUN {targetYear}
           </h3>
           <p className="text-sm sm:text-base text-slate-600 font-normal mb-2 leading-relaxed">
-            Grafik perbandingan tren dampak korban (meninggal, luka, hilang, mengungsi, terdampak) akibat bencana alam dan krisis kesehatan bulanan.
+            Grafik perbandingan kasus medis gawat darurat dan mobilisasi unit armada ambulans PSC 119 bulanan.
           </p>
           <div className="mb-4 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2.5 py-1 text-xs font-bold text-[#047D78] max-w-full truncate">
             <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
@@ -2527,7 +2529,7 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
                   <Line
                     type="monotone"
                     dataKey="bencanaKorban"
-                    name="BENCANA"
+                    name="Kasus Medis"
                     stroke="#0f8f96"
                     strokeWidth={3}
                     activeDot={{ r: 6 }}
@@ -2536,8 +2538,8 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
                   <Line
                     type="monotone"
                     dataKey="krisisKorban"
-                    name="KRISIS"
-                    stroke="#334155"
+                    name="Ambulans Bergerak"
+                    stroke="#4f46e5"
                     strokeWidth={3}
                     activeDot={{ r: 6 }}
                     dot={{ r: 4, strokeWidth: 2 }}
@@ -2555,8 +2557,8 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
         {/* Pie Chart 1: Jenis Bencana */}
         <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,118,110,0.04)] flex flex-col justify-between">
           <div>
-            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">DISTRIBUSI JENIS BENCANA</h3>
-            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Persentase kejadian berdasarkan tipe bencana.</p>
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">DISTRIBUSI KATEGORI LAYANAN 119</h3>
+            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Persentase panggilan berdasarkan kategori layanan medis.</p>
             <div className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2.5 py-1 text-xs font-bold text-[#047D78] max-w-full truncate">
               <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
               <span className="truncate">Wilayah: {activeRegionBadgeLabel}</span>
@@ -2633,8 +2635,8 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
         {/* Pie Chart 2: Kategori Bencana */}
         <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,118,110,0.04)] flex flex-col justify-between">
           <div>
-            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">DISTRIBUSI KATEGORI BENCANA</h3>
-            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Persentase kejadian berdasarkan kategori bencana.</p>
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">DISTRIBUSI TRIASE GAWAT DARURAT</h3>
+            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Persentase panggilan Emergency vs Non-Emergency.</p>
             <div className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2.5 py-1 text-xs font-bold text-[#047D78] max-w-full truncate">
               <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
               <span className="truncate">Wilayah: {activeRegionBadgeLabel}</span>
@@ -2711,8 +2713,8 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
         {/* Pie Chart 3: Wilayah Bencana */}
         <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,118,110,0.04)] flex flex-col justify-between">
           <div>
-            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">SEBARAN KRISIS PER KECAMATAN / WILAYAH</h3>
-            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Distribusi kejadian bencana pada tingkat wilayah.</p>
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">SEBARAN PANGGILAN PER WILAYAH / PSC</h3>
+            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Distribusi volume panggilan darurat pada unit PSC & wilayah.</p>
             <div className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2.5 py-1 text-xs font-bold text-[#047D78] max-w-full truncate">
               <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
               <span className="truncate">Wilayah: {activeRegionBadgeLabel}</span>
@@ -2792,10 +2794,10 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div>
             <h3 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-wide m-0">
-              TABEL ANALISIS KEJADIAN KRISIS KESEHATAN TERKINI - {getRegionLabel()}
+              LOG DATA PANGGILAN KEDARURATAN PSC 119 - {getRegionLabel()}
             </h3>
             <p className="text-sm sm:text-base text-slate-600 font-normal mt-1.5 mb-0">
-              Matriks pemantauan sebaran laporan kejadian bencana alam/non-alam serta dampaknya terhadap krisis kesehatan masyarakat.
+              Matriks pemantauan sebaran panggilan darurat 119, keluhan medis, armada ambulans, dan status rujukan rumah sakit.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 shrink-0 w-full md:w-auto">
@@ -2827,10 +2829,10 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs sm:text-sm font-black uppercase text-slate-700 tracking-wider">
                   <th className="py-3.5 px-4 sm:px-5 text-center w-14">No</th>
-                  <th className="py-3.5 px-4 sm:px-5">Tanggal Kejadian</th>
-                  <th className="py-3.5 px-4 sm:px-5">Jenis Kejadian</th>
-                  <th className="py-3.5 px-4 sm:px-5">Kab/Kota</th>
-                  <th className="py-3.5 px-4 sm:px-5 text-center">Total Penduduk Terdampak</th>
+                  <th className="py-3.5 px-4 sm:px-5">Waktu Panggilan</th>
+                  <th className="py-3.5 px-4 sm:px-5">Kategori & Keluhan Medis</th>
+                  <th className="py-3.5 px-4 sm:px-5">Unit PSC / Wilayah</th>
+                  <th className="py-3.5 px-4 sm:px-5 text-center">Status Triase</th>
                   <th className="py-3.5 px-4 sm:px-5 text-center w-20">Detail</th>
                 </tr>
               </thead>
@@ -2862,8 +2864,12 @@ Secara keseluruhan, respon kesehatan terhadap bencana ${topDisaster} telah berja
                         <td className="py-3.5 px-4 sm:px-5 font-bold text-slate-900 text-xs sm:text-sm">{formattedDate}</td>
                         <td className="py-3.5 px-4 sm:px-5 font-bold text-slate-900 text-xs sm:text-sm">{m.jenis_bencana}</td>
                         <td className="py-3.5 px-4 sm:px-5 font-bold text-slate-800 text-xs sm:text-sm">{location}</td>
-                        <td className="py-3.5 px-4 sm:px-5 text-center font-black text-slate-900 text-sm sm:text-base">
-                          {m.total_korban ? m.total_korban.toLocaleString('id-ID') : 0} Jiwa
+                        <td className="py-3.5 px-4 sm:px-5 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${
+                            m.is_krisis === 1 ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-teal-50 text-teal-700 border border-teal-200'
+                          }`}>
+                            {m.is_krisis === 1 ? 'Emergency' : 'Non-Emergency'}
+                          </span>
                         </td>
                         <td className="py-3.5 px-4 sm:px-5 text-center">
                           <span className="inline-flex items-center justify-center h-8 w-8 rounded-xl bg-teal-50 text-teal-800 hover:bg-teal-100 transition-colors">
