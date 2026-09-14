@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "source_url": "https://ntt.tanggap-bencana.go.id/",
+  "updated_at": "2026-08-24T00:50:00.943451+00:00",
+  "latest_date": "2026-08-23",
+  "dates": {
+    "2026-08-15": {
+      "analisa_ringkasan_harian": "2026-08-15_analisa_ringkasan_harian.csv",
+      "situasi_kesehatan": "2026-08-15_situasi_kesehatan.csv",
+      "pasien_rs": "2026-08-15_pasien_rs.csv",
+      "pasien_puskesmas": "2026-08-15_pasien_puskesmas.csv"
+    },
+    "2026-08-16": {
+      "analisa_ringkasan_harian": "2026-08-16_analisa_ringkasan_harian.csv",
+      "situasi_kesehatan": "2026-08-16_situasi_kesehatan.csv",
+      "pasien_rs": "2026-08-16_pasien_rs.csv",
+      "pasien_puskesmas": "2026-08-16_pasien_puskesmas.csv"
+    },
+    "2026-08-17": {
+      "analisa_ringkasan_harian": "2026-08-17_analisa_ringkasan_harian.csv",
+      "situasi_kesehatan": "2026-08-17_situasi_kesehatan.csv",
+      "pasien_rs": "2026-08-17_pasien_rs.csv",
+      "pasien_puskesmas": "2026-08-17_pasien_puskesmas.csv"
+    },
+    "2026-08-18": {
+      "analisa_ringkasan_harian": "2026-08-18_analisa_ringkasan_harian.csv",
+      "situasi_kesehatan": "2026-08-18_situasi_kesehatan.csv",
+      "pasien_rs": "2026-08-18_pasien_rs.csv",
+      "pasien_puskesmas": "2026-08-18_pasien_puskesmas.csv"
+    },
+    "2026-08-19": {
+      "analisa_ringkasan_harian": "2026-08-19_analisa_ringkasan_harian.csv",
+      "situasi_kesehatan": "2026-08-19_situasi_kesehatan.csv",
+      "pasien_rs": "2026-08-19_pasien_rs.csv",
+      "pasien_puskesmas": "2026-08-19_pasien_puskesmas.csv"
+    },
+    "2026-08-20": {
+      "analisa_ringkasan_harian": "2026-08-20_analisa_ringkasan_harian.csv",
+      "situasi_kesehatan": "2026-08-20_situasi_kesehatan.csv",
+      "pasien_rs": "2026-08-20_pasien_rs.csv",
+      "pasien_puskesmas": "2026-08-20_pasien_puskesmas.csv"
+    },
+    "2026-08-21": {
+      "analisa_ringkasan_harian": "2026-08-21_analisa_ringkasan_harian.csv",
+      "situasi_kesehatan": "2026-08-21_situasi_kesehatan.csv",
+      "pasien_rs": "2026-08-21_pasien_rs.csv",
+      "pasien_puskesmas": "2026-08-21_pasien_puskesmas.csv"
+    },
+    "2026-08-22": {
+      "analisa_ringkasan_harian": "2026-08-22_analisa_ringkasan_harian.csv",
+      "situasi_kesehatan": "2026-08-22_situasi_kesehatan.csv",
+      "pasien_rs": "2026-08-22_pasien_rs.csv",
+      "pasien_puskesmas": "2026-08-22_pasien_puskesmas.csv"
+    },
+    "2026-08-23": {
+      "analisa_ringkasan_harian": "2026-08-23_analisa_ringkasan_harian.csv",
+      "situasi_kesehatan": "2026-08-23_situasi_kesehatan.csv",
+      "pasien_rs": "2026-08-23_pasien_rs.csv",
+      "pasien_puskesmas": "2026-08-23_pasien_puskesmas.csv"
+    }
+  }
+}

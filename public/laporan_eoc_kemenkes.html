@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Laporan Infografis EOC Kemenkes RI — Juli 2026</title>
+<style>
+  :root{
+    --ink:#1B2430;
+    --paper:#FFFFFF;
+    --panel:#F2F3F5;
+    --panel-line:#DDE1E6;
+    --red:#B91C1C;
+    --red-dark:#7A1315;
+    --red-soft:#FBE7E7;
+    --amber:#B45309;
+    --amber-soft:#FDF1DE;
+    --crimson:#8A1212;
+    --crimson-soft:#F7E3E3;
+    --green:#276749;
+    --green-soft:#E6F2EB;
+    --slate:#5B6472;
+    --gold:#C9A227;
+    font-family: 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:#E7E8EA;}
+  body{color:var(--ink);}
+  .serif{font-family: Georgia, 'Times New Roman', serif;}
+  .mono{font-family: 'Consolas','Courier New',monospace; font-variant-numeric: tabular-nums;}
+
+  .page{
+    max-width:1000px;
+    margin:28px auto;
+    background:var(--paper);
+    box-shadow:0 6px 24px rgba(0,0,0,.18);
+    position:relative;
+    overflow:hidden;
+    padding-bottom:56px;
+  }
+  .tricolor{ height:8px; width:100%; background: linear-gradient(90deg, var(--red) 0 33%, var(--ink) 33% 66%, var(--red) 66% 100%); }
+
+  .letterhead{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding:22px 40px 14px 40px;
+    border-bottom:2px solid var(--ink);
+  }
+  .lh-left{display:flex; gap:14px; align-items:center;}
+  .seal{
+    width:56px; height:56px; border-radius:50%;
+    border:2.5px solid var(--red); display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:11px; color:var(--red); text-align:center; line-height:1.1;
+    letter-spacing:.02em;
+  }
+  .lh-org{font-size:11px; letter-spacing:.12em; color:var(--slate); font-weight:700; text-transform:uppercase;}
+  .lh-org b{color:var(--ink); font-size:13px; display:block; letter-spacing:.04em;}
+  .lh-right{text-align:right; font-size:11px; color:var(--slate);}
+  .lh-right .status{
+    display:inline-block; margin-top:6px; background:var(--red); color:#fff;
+    font-size:10.5px; font-weight:700; letter-spacing:.08em; padding:3px 10px; border-radius:2px;
+  }
+
+  .hero{padding:34px 40px 8px 40px;}
+  .eyebrow{font-size:12px; letter-spacing:.18em; color:var(--red); font-weight:700; text-transform:uppercase;}
+  h1.title{font-size:28px; line-height:1.25; margin:8px 0 6px 0; color:var(--ink); letter-spacing:.01em;}
+  .subtitle{font-size:15px; color:var(--slate); margin:0 0 6px 0; max-width:760px;}
+  .meta-strip{display:flex; gap:26px; margin-top:16px; font-size:11.5px; color:var(--slate); border-top:1px solid var(--panel-line); padding-top:10px;}
+  .meta-strip b{color:var(--ink);}
+
+  .section{padding:22px 40px;}
+  .section-title{
+    display:flex; align-items:center; gap:10px; margin-bottom:16px;
+  }
+  .section-title .bar{width:5px; height:20px; background:var(--red); display:inline-block;}
+  .section-title h2{font-size:16px; letter-spacing:.06em; text-transform:uppercase; margin:0; color:var(--ink);}
+
+  /* KPI cards */
+  .kpi-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}
+  .kpi{
+    background:var(--panel); border:1px solid var(--panel-line); border-top:4px solid var(--ink);
+    padding:16px 16px 14px 16px; position:relative;
+  }
+  .kpi.severe{border-top-color:var(--red);}
+  .kpi .num{font-size:30px; font-weight:800; letter-spacing:-.01em;}
+  .kpi.severe .num{color:var(--red-dark);}
+  .kpi .label{font-size:11.5px; color:var(--slate); text-transform:uppercase; letter-spacing:.05em; margin-top:2px;}
+  .kpi .unit{font-size:11px; color:var(--slate);}
+
+  p.body-text{font-size:13.6px; line-height:1.75; color:#2B3340; text-align:justify; margin:0 0 12px 0;}
+
+  table{width:100%; border-collapse:collapse; font-size:12.6px;}
+  th{background:var(--ink); color:#fff; text-align:left; padding:10px 12px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; font-size:10.8px;}
+  td{padding:9px 12px; border-bottom:1px solid var(--panel-line);}
+  tr:nth-child(even) td{background:#FAFAFA;}
+  .risk-pill{display:inline-block; padding:3px 10px; border-radius:2px; font-size:10.6px; font-weight:700; letter-spacing:.03em;}
+  .risk-sangat{background:var(--crimson-soft); color:var(--crimson);}
+  .risk-tinggi{background:var(--amber-soft); color:var(--amber);}
+
+  .region-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:6px;}
+  .region-card{border:1px solid var(--panel-line); border-left:4px solid var(--ink); padding:12px 14px; background:var(--panel);}
+  .region-card.top{border-left-color:var(--red);}
+  .region-card .rname{font-weight:800; font-size:13.5px;}
+  .region-card .rstat{font-size:11px; color:var(--slate); margin:3px 0 6px 0;}
+  .region-card .rnote{font-size:12px; line-height:1.5; color:#2B3340;}
+
+  .faskes-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:8px;}
+  .faskes-card{background:var(--panel); border:1px solid var(--panel-line); padding:14px 12px; text-align:center;}
+  .faskes-card .ficon{font-size:20px; margin-bottom:6px;}
+  .faskes-card .ftitle{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--slate); font-weight:700;}
+  .faskes-card .fval{font-size:19px; font-weight:800; margin:6px 0 2px 0;}
+  .faskes-card .fstatus{font-size:10.5px; font-weight:700; letter-spacing:.03em; padding:2px 8px; border-radius:2px; display:inline-block;}
+  .st-waspada{background:var(--amber-soft); color:var(--amber);}
+  .st-siaga{background:var(--crimson-soft); color:var(--crimson);}
+  .st-aman{background:var(--green-soft); color:var(--green);}
+
+  .steps{counter-reset:step;}
+  .step{display:flex; gap:14px; margin-bottom:14px; align-items:flex-start;}
+  .step .snum{
+    counter-increment:step; content:counter(step);
+    width:34px; height:34px; border-radius:50%; background:var(--red); color:#fff; font-weight:800;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:14px;
+  }
+  .step .snum::before{content:counter(step);}
+  .step .stext b{display:block; font-size:13.5px; margin-bottom:3px;}
+  .step .stext p{margin:0; font-size:12.6px; color:#2B3340; line-height:1.6;}
+
+  .standard-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:8px;}
+  .std-card{border:1px solid var(--panel-line); padding:13px 14px; background:var(--panel);}
+  .std-card .sv{font-size:20px; font-weight:800; color:var(--red-dark);}
+  .std-card .sl{font-size:11.5px; color:var(--slate); text-transform:uppercase; letter-spacing:.04em; margin-top:2px;}
+  .std-card .sd{font-size:12px; margin-top:6px; line-height:1.5; color:#2B3340;}
+
+  .hotline-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:8px;}
+  .hotline-card{background:var(--ink); color:#fff; padding:16px; text-align:center;}
+  .hotline-card .hl{font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#B7BEC8; margin-bottom:6px;}
+  .hotline-card .hnum{font-size:20px; font-weight:800; font-family:'Consolas','Courier New',monospace;}
+  .hotline-card.red{background:var(--red-dark);}
+
+  .signature-block{display:flex; justify-content:space-between; align-items:flex-end; margin-top:30px; padding-top:20px; border-top:1px solid var(--panel-line);}
+  .sig-left{font-size:11.5px; color:var(--slate); max-width:340px; line-height:1.6;}
+  .sig-right{text-align:center;}
+  .stamp{
+    width:110px; height:110px; border-radius:50%; border:3px double var(--red); color:var(--red);
+    display:flex; align-items:center; justify-content:center; font-size:9.5px; font-weight:800;
+    text-align:center; line-height:1.3; transform:rotate(-8deg); margin:0 auto 10px auto; letter-spacing:.02em;
+  }
+  .sig-name{font-weight:800; font-size:13px; border-top:1px solid var(--ink); padding-top:6px; margin-top:60px; display:inline-block;}
+  .sig-role{font-size:11px; color:var(--slate);}
+
+  .page-footer{
+    position:absolute; bottom:0; left:0; right:0; display:flex; justify-content:space-between;
+    padding:12px 40px; font-size:10px; color:var(--slate); border-top:1px solid var(--panel-line);
+  }
+  .watermark{
+    position:absolute; top:44%; left:50%; transform:translate(-50%,-50%) rotate(-24deg);
+    font-size:64px; font-weight:900; color:rgba(185,28,28,0.045); letter-spacing:.1em; white-space:nowrap; pointer-events:none;
+  }
+
+  .callout{
+    border-left:4px solid var(--red); background:var(--red-soft); padding:12px 16px; font-size:12.6px; line-height:1.6; color:var(--red-dark); margin-top:10px;
+  }
+  .callout b{color:var(--crimson);}
+
+  @media (max-width:720px){
+    .kpi-grid{grid-template-columns:repeat(2,1fr);}
+    .region-grid{grid-template-columns:1fr;}
+    .faskes-grid{grid-template-columns:repeat(2,1fr);}
+    .standard-grid{grid-template-columns:1fr;}
+    .hotline-grid{grid-template-columns:1fr;}
+    .signature-block{flex-direction:column; gap:20px; align-items:flex-start;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= HALAMAN 1 ================= -->
+<div class="page">
+  <div class="watermark">EOC KEMENKES RI</div>
+  <div class="tricolor"></div>
+  <div class="letterhead">
+    <div class="lh-left">
+      <div class="seal">EOC<br>KEMENKES<br>RI</div>
+      <div class="lh-org">Pusat Krisis Kesehatan<b>Kementerian Kesehatan Republik Indonesia</b></div>
+    </div>
+    <div class="lh-right">
+      No. Dok: EOC/INFO-EKS/VII/2026<br>
+      Klasifikasi: Terbatas — Internal Komando<br>
+      <span class="status">SIAGA DARURAT</span>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="eyebrow">Emergency Operations Center — Periode Juli 2026</div>
+    <h1 class="title serif">LAPORAN INFOGRAFIS EOC KEMENKES RI:<br>EKSEKUTIF KRISIS KESEHATAN KEBENCANAAN</h1>
+    <p class="subtitle">Analisis Situasi Kebencanaan, Dampak Korban, dan Mobilisasi Kesiapsiagaan Darurat</p>
+    <div class="meta-strip">
+      <div>Periode Pemantauan: <b>1–31 Juli 2026</b></div>
+      <div>Cakupan: <b>34 Provinsi</b></div>
+      <div>Status Terakhir Diperbarui: <b>31 Juli 2026, 23:59 WIB</b></div>
+      <div>Diterbitkan oleh: <b>Pusat Krisis Kesehatan Kemenkes RI</b></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="bar"></span><h2>Enam Indikator Utama Krisis Kesehatan Nasional</h2></div>
+    <div class="kpi-grid">
+      <div class="kpi severe"><div class="num mono">484</div><div class="label">Total Kejadian Bencana</div><div class="unit">Kejadian tercatat, seluruh Indonesia</div></div>
+      <div class="kpi severe"><div class="num mono">183</div><div class="label">Korban Meninggal Dunia</div><div class="unit">Jiwa</div></div>
+      <div class="kpi"><div class="num mono">6.082</div><div class="label">Korban Luka (Berat &amp; Ringan)</div><div class="unit">Jiwa</div></div>
+      <div class="kpi severe"><div class="num mono">36</div><div class="label">Korban Hilang</div><div class="unit">Jiwa, dalam pencarian aktif</div></div>
+      <div class="kpi"><div class="num mono">6.996</div><div class="label">Pengungsi di Posko</div><div class="unit">Jiwa, tersebar di titik pengungsian</div></div>
+      <div class="kpi"><div class="num mono">303.380</div><div class="label">Penduduk Terdampak Krisis</div><div class="unit">Jiwa, akumulasi nasional</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="bar"></span><h2>Ringkasan Eksekutif Analisis Situasi</h2></div>
+    <p class="body-text">Sepanjang periode Juli 2026, Pusat Krisis Kesehatan Kementerian Kesehatan RI mencatat eskalasi signifikan beban krisis kesehatan akibat kebencanaan, dengan <b>484 kejadian</b> yang berdampak langsung pada <b>303.380 jiwa</b> penduduk di seluruh wilayah cakupan pemantauan. Tingginya angka korban meninggal dunia (183 jiwa), korban luka (6.082 jiwa), serta 36 jiwa yang masih dinyatakan hilang menegaskan bahwa tekanan terhadap sistem kesehatan darurat berada pada level yang memerlukan kewaspadaan penuh. Konsentrasi dampak yang tidak merata antarwilayah — dengan Jawa Barat dan Banten menyumbang porsi korban dan pengungsi terbesar secara nasional — menuntut prioritas alokasi sumber daya medis dan logistik kesehatan yang terarah, cepat, dan terukur sesuai prinsip manajemen krisis berbasis risiko.</p>
+    <p class="body-text">Kondisi 6.996 jiwa pengungsi yang saat ini berada di posko pengungsian menghadirkan ancaman kesehatan masyarakat sekunder yang tidak kalah serius dibandingkan dampak primer bencana itu sendiri. Kepadatan hunian sementara, keterbatasan sanitasi, dan minimnya akses air bersih pada masa tanggap darurat menjadi faktor pendorong utama peningkatan risiko penyakit menular berbasis lingkungan, khususnya Infeksi Saluran Pernapasan Akut (ISPA), Diare, dan penyakit Kulit (skabies dan dermatitis). Ketiga penyakit ini secara historis selalu menjadi penyumbang morbiditas tertinggi di posko pengungsian pada 2–3 minggu pertama pascabencana. Atas dasar ini, Pusat Krisis Kesehatan Kemenkes RI menetapkan Jawa Barat dan Banten sebagai wilayah prioritas utama intervensi kesehatan darurat, dengan instruksi tegas kepada seluruh jajaran Dinas Kesehatan Provinsi dan Tim EMT untuk mempercepat surveilans penyakit menular, distribusi logistik obat esensial, serta penguatan pos kesehatan lapangan tanpa penundaan.</p>
+    <div class="callout"><b>Status Komando:</b> Seluruh Dinas Kesehatan Provinsi terdampak diinstruksikan mengaktifkan status Tanggap Darurat Kesehatan dan melaporkan perkembangan situasi ke EOC Kemenkes RI secara berkala setiap 24 jam.</div>
+  </div>
+
+  <div class="page-footer">
+    <span>Laporan Infografis Eksekutif — Pusat Krisis Kesehatan Kemenkes RI</span>
+    <span>Halaman 1 dari 3</span>
+  </div>
+</div>
+
+<!-- ================= HALAMAN 2 ================= -->
+<div class="page">
+  <div class="watermark">EOC KEMENKES RI</div>
+  <div class="tricolor"></div>
+  <div class="letterhead">
+    <div class="lh-left">
+      <div class="seal">EOC<br>KEMENKES<br>RI</div>
+      <div class="lh-org">Pusat Krisis Kesehatan<b>Kementerian Kesehatan Republik Indonesia</b></div>
+    </div>
+    <div class="lh-right">
+      No. Dok: EOC/INFO-EKS/VII/2026<br>
+      Klasifikasi: Terbatas — Internal Komando<br>
+      <span class="status">SIAGA DARURAT</span>
+    </div>
+  </div>
+
+  <div class="section" style="padding-top:26px;">
+    <div class="section-title"><span class="bar"></span><h2>Pemetaan Spasial Regional &amp; Distribusi Kebencanaan</h2></div>
+    <p class="body-text">Analisis distribusi spasial menunjukkan bahwa dampak krisis kesehatan bulan Juli 2026 terkonsentrasi pada lima provinsi prioritas yang secara kumulatif menyumbang <b>40 kejadian bencana</b> dan <b>10.094 jiwa</b> korban serta pengungsi. Pola sebaran ini mengonfirmasi karakter krisis yang bersifat klaster regional, sehingga strategi respons wajib disusun secara terdiferensiasi per wilayah, bukan pendekatan seragam nasional.</p>
+
+    <div class="region-grid">
+      <div class="region-card top">
+        <div class="rname">1. Jawa Barat</div>
+        <div class="rstat">17 Kejadian · 4.033 Korban/Pengungsi</div>
+        <div class="rnote">Wilayah dengan beban tertinggi secara nasional. Frekuensi kejadian yang tinggi dikombinasikan dengan volume korban terbesar menjadikan Jawa Barat sebagai episentrum utama operasi tanggap darurat kesehatan bulan ini.</div>
+      </div>
+      <div class="region-card top">
+        <div class="rname">2. Banten</div>
+        <div class="rstat">8 Kejadian · 3.018 Korban/Pengungsi</div>
+        <div class="rnote">Rasio korban per kejadian yang sangat tinggi mengindikasikan intensitas dampak per lokasi bencana yang berat, menuntut penguatan kapasitas faskes rujukan dan pos kesehatan lapangan secara segera.</div>
+      </div>
+      <div class="region-card">
+        <div class="rname">3. DKI Jakarta</div>
+        <div class="rstat">6 Kejadian · 1.653 Korban/Pengungsi</div>
+        <div class="rnote">Kepadatan penduduk perkotaan memperbesar potensi penyebaran penyakit menular di titik pengungsian sehingga memerlukan pengawasan epidemiologis yang lebih ketat meski jumlah kejadian relatif moderat.</div>
+      </div>
+      <div class="region-card">
+        <div class="rname">4. Gorontalo</div>
+        <div class="rstat">2 Kejadian · 816 Korban/Pengungsi</div>
+        <div class="rnote">Meski jumlah kejadian paling sedikit di antara lima wilayah prioritas, rasio dampak per kejadian tertinggi secara nasional (408 korban/kejadian) menandakan skala bencana tunggal yang sangat besar dan memerlukan mobilisasi logistik lintas wilayah.</div>
+      </div>
+      <div class="region-card">
+        <div class="rname">5. Sumatera Barat</div>
+        <div class="rstat">7 Kejadian · 574 Korban/Pengungsi</div>
+        <div class="rnote">Karakter kejadian yang tersebar pada frekuensi cukup tinggi namun dampak per kejadian relatif lebih terkendali, sehingga fokus intervensi diarahkan pada pemantauan dini dan kesiapsiagaan wilayah rawan berulang.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="bar"></span><h2>Tabel Distribusi Dampak Regional</h2></div>
+    <table>
+      <thead>
+        <tr><th>Peringkat</th><th>Provinsi</th><th>Jumlah Kejadian</th><th>Total Pengungsi/Korban</th><th>Tingkat Risiko Krisis Kesehatan</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td><b>Jawa Barat</b></td><td class="mono">17</td><td class="mono">4.033</td><td><span class="risk-pill risk-sangat">SANGAT TINGGI</span></td></tr>
+        <tr><td>2</td><td><b>Banten</b></td><td class="mono">8</td><td class="mono">3.018</td><td><span class="risk-pill risk-sangat">SANGAT TINGGI</span></td></tr>
+        <tr><td>3</td><td><b>DKI Jakarta</b></td><td class="mono">6</td><td class="mono">1.653</td><td><span class="risk-pill risk-tinggi">TINGGI</span></td></tr>
+        <tr><td>4</td><td><b>Gorontalo</b></td><td class="mono">2</td><td class="mono">816</td><td><span class="risk-pill risk-tinggi">TINGGI</span></td></tr>
+        <tr><td>5</td><td><b>Sumatera Barat</b></td><td class="mono">7</td><td class="mono">574</td><td><span class="risk-pill risk-tinggi">TINGGI</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="bar"></span><h2>Analisis Kapasitas Fasilitas Kesehatan (Faskes)</h2></div>
+    <p class="body-text">Penilaian kesiapan faskes rujukan di lima wilayah prioritas menunjukkan tekanan kapasitas yang perlu diantisipasi melalui realokasi sumber daya lintas provinsi, khususnya pada klaster Jawa Barat–Banten yang menanggung beban kasus tertinggi.</p>
+    <div class="faskes-grid">
+      <div class="faskes-card">
+        <div class="ficon">🛏️</div>
+        <div class="ftitle">Bed Occupancy Rate</div>
+        <div class="fval mono">78%</div>
+        <span class="fstatus st-waspada">WASPADA</span>
+      </div>
+      <div class="faskes-card">
+        <div class="ficon">🚑</div>
+        <div class="ftitle">Akses UGD 24 Jam</div>
+        <div class="fval mono">92%</div>
+        <span class="fstatus st-siaga">BEBAN TINGGI</span>
+      </div>
+      <div class="faskes-card">
+        <div class="ficon">🚨</div>
+        <div class="ftitle">Mobilisasi Ambulans</div>
+        <div class="fval mono">85%</div>
+        <span class="fstatus st-waspada">WASPADA</span>
+      </div>
+      <div class="faskes-card">
+        <div class="ficon">💊</div>
+        <div class="ftitle">Stok Obat Esensial</div>
+        <div class="fval mono">61%</div>
+        <span class="fstatus st-siaga">MENIPIS</span>
+      </div>
+    </div>
+    <div class="callout"><b>Catatan Komando:</b> Stok obat esensial di bawah ambang 65% pada klaster Jawa Barat–Banten mewajibkan aktivasi jalur distribusi logistik prioritas dari gudang farmasi regional dalam 1×24 jam.</div>
+  </div>
+
+  <div class="page-footer">
+    <span>Laporan Infografis Eksekutif — Pusat Krisis Kesehatan Kemenkes RI</span>
+    <span>Halaman 2 dari 3</span>
+  </div>
+</div>
+
+<!-- ================= HALAMAN 3 ================= -->
+<div class="page">
+  <div class="watermark">EOC KEMENKES RI</div>
+  <div class="tricolor"></div>
+  <div class="letterhead">
+    <div class="lh-left">
+      <div class="seal">EOC<br>KEMENKES<br>RI</div>
+      <div class="lh-org">Pusat Krisis Kesehatan<b>Kementerian Kesehatan Republik Indonesia</b></div>
+    </div>
+    <div class="lh-right">
+      No. Dok: EOC/INFO-EKS/VII/2026<br>
+      Klasifikasi: Terbatas — Internal Komando<br>
+      <span class="status">SIAGA DARURAT</span>
+    </div>
+  </div>
+
+  <div class="section" style="padding-top:26px;">
+    <div class="section-title"><span class="bar"></span><h2>Rekomendasi Taktis Tim Medis (EMT) &amp; Rencana Kontinjensi</h2></div>
+    <p class="body-text">Berdasarkan hasil analisis situasi dan pemetaan risiko regional, Pusat Krisis Kesehatan Kemenkes RI menginstruksikan pelaksanaan protokol mobilisasi Emergency Medical Team (EMT) Tipe 1 dan Tipe 2 secara berjenjang ke seluruh titik pengungsian pada wilayah prioritas.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="snum"></div>
+        <div class="stext">
+          <b>Aktivasi &amp; Penugasan EMT Tipe 1 (0–24 Jam)</b>
+          <p>Mengerahkan EMT Tipe 1 (rawat jalan/mobile clinic) ke posko pengungsian terparah di klaster Jawa Barat dan Banten dalam waktu maksimal 24 jam sejak status siaga darurat ditetapkan, dengan fokus penanganan awal ISPA, Diare, dan penyakit Kulit.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="snum"></div>
+        <div class="stext">
+          <b>Penguatan EMT Tipe 2 &amp; Rujukan (24–72 Jam)</b>
+          <p>Menempatkan EMT Tipe 2 (rawat inap darurat) pada faskes rujukan terdekat dari titik pengungsian di DKI Jakarta, Gorontalo, dan Sumatera Barat untuk menopang kapasitas BOR yang berada pada level waspada, disertai jalur evakuasi medis yang jelas.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="snum"></div>
+        <div class="stext">
+          <b>Surveilans Berkelanjutan &amp; Rotasi Tenaga Kesehatan (72 Jam+)</b>
+          <p>Menjalankan surveilans penyakit menular harian di seluruh posko, disertai sistem rotasi tenaga kesehatan setiap 7 hari guna menjaga kualitas layanan dan mencegah kelelahan personel selama masa tanggap darurat berlangsung.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="bar"></span><h2>Standar Kesiapsiagaan Sanitasi &amp; Pengungsian</h2></div>
+    <div class="standard-grid">
+      <div class="std-card">
+        <div class="sv">15 L</div>
+        <div class="sl">Air Bersih per Jiwa/Hari</div>
+        <div class="sd">Standar minimal ketersediaan air bersih di posko pengungsian sesuai pedoman kesehatan lingkungan tanggap darurat.</div>
+      </div>
+      <div class="std-card">
+        <div class="sv">1 : 20</div>
+        <div class="sl">Rasio MCK per Pengungsi</div>
+        <div class="sd">Satu unit MCK (jamban pengungsian) wajib melayani maksimal 20 jiwa untuk mencegah penularan penyakit berbasis sanitasi.</div>
+      </div>
+      <div class="std-card">
+        <div class="sv">3x</div>
+        <div class="sl">Distribusi Dapur Umum/Hari</div>
+        <div class="sd">Penyediaan makanan siap saji secara higienis minimal tiga kali sehari dengan standar gizi darurat bencana.</div>
+      </div>
+      <div class="std-card">
+        <div class="sv">1 : 500</div>
+        <div class="sl">Rasio Ruang Isolasi Krisis</div>
+        <div class="sd">Area isolasi kesehatan disiapkan untuk mengantisipasi lonjakan kasus penyakit menular per 500 jiwa pengungsi.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="bar"></span><h2>Pusat Pelayanan Informasi Darurat</h2></div>
+    <div class="hotline-grid">
+      <div class="hotline-card red">
+        <div class="hl">Hotline EOC Kemenkes RI</div>
+        <div class="hnum">0812-1212-3119</div>
+      </div>
+      <div class="hotline-card">
+        <div class="hl">Call Center Darurat Medis</div>
+        <div class="hnum">119 (PSC 119)</div>
+      </div>
+      <div class="hotline-card red">
+        <div class="hl">Command Center 24 Jam</div>
+        <div class="hnum">(021) 500-567</div>
+      </div>
+    </div>
+
+    <div class="signature-block">
+      <div class="sig-left">Dokumen ini merupakan laporan resmi Pusat Krisis Kesehatan Kementerian Kesehatan Republik Indonesia dan digunakan sebagai dasar pengambilan keputusan operasional lintas sektor dalam penanganan krisis kesehatan kebencanaan.</div>
+      <div class="sig-right">
+        <div class="stamp">DISAHKAN<br>SECARA DIGITAL<br>EOC KEMENKES RI<br>31-07-2026</div>
+        <div class="sig-name">dr. [Nama Kepala Pusat]</div><br>
+        <div class="sig-role">Kepala Pusat Krisis Kesehatan<br>Kementerian Kesehatan RI</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>Laporan Infografis Eksekutif — Pusat Krisis Kesehatan Kemenkes RI</span>
+    <span>Halaman 3 dari 3</span>
+  </div>
+</div>
+
+</body>
+</html>

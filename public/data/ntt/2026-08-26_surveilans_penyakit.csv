@@ -1,0 +1,69 @@
+tanggal,kabupaten,puskesmas,jenis_penyakit,jumlah_kasus,kasus_baru
+2026-08-26,"Kab. Manggarai","Posko & Faskes Kab. Manggarai","ISPA",3796,607
+2026-08-26,"Kab. Manggarai","Posko & Faskes Kab. Manggarai","Hipertensi",1787,351
+2026-08-26,"Kab. Manggarai","Posko & Faskes Kab. Manggarai","Diare",191,35
+2026-08-26,"Kab. Manggarai","Posko & Faskes Kab. Manggarai","Diabetes Dewasa (> 18 Tahun)",188,23
+2026-08-26,"Kab. Manggarai","Posko & Faskes Kab. Manggarai","Dermatitis (Penyakit Kulit)",166,33
+2026-08-26,"Kab. Manggarai","Posko & Faskes Kab. Manggarai","Luka",113,23
+2026-08-26,"Kab. Manggarai","Posko & Faskes Kab. Manggarai","Gigitan Hewan Penular Rabies",75,13
+2026-08-26,"Kab. Manggarai","Posko & Faskes Kab. Manggarai","Fraktur",9,3
+2026-08-26,"Kab. Manggarai","Posko & Faskes Kab. Manggarai","Diabetes Pada Anak (0-17 tahun)",5,3
+2026-08-26,"Kab. Manggarai","Posko & Faskes Kab. Manggarai","Pneumonia",5,0
+2026-08-26,"Kab. Manggarai","Posko & Faskes Kab. Manggarai","Suspek Demam Tifoid",2,1
+2026-08-26,"Kab. Manggarai","Posko & Faskes Kab. Manggarai","Suspek Dengue",1,0
+2026-08-26,"Kab. Nagekeo","Posko & Faskes Kab. Nagekeo","ISPA",1969,315
+2026-08-26,"Kab. Nagekeo","Posko & Faskes Kab. Nagekeo","Hipertensi",927,182
+2026-08-26,"Kab. Nagekeo","Posko & Faskes Kab. Nagekeo","Diare",99,18
+2026-08-26,"Kab. Nagekeo","Posko & Faskes Kab. Nagekeo","Diabetes Dewasa (> 18 Tahun)",97,12
+2026-08-26,"Kab. Nagekeo","Posko & Faskes Kab. Nagekeo","Dermatitis (Penyakit Kulit)",86,17
+2026-08-26,"Kab. Nagekeo","Posko & Faskes Kab. Nagekeo","Luka",59,12
+2026-08-26,"Kab. Nagekeo","Posko & Faskes Kab. Nagekeo","Gigitan Hewan Penular Rabies",39,7
+2026-08-26,"Kab. Nagekeo","Posko & Faskes Kab. Nagekeo","Fraktur",5,1
+2026-08-26,"Kab. Nagekeo","Posko & Faskes Kab. Nagekeo","Diabetes Pada Anak (0-17 tahun)",2,2
+2026-08-26,"Kab. Nagekeo","Posko & Faskes Kab. Nagekeo","Pneumonia",2,0
+2026-08-26,"Kab. Nagekeo","Posko & Faskes Kab. Nagekeo","Suspek Demam Tifoid",1,0
+2026-08-26,"Kab. Ende","Posko & Faskes Kab. Ende","ISPA",1277,204
+2026-08-26,"Kab. Ende","Posko & Faskes Kab. Ende","Hipertensi",601,118
+2026-08-26,"Kab. Ende","Posko & Faskes Kab. Ende","Diare",64,12
+2026-08-26,"Kab. Ende","Posko & Faskes Kab. Ende","Diabetes Dewasa (> 18 Tahun)",63,8
+2026-08-26,"Kab. Ende","Posko & Faskes Kab. Ende","Dermatitis (Penyakit Kulit)",56,11
+2026-08-26,"Kab. Ende","Posko & Faskes Kab. Ende","Luka",38,8
+2026-08-26,"Kab. Ende","Posko & Faskes Kab. Ende","Gigitan Hewan Penular Rabies",25,4
+2026-08-26,"Kab. Ende","Posko & Faskes Kab. Ende","Fraktur",3,1
+2026-08-26,"Kab. Ende","Posko & Faskes Kab. Ende","Diabetes Pada Anak (0-17 tahun)",2,1
+2026-08-26,"Kab. Ende","Posko & Faskes Kab. Ende","Pneumonia",2,0
+2026-08-26,"Kab. Ende","Posko & Faskes Kab. Ende","Suspek Demam Tifoid",1,0
+2026-08-26,"Kab. Manggarai Timur","Posko & Faskes Kab. Manggarai Timur","ISPA",949,152
+2026-08-26,"Kab. Manggarai Timur","Posko & Faskes Kab. Manggarai Timur","Hipertensi",447,88
+2026-08-26,"Kab. Manggarai Timur","Posko & Faskes Kab. Manggarai Timur","Diare",48,9
+2026-08-26,"Kab. Manggarai Timur","Posko & Faskes Kab. Manggarai Timur","Diabetes Dewasa (> 18 Tahun)",47,6
+2026-08-26,"Kab. Manggarai Timur","Posko & Faskes Kab. Manggarai Timur","Dermatitis (Penyakit Kulit)",42,8
+2026-08-26,"Kab. Manggarai Timur","Posko & Faskes Kab. Manggarai Timur","Luka",28,6
+2026-08-26,"Kab. Manggarai Timur","Posko & Faskes Kab. Manggarai Timur","Gigitan Hewan Penular Rabies",19,3
+2026-08-26,"Kab. Manggarai Timur","Posko & Faskes Kab. Manggarai Timur","Fraktur",2,1
+2026-08-26,"Kab. Manggarai Timur","Posko & Faskes Kab. Manggarai Timur","Diabetes Pada Anak (0-17 tahun)",1,1
+2026-08-26,"Kab. Manggarai Timur","Posko & Faskes Kab. Manggarai Timur","Pneumonia",1,0
+2026-08-26,"Kab. Manggarai Timur","Posko & Faskes Kab. Manggarai Timur","Suspek Demam Tifoid",1,0
+2026-08-26,"Kab. Manggarai Barat","Posko & Faskes Kab. Manggarai Barat","ISPA",390,62
+2026-08-26,"Kab. Manggarai Barat","Posko & Faskes Kab. Manggarai Barat","Hipertensi",184,36
+2026-08-26,"Kab. Manggarai Barat","Posko & Faskes Kab. Manggarai Barat","Diare",20,4
+2026-08-26,"Kab. Manggarai Barat","Posko & Faskes Kab. Manggarai Barat","Diabetes Dewasa (> 18 Tahun)",19,2
+2026-08-26,"Kab. Manggarai Barat","Posko & Faskes Kab. Manggarai Barat","Dermatitis (Penyakit Kulit)",17,3
+2026-08-26,"Kab. Manggarai Barat","Posko & Faskes Kab. Manggarai Barat","Luka",12,2
+2026-08-26,"Kab. Manggarai Barat","Posko & Faskes Kab. Manggarai Barat","Gigitan Hewan Penular Rabies",8,1
+2026-08-26,"Kab. Manggarai Barat","Posko & Faskes Kab. Manggarai Barat","Fraktur",1,0
+2026-08-26,"Kab. Ngada","Posko & Faskes Kab. Ngada","ISPA",293,47
+2026-08-26,"Kab. Ngada","Posko & Faskes Kab. Ngada","Hipertensi",138,27
+2026-08-26,"Kab. Ngada","Posko & Faskes Kab. Ngada","Diare",15,3
+2026-08-26,"Kab. Ngada","Posko & Faskes Kab. Ngada","Diabetes Dewasa (> 18 Tahun)",14,2
+2026-08-26,"Kab. Ngada","Posko & Faskes Kab. Ngada","Dermatitis (Penyakit Kulit)",13,3
+2026-08-26,"Kab. Ngada","Posko & Faskes Kab. Ngada","Luka",9,2
+2026-08-26,"Kab. Ngada","Posko & Faskes Kab. Ngada","Gigitan Hewan Penular Rabies",6,1
+2026-08-26,"Kab. Ngada","Posko & Faskes Kab. Ngada","Fraktur",1,0
+2026-08-26,"Kab. Sikka","Posko & Faskes Kab. Sikka","ISPA",195,31
+2026-08-26,"Kab. Sikka","Posko & Faskes Kab. Sikka","Hipertensi",92,18
+2026-08-26,"Kab. Sikka","Posko & Faskes Kab. Sikka","Diare",10,2
+2026-08-26,"Kab. Sikka","Posko & Faskes Kab. Sikka","Diabetes Dewasa (> 18 Tahun)",10,1
+2026-08-26,"Kab. Sikka","Posko & Faskes Kab. Sikka","Dermatitis (Penyakit Kulit)",9,2
+2026-08-26,"Kab. Sikka","Posko & Faskes Kab. Sikka","Luka",6,1
+2026-08-26,"Kab. Sikka","Posko & Faskes Kab. Sikka","Gigitan Hewan Penular Rabies",4,1
