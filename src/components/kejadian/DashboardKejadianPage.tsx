@@ -39,6 +39,7 @@ import {
   Phone,
   Ambulance,
   HeartPulse,
+  Lock,
 } from 'lucide-react'
 import {
   PieChart,
@@ -344,10 +345,87 @@ export default function DashboardKejadianPage() {
   const [tahun, setTahun] = useState('2026')
   const [activeKodePsc, setActiveKodePsc] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return new URLSearchParams(window.location.search).get('kode_psc')?.trim() || ''
+      const fromUrl = new URLSearchParams(window.location.search).get('kode_psc')?.trim()
+      if (fromUrl) {
+        localStorage.setItem('auth_kode_psc', fromUrl)
+        return fromUrl
+      }
+      return localStorage.getItem('auth_kode_psc') || ''
     }
     return ''
   })
+  const [activePscCenter, setActivePscCenter] = useState<any | null>(null)
+
+  // Otomatisasi kunci wilayah berdasarkan unit kode_psc
+  useEffect(() => {
+    if (!activeKodePsc) return
+    let isMounted = true
+
+    async function resolvePscUnitScope() {
+      try {
+        const res = await fetch(`/api/psc/centers?kode_psc=${encodeURIComponent(activeKodePsc)}`)
+        if (!res.ok) return
+        const json = await res.json()
+        const center = json?.data?.[0]
+        if (!center || !isMounted) return
+
+        setActivePscCenter(center)
+
+        const provName = (center.provinsi || '').trim()
+        const kabName = (center.kabupaten || '').trim()
+
+        if (provName) setProvince(provName)
+        if (kabName) setKabupaten(kabName)
+        setCakupan('kabupaten-kota')
+
+        // Terapkan wilayah_scope terkunci ke useAuthStore
+        const currentAuthUser = useAuthStore.getState().user
+        useAuthStore.setState({
+          user: {
+            ...(currentAuthUser || {
+              id_user: 9287,
+              username: activeKodePsc,
+              email: `${activeKodePsc.toLowerCase()}@psc119.kemkes.go.id`,
+              nama_lengkap: center.nama_psc || `PSC 119 ${activeKodePsc}`,
+              level_user_id: 2,
+              level_name: 'Operator PSC',
+            }),
+            wilayah_scope: {
+              mode: 'kabupaten',
+              access_label: `${center.nama_psc} (${kabName}, ${provName})`,
+              cakupan: {
+                id: 'kabupaten-kota',
+                value: 'kabupaten-kota',
+                label: 'KABUPATEN/KOTA',
+                locked: true,
+              },
+              provinsi: {
+                id: center.kd_prop,
+                value: provName.toLowerCase(),
+                label: provName,
+                locked: true,
+                options: [{ id: center.kd_prop, label: provName }],
+              },
+              kabupaten: {
+                id: center.kd_kab,
+                value: kabName.toLowerCase(),
+                label: kabName,
+                locked: true,
+                options: [{ id: center.kd_kab, label: kabName }],
+              },
+            },
+          },
+        })
+      } catch (err) {
+        console.error('Gagal memuat profil unit PSC untuk penguncian wilayah:', err)
+      }
+    }
+
+    resolvePscUnitScope()
+    return () => {
+      isMounted = false
+    }
+  }, [activeKodePsc])
   const [filterStartDate, setFilterStartDate] = useState<string | undefined>(undefined)
   const [filterEndDate, setFilterEndDate] = useState<string | undefined>(undefined)
   const [ewsAlertQueue, setEwsAlertQueue] = useState<any[]>([])
@@ -1356,7 +1434,11 @@ export default function DashboardKejadianPage() {
     setSelectedRegions([])
     setFilterStartDate(undefined)
     setFilterEndDate(undefined)
-    if (isProvLocked && user?.wilayah_scope?.provinsi?.label) {
+    if (isKabLocked && user?.wilayah_scope?.kabupaten?.label) {
+      setKabupaten(user.wilayah_scope.kabupaten.label)
+      setProvince(user.wilayah_scope.provinsi.label)
+      setCakupan('kabupaten-kota')
+    } else if (isProvLocked && user?.wilayah_scope?.provinsi?.label) {
       setKabupaten('')
       setCakupan('provinsi')
     } else {
@@ -2040,122 +2122,139 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           {/* Smart Search, Info Filter & Reset Button Grid */}
           <section className="grid grid-cols-1 md:grid-cols-[8fr_6fr_3fr_3fr] gap-4 w-full items-start z-20 relative">
 
-        {/* Column 1: Smart Search Bar */}
+        {/* Column 1: Smart Search Bar or Locked Unit Status */}
         <div className="relative w-full z-20">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[#6b7280]">
-            Pencarian Wilayah
+            {isKabLocked ? 'Status Wilayah Unit PSC' : 'Pencarian Wilayah'}
           </p>
-          <div className="relative flex items-center">
-            <Search className="absolute left-4 h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value)
-                setShowSuggestions(true)
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  if (searchQuery.trim().length >= 2) {
-                    const text = searchQuery.trim()
-                    const exists = selectedRegions.some((item) => (item.label || '').toLowerCase() === text.toLowerCase())
-                    if (!exists) {
-                      const newItem: SelectedRegionItem = {
-                        id: `typed-${text}-${Date.now()}`,
-                        type: 'kabupaten',
-                        label: text,
-                        province_name: text,
-                        kabupaten_name: text,
-                        kecamatan_name: text,
-                        desa_name: text,
-                      }
-                      setSelectedRegions((prev) => [...prev, newItem])
-                    }
-                    setSearchQuery('')
-                    setShowSuggestions(false)
-                  }
-                  fetchData()
-                }
-              }}
-              onFocus={() => setShowSuggestions(true)}
-              placeholder="Cari Provinsi, Kab/Kota, Kecamatan, atau Desa..."
-              className="w-full rounded-2xl border border-slate-200 bg-white h-12 pl-11 pr-36 text-sm font-medium shadow-sm outline-none placeholder:text-slate-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all"
-            />
-            
-            {/* Action buttons inside the search bar */}
-            <div className="absolute right-1.5 top-1.5 bottom-1.5 flex items-center gap-1">
-              {isSearching ? (
-                <Loader2 className="h-4 w-4 animate-spin text-teal-600 mr-2" />
-              ) : searchQuery ? (
-                <button
-                  onClick={() => {
-                    setSearchQuery('')
-                    setSuggestions([])
-                  }}
-                  type="button"
-                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition mr-0.5"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={() => {
-                  fetchData()
-                }}
-                className="h-9 px-3.5 rounded-xl bg-[#047D78] hover:bg-[#036662] text-white text-xs font-extrabold uppercase tracking-wider flex items-center gap-1 shadow-sm transition active:scale-95 cursor-pointer"
-                title="Terapkan Filter Wilayah"
-              >
-                <CheckCircle2 className="h-3.5 w-3.5 text-teal-200" />
-                <span>TERAPKAN</span>
-              </button>
+          {isKabLocked ? (
+            <div className="flex items-center gap-2.5 h-12 w-full rounded-2xl border border-teal-200/90 bg-[#f0fbf9] px-3.5 shadow-xs">
+              <Lock className="h-4 w-4 text-teal-700 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-semibold text-teal-700 leading-tight">Wilayah Terkunci Sesuai Unit PSC</p>
+                <p className="truncate text-xs font-black text-teal-900 uppercase">
+                  {user?.wilayah_scope?.access_label || `${displayKabupaten}, ${displayProvinces}`}
+                </p>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-wider bg-teal-700 text-white px-2 py-0.5 rounded-md shrink-0">
+                TERKUNCI
+              </span>
             </div>
-          </div>
-
-          {/* Dropdown Suggestions */}
-          {showSuggestions && suggestions.length > 0 && (
+          ) : (
             <>
-              {/* Backdrop to close dropdown on outer click */}
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setShowSuggestions(false)}
-              />
-
-              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 max-h-[320px] overflow-y-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-[0_12px_40px_rgba(0,0,0,0.12)]">
-                {suggestions.map((sug, idx) => {
-                  let badgeClass = 'bg-slate-50 text-slate-700 border-slate-200'
-                  if (sug.type === 'provinsi') badgeClass = 'bg-teal-50 text-teal-700 border-teal-150'
-                  if (sug.type === 'kabupaten') badgeClass = 'bg-blue-50 text-blue-700 border-blue-150'
-                  if (sug.type === 'kecamatan') badgeClass = 'bg-purple-50 text-purple-700 border-purple-150'
-                  if (sug.type === 'desa') badgeClass = 'bg-amber-50 text-amber-700 border-amber-150'
-
-                  return (
+              <div className="relative flex items-center">
+                <Search className="absolute left-4 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    setShowSuggestions(true)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      if (searchQuery.trim().length >= 2) {
+                        const text = searchQuery.trim()
+                        const exists = selectedRegions.some((item) => (item.label || '').toLowerCase() === text.toLowerCase())
+                        if (!exists) {
+                          const newItem: SelectedRegionItem = {
+                            id: `typed-${text}-${Date.now()}`,
+                            type: 'kabupaten',
+                            label: text,
+                            province_name: text,
+                            kabupaten_name: text,
+                            kecamatan_name: text,
+                            desa_name: text,
+                          }
+                          setSelectedRegions((prev) => [...prev, newItem])
+                        }
+                        setSearchQuery('')
+                        setShowSuggestions(false)
+                      }
+                      fetchData()
+                    }
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  placeholder="Cari Provinsi, Kab/Kota, Kecamatan, atau Desa..."
+                  className="w-full rounded-2xl border border-slate-200 bg-white h-12 pl-11 pr-36 text-sm font-medium shadow-sm outline-none placeholder:text-slate-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all"
+                />
+                
+                {/* Action buttons inside the search bar */}
+                <div className="absolute right-1.5 top-1.5 bottom-1.5 flex items-center gap-1">
+                  {isSearching ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-teal-600 mr-2" />
+                  ) : searchQuery ? (
                     <button
-                      key={idx}
+                      onClick={() => {
+                        setSearchQuery('')
+                        setSuggestions([])
+                      }}
                       type="button"
-                      onClick={() => handleSelectSuggestion(sug)}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-teal-50/50 transition-colors"
+                      className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition mr-0.5"
                     >
-                      <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
-                      <span className="flex-1 truncate">{sug.label}</span>
-                      <span className={`rounded-lg border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${badgeClass}`}>
-                        {sug.type}
-                      </span>
+                      <X className="h-4 w-4" />
                     </button>
-                  )
-                })}
-              </div>
-            </>
-          )}
+                  ) : null}
 
-          {showSuggestions && searchQuery.trim().length >= 2 && !isSearching && suggestions.length === 0 && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowSuggestions(false)} />
-              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 rounded-2xl border border-slate-100 bg-white p-4 text-center shadow-[0_12px_40px_rgba(0,0,0,0.12)]">
-                <p className="text-xs text-slate-400 italic">Tidak ditemukan wilayah dengan kata kunci "{searchQuery}"</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fetchData()
+                    }}
+                    className="h-9 px-3.5 rounded-xl bg-[#047D78] hover:bg-[#036662] text-white text-xs font-extrabold uppercase tracking-wider flex items-center gap-1 shadow-sm transition active:scale-95 cursor-pointer"
+                    title="Terapkan Filter Wilayah"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 text-teal-200" />
+                    <span>TERAPKAN</span>
+                  </button>
+                </div>
               </div>
+
+              {/* Dropdown Suggestions */}
+              {showSuggestions && suggestions.length > 0 && (
+                <>
+                  {/* Backdrop to close dropdown on outer click */}
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowSuggestions(false)}
+                  />
+
+                  <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 max-h-[320px] overflow-y-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-[0_12px_40px_rgba(0,0,0,0.12)]">
+                    {suggestions.map((sug, idx) => {
+                      let badgeClass = 'bg-slate-50 text-slate-700 border-slate-200'
+                      if (sug.type === 'provinsi') badgeClass = 'bg-teal-50 text-teal-700 border-teal-150'
+                      if (sug.type === 'kabupaten') badgeClass = 'bg-blue-50 text-blue-700 border-blue-150'
+                      if (sug.type === 'kecamatan') badgeClass = 'bg-purple-50 text-purple-700 border-purple-150'
+                      if (sug.type === 'desa') badgeClass = 'bg-amber-50 text-amber-700 border-amber-150'
+
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSelectSuggestion(sug)}
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-teal-50/50 transition-colors"
+                        >
+                          <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
+                          <span className="flex-1 truncate">{sug.label}</span>
+                          <span className={`rounded-lg border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${badgeClass}`}>
+                            {sug.type}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+
+              {showSuggestions && searchQuery.trim().length >= 2 && !isSearching && suggestions.length === 0 && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowSuggestions(false)} />
+                  <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 rounded-2xl border border-slate-100 bg-white p-4 text-center shadow-[0_12px_40px_rgba(0,0,0,0.12)]">
+                    <p className="text-xs text-slate-400 italic">Tidak ditemukan wilayah dengan kata kunci "{searchQuery}"</p>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

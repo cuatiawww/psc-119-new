@@ -2686,7 +2686,7 @@ export default function UnduhLaporanPage() {
               <div class="ai-analysis-card">
                 <div class="ai-badge">INTEGRASI DATA MULTI-SEKTORAL RESMI</div>
                 <p style="font-size: 13px; color: #334155; line-height: 1.65; text-align: justify; margin: 0;">
-                  Data dihimpun secara terpadu dan real-time dari <b>Sistem Informasi Penanggulangan Krisis Kesehatan (SIPKK Kemenkes RI)</b>, <b>Sistem Kewaspadaan Dini dan Respon (SKDR)</b>, laporan harian <b>Emergency Operations Center (EOC 24 Jam)</b> Kementerian Kesehatan RI, <b>Badan Nasional Penanggulangan Bencana (BNPB)</b>, serta <b>Badan Meteorologi, Klimatologi, dan Geofisika (BMKG)</b>. Seluruh data diverifikasi bertingkat oleh Tim Verifikator Pusat Krisis Kesehatan sesuai standar WHO Health Cluster.
+                  Data dihimpun secara terpadu dan real-time dari <b>Sistem Penanggulangan Gawat Darurat Terpadu (SPGDT / PSC 119 Kemenkes RI)</b>, <b>Sistem Kewaspadaan Dini dan Respon (SKDR)</b>, laporan dispatch <b>Command Center PSC 119 (24 Jam)</b> Kementerian Kesehatan RI, jejaring fasyankes terakreditasi, serta data penanganan darurat pra-rumah sakit nasional. Seluruh data diverifikasi bertingkat oleh Tim Verifikator PSC 119 Kemenkes RI.
                 </p>
               </div>
             </section>

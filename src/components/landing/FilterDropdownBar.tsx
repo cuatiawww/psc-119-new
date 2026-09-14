@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Globe, MapPin, Building2, ChevronDown, Calendar, CheckCircle2, Check, Clock, CalendarDays, SlidersHorizontal } from 'lucide-react'
+import { Globe, MapPin, Building2, ChevronDown, Calendar, CheckCircle2, Check, Clock, CalendarDays, SlidersHorizontal, Lock } from 'lucide-react'
 import { useAuthStore, type WilayahScope } from '@/lib/authStore'
 import { buildRegionsUrl } from '@/lib/utils/api'
 
@@ -547,14 +547,20 @@ export default function FilterDropdownBar({ onSummaryChange, selectedProvinceNam
                   </span>
                 </span>
 
-                <ChevronDown
-                  className={`
-                    ml-auto h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0 text-[#9ca3af]
-                    transition-transform duration-200
-                    ${isOpen ? 'rotate-180' : ''}
-                    ${locked ? 'opacity-30' : ''}
-                  `}
-                />
+                {locked ? (
+                  <span className="ml-auto flex items-center gap-1 rounded-md bg-teal-50 border border-teal-200/80 px-1.5 py-0.5" title="Filter dikunci sesuai unit wilayah">
+                    <Lock className="h-3 w-3 text-teal-700" />
+                    <span className="text-[9px] font-bold text-teal-850 uppercase tracking-tighter">Kunci</span>
+                  </span>
+                ) : (
+                  <ChevronDown
+                    className={`
+                      ml-auto h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0 text-[#9ca3af]
+                      transition-transform duration-200
+                      ${isOpen ? 'rotate-180' : ''}
+                    `}
+                  />
+                )}
               </button>
 
               {/* Standard Dropdowns (Cakupan, Provinsi, Kab/Kota) */}

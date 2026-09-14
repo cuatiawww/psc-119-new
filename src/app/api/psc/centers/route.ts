@@ -7,18 +7,28 @@ const PSC_API_BASE_URL = process.env.PSC_API_BASE_URL || 'https://psc.kemkes.go.
 const PSC_API_TOKEN = process.env.PSC_API_TOKEN || ''
 
 // In-memory cache untuk data-psc (5 menit)
-let pscCentersCache: { timestamp: number; data: any } | null = null
+const centersCacheMap = new Map<string, { timestamp: number; data: any }>()
 const CACHE_TTL_MS = 5 * 60 * 1000
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    if (pscCentersCache && Date.now() - pscCentersCache.timestamp < CACHE_TTL_MS) {
-      return NextResponse.json(pscCentersCache.data)
+    const { searchParams } = new URL(req.url)
+    const kode_psc = searchParams.get('kode_psc')?.trim() || ''
+
+    const cacheKey = kode_psc || '__ALL__'
+    const cached = centersCacheMap.get(cacheKey)
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return NextResponse.json(cached.data)
     }
 
     const headers: Record<string, string> = {}
     if (PSC_API_TOKEN) {
       headers['TTOKEN'] = PSC_API_TOKEN
+    }
+
+    const formData = new FormData()
+    if (kode_psc) {
+      formData.append('kode_psc', kode_psc)
     }
 
     const controller = new AbortController()
@@ -27,13 +37,14 @@ export async function GET() {
     const response = await fetch(`${PSC_API_BASE_URL}/data-psc`, {
       method: 'POST',
       headers,
+      body: formData,
       signal: controller.signal,
     })
     clearTimeout(timeoutId)
 
     if (response.ok) {
       const result = await response.json()
-      pscCentersCache = { timestamp: Date.now(), data: result }
+      centersCacheMap.set(cacheKey, { timestamp: Date.now(), data: result })
       return NextResponse.json(result)
     }
 
@@ -55,6 +66,14 @@ export async function GET() {
   }
 }
 
-export async function POST() {
-  return GET()
+export async function POST(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({}))
+    const kode_psc = body.kode_psc || ''
+    const url = new URL(req.url)
+    if (kode_psc) url.searchParams.set('kode_psc', kode_psc)
+    return GET(new Request(url.toString(), { method: 'GET' }))
+  } catch {
+    return GET(req)
+  }
 }

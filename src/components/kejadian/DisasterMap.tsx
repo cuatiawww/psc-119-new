@@ -179,6 +179,7 @@ interface MarkerData {
   kabupaten?: string
   nama_kab?: string
   nama_desa?: string
+  desa?: string
   kecamatan?: string
   topografi?: string
   total_korban: number
@@ -189,6 +190,14 @@ interface MarkerData {
   terdampak?: number
   icon_file?: string
   jml_titik_lokasi?: number
+  // PSC Fields
+  kategori_layanan?: string
+  jenis_layanan?: string
+  nomor_kendaraan?: string
+  nama_petugas_ambulan?: string
+  status_penanganan_code?: string
+  status_verifikasi?: string
+  [key: string]: any
 }
 
 interface DisasterMapProps {
@@ -781,7 +790,10 @@ export default function DisasterMap({
     warnings?: any[]
     stats: {
       totalEvents: number
-      totalKorban: number
+      totalEmergency?: number
+      totalAmbulans?: number
+      totalSelesai?: number
+      totalKorban?: number
       meninggal?: number
       lukaBerat?: number
       lukaRingan?: number
@@ -791,7 +803,7 @@ export default function DisasterMap({
       populasiTerdampak?: number
       faskesCount?: number
       poskoCount?: number
-      breakdown: { name: string; count: number; totalKorban?: number }[]
+      breakdown: { name: string; count: number; emergency?: number; ambulans?: number; selesai?: number; totalKorban?: number }[]
       eventsList?: MarkerData[]
       faskesList?: any[]
       poskoList?: any[]
@@ -1262,18 +1274,36 @@ export default function DisasterMap({
           map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 600 })
         }
 
-        // Group by kabupaten
-        const kabMap = new Map<string, { count: number; totalKorban: number }>()
-        provMarkers.forEach((m) => {
-          const kab = m.kabupaten || 'LAINNYA'
-          const existing = kabMap.get(kab) || { count: 0, totalKorban: 0 }
+        // Group by kabupaten (PSC metrics: calls, emergency, ambulans, selesai)
+        const kabMap = new Map<string, { count: number; emergency: number; ambulans: number; selesai: number }>()
+        let totalEmergency = 0
+        let totalAmbulans = 0
+        let totalSelesai = 0
+
+        provMarkers.forEach((m: any) => {
+          const kab = m.kabupaten || m.nama_kab || 'LAINNYA'
+          const existing = kabMap.get(kab) || { count: 0, emergency: 0, ambulans: 0, selesai: 0 }
           existing.count++
-          existing.totalKorban += m.total_korban || 0
+
+          const isEm = (m.jenis_layanan || m.kategori_layanan || m.jenis_bencana || '').toLowerCase().includes('emergency') || 
+                       (m.kategori_layanan || m.jenis_bencana || '').toLowerCase().includes('trauma')
+          if (isEm) {
+            existing.emergency++
+            totalEmergency++
+          }
+          if (m.nomor_kendaraan || m.nama_petugas_ambulan || (m.jenis_layanan || '').toLowerCase().includes('ambulan')) {
+            existing.ambulans++
+            totalAmbulans++
+          }
+          if ((m.status_penanganan_code || m.status_verifikasi || '').toLowerCase().includes('selesai')) {
+            existing.selesai++
+            totalSelesai++
+          }
           kabMap.set(kab, existing)
         })
 
         const breakdown = Array.from(kabMap.entries())
-          .map(([name, s]) => ({ name, count: s.count, totalKorban: s.totalKorban }))
+          .map(([name, s]) => ({ name, count: s.count, emergency: s.emergency, ambulans: s.ambulans, selesai: s.selesai }))
           .sort((a, b) => b.count - a.count)
 
         setActivePopup({
@@ -1283,7 +1313,9 @@ export default function DisasterMap({
           warnings: warningsByProvince.get(provCleaned) || [],
           stats: {
             totalEvents: provMarkers.length,
-            totalKorban: provMarkers.reduce((s, m) => s + (m.total_korban || 0), 0),
+            totalEmergency,
+            totalAmbulans,
+            totalSelesai,
             breakdown,
           },
         })
@@ -1328,31 +1360,27 @@ export default function DisasterMap({
         if (Array.isArray(nttSituasiRef.current) && nttSituasiRef.current.length > 0) {
           nttData = nttSituasiRef.current.find((item: any) => cleanKey(item.kabupaten) === kabCleaned)
         }
-
-        const meninggal = nttData ? Number(nttData.meninggal || 0) : kabMarkers.reduce((s, m) => s + (m.meninggal || 0), 0)
-        const lukaBerat = nttData ? Number(nttData.luka_berat || 0) : kabMarkers.reduce((s, m) => s + (m.luka_berat || 0), 0)
-        const lukaRingan = nttData ? Number(nttData.luka_ringan || 0) : kabMarkers.reduce((s, m) => s + (m.luka_ringan || 0), 0)
-        const totalLuka = nttData ? (lukaBerat + lukaRingan) : (kabMarkers.reduce((s, m) => s + (m.luka_berat || 0) + (m.luka_ringan || 0), 0) || kabMarkers.reduce((s, m) => s + (m.total_korban || 0), 0))
-        const pengungsi = nttData ? Number(nttData.pengungsi || 0) : (kabPosko.reduce((s: number, p: any) => s + Number(p.jumlah_jiwa || p.jiwa || 0), 0) || kabMarkers.reduce((s, m) => s + (m.pengungsi || 0), 0))
-        const titikPosko = nttData ? Number(nttData.titik_pengungsian || 0) : kabPosko.length
-        const populasiTerdampak = nttData ? Number(nttData.populasi_terdampak || 0) : kabMarkers.reduce((s, m) => s + (m.terdampak || 0), 0)
+        let kabEmergency = 0
+        let kabAmbulans = 0
+        let kabSelesai = 0
+        kabMarkers.forEach((m: any) => {
+          const isEm = (m.jenis_layanan || m.kategori_layanan || m.jenis_bencana || '').toLowerCase().includes('emergency') || 
+                       (m.kategori_layanan || m.jenis_bencana || '').toLowerCase().includes('trauma')
+          if (isEm) kabEmergency++
+          if (m.nomor_kendaraan || m.nama_petugas_ambulan || (m.jenis_layanan || '').toLowerCase().includes('ambulan')) kabAmbulans++
+          if ((m.status_penanganan_code || m.status_verifikasi || '').toLowerCase().includes('selesai')) kabSelesai++
+        })
 
         setActivePopup({
           type: 'kabupaten',
           name: kabName,
           featureExtent: extent,
           stats: {
-            totalEvents: kabMarkers.length || (nttData ? 1 : 0),
-            totalKorban: (meninggal + totalLuka) || kabMarkers.reduce((s, m) => s + (m.total_korban || 0), 0),
-            meninggal,
-            lukaBerat,
-            lukaRingan,
-            totalLuka,
-            pengungsi,
-            titikPosko,
-            populasiTerdampak,
+            totalEvents: kabMarkers.length,
+            totalEmergency: kabEmergency,
+            totalAmbulans: kabAmbulans,
+            totalSelesai: kabSelesai,
             faskesCount: kabFaskes.length,
-            poskoCount: kabPosko.length || titikPosko,
             breakdown: [],
             eventsList: kabMarkers,
             faskesList: kabFaskes,
@@ -3839,12 +3867,9 @@ export default function DisasterMap({
             )}
 
             <div className="flex items-start gap-2">
-              <span className="w-16 flex-shrink-0 text-[10px] font-bold text-black uppercase">Korban</span>
-              <span
-                className="font-extrabold"
-                style={{ color: pinColor(markerPopup.data.total_korban) }}
-              >
-                {markerPopup.data.total_korban > 0 ? `${markerPopup.data.total_korban.toLocaleString('id-ID')} orang` : 'Tidak ada korban'}
+              <span className="w-16 flex-shrink-0 text-[10px] font-bold text-black uppercase">Layanan</span>
+              <span className="font-extrabold text-teal-800 text-[11px]">
+                {markerPopup.data.kategori_layanan || markerPopup.data.jenis_layanan || formatDisasterName(markerPopup.data.jenis_bencana) || 'Panggilan Darurat Medis'}
               </span>
             </div>
 
@@ -4378,39 +4403,37 @@ export default function DisasterMap({
             </button>
           </div>
 
-          {/* ── Ringkasan Statistik 2x2 Grid ── */}
+          {/* ── Ringkasan Statistik 2x2 Grid PSC 119 ── */}
           <div className="grid grid-cols-2 gap-2 mb-3">
-            {/* Meninggal */}
-            <div className="rounded-xl bg-rose-50/90 p-2.5 border border-rose-200/70">
-              <p className="text-[9.5px] font-extrabold text-rose-800 uppercase tracking-wide">Meninggal</p>
-              <p className="text-lg font-black text-rose-950">
-                {(activePopup.stats.meninggal ?? 0).toLocaleString('id-ID')} <span className="text-[10px] font-bold text-rose-700">Jiwa</span>
-              </p>
-            </div>
-
-            {/* Luka-luka */}
-            <div className="rounded-xl bg-amber-50/90 p-2.5 border border-amber-200/70">
-              <p className="text-[9.5px] font-extrabold text-amber-800 uppercase tracking-wide">Luka-Luka</p>
-              <p className="text-lg font-black text-amber-950">
-                {(activePopup.stats.totalLuka ?? activePopup.stats.totalKorban ?? 0).toLocaleString('id-ID')} <span className="text-[10px] font-bold text-amber-700">Jiwa</span>
-              </p>
-            </div>
-
-            {/* Pengungsi */}
-            <div className="rounded-xl bg-sky-50/90 p-2.5 border border-sky-200/70">
-              <p className="text-[9.5px] font-extrabold text-sky-800 uppercase tracking-wide">Pengungsi</p>
-              <p className="text-lg font-black text-sky-950">
-                {(activePopup.stats.pengungsi ?? 0).toLocaleString('id-ID')} <span className="text-[10px] font-bold text-sky-700">Jiwa</span>
-              </p>
-            </div>
-
-            {/* Terdampak / Posko */}
+            {/* Total Panggilan */}
             <div className="rounded-xl bg-teal-50/90 p-2.5 border border-teal-200/70">
-              <p className="text-[9.5px] font-extrabold text-teal-800 uppercase tracking-wide">Populasi Terdampak</p>
+              <p className="text-[9.5px] font-extrabold text-teal-800 uppercase tracking-wide">Total Panggilan</p>
               <p className="text-lg font-black text-teal-950">
-                {(activePopup.stats.populasiTerdampak ?? 0) > 0
-                  ? `${(activePopup.stats.populasiTerdampak ?? 0).toLocaleString('id-ID')} Jiwa`
-                  : `${activePopup.stats.totalEvents} Kejadian`}
+                {(activePopup.stats.totalEvents ?? 0).toLocaleString('id-ID')} <span className="text-[10px] font-bold text-teal-700">Panggilan</span>
+              </p>
+            </div>
+
+            {/* Gawat Darurat / Trauma */}
+            <div className="rounded-xl bg-rose-50/90 p-2.5 border border-rose-200/70">
+              <p className="text-[9.5px] font-extrabold text-rose-800 uppercase tracking-wide">Gadar / Trauma</p>
+              <p className="text-lg font-black text-rose-950">
+                {(activePopup.stats.totalEmergency ?? 0).toLocaleString('id-ID')} <span className="text-[10px] font-bold text-rose-700">Kasus</span>
+              </p>
+            </div>
+
+            {/* Ambulans Dikerahkan */}
+            <div className="rounded-xl bg-amber-50/90 p-2.5 border border-amber-200/70">
+              <p className="text-[9.5px] font-extrabold text-amber-800 uppercase tracking-wide">Dispatch Ambulans</p>
+              <p className="text-lg font-black text-amber-950">
+                {(activePopup.stats.totalAmbulans ?? 0).toLocaleString('id-ID')} <span className="text-[10px] font-bold text-amber-700">Armada</span>
+              </p>
+            </div>
+
+            {/* Selesai Ditangani */}
+            <div className="rounded-xl bg-emerald-50/90 p-2.5 border border-emerald-200/70">
+              <p className="text-[9.5px] font-extrabold text-emerald-800 uppercase tracking-wide">Selesai Ditangani</p>
+              <p className="text-lg font-black text-emerald-950">
+                {(activePopup.stats.totalSelesai ?? 0).toLocaleString('id-ID')} <span className="text-[10px] font-bold text-emerald-700">Selesai</span>
               </p>
             </div>
           </div>
@@ -4420,23 +4443,23 @@ export default function DisasterMap({
             {activePopup.type === 'provinsi' ? (
               <>
                 <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 mb-1">
-                  Sebaran Kejadian per Kab/Kota:
+                  Sebaran Panggilan per Kab/Kota:
                 </p>
                 {activePopup.stats.breakdown.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">Tidak ada kejadian bencana tercatat.</p>
+                  <p className="text-xs text-slate-400 italic">Tidak ada panggilan tercatat di wilayah ini.</p>
                 ) : (
                   <div className="space-y-1.5">
-                    {activePopup.stats.breakdown.map((item, idx) => (
+                    {activePopup.stats.breakdown.map((item: any, idx: number) => (
                       <div key={idx} className="flex justify-between items-center rounded-lg bg-slate-50 p-2 text-xs border border-slate-100">
                         <span className="font-semibold text-slate-700 truncate max-w-[180px]">{item.name}</span>
                         <div className="flex items-center gap-1.5">
-                          {item.totalKorban ? (
+                          {item.emergency ? (
                             <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
-                              {item.totalKorban} korban
+                              {item.emergency} gadar
                             </span>
                           ) : null}
-                          <span className="font-extrabold text-slate-900 bg-white border border-slate-200 px-1.5 py-0.5 rounded-md">
-                            {item.count} kejadian
+                          <span className="font-extrabold text-teal-800 bg-teal-50/60 border border-teal-200/60 px-1.5 py-0.5 rounded-md">
+                            {item.count} panggilan
                           </span>
                         </div>
                       </div>
@@ -4446,12 +4469,12 @@ export default function DisasterMap({
               </>
             ) : (
               <>
-                {/* Faskes List in this Kabupaten */}
+                {/* Faskes / Rumah Sakit Jejaring Rujukan */}
                 {activePopup.stats.faskesList && activePopup.stats.faskesList.length > 0 && (
                   <div className="space-y-1.5">
                     <p className="text-[10px] font-extrabold uppercase tracking-wider text-teal-800 flex items-center gap-1">
                       <Building2 className="w-3.5 h-3.5 text-teal-600" />
-                      Fasilitas Kesehatan Terkait ({activePopup.stats.faskesList.length} Unit):
+                      Jejaring RS &amp; Fasyankes Rujukan ({activePopup.stats.faskesList.length} Unit):
                     </p>
                     <div className="space-y-1.5">
                       {activePopup.stats.faskesList.map((f: any, idx: number) => (
@@ -4461,8 +4484,8 @@ export default function DisasterMap({
                           </div>
                           <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-500 font-medium">
                             {f.kecamatan && <span>Kec. {f.kecamatan}</span>}
-                            {f.tt_tersedia && <span>• {f.tt_tersedia} TT Tersedia</span>}
-                            {f.dokter && <span>• {f.dokter} Dokter</span>}
+                            {f.tt_tersedia && <span>• {f.tt_tersedia} TT</span>}
+                            {f.telp && <span>• Telp: {f.telp}</span>}
                           </div>
                         </div>
                       ))}
@@ -4470,51 +4493,26 @@ export default function DisasterMap({
                   </div>
                 )}
 
-                {/* Posko List in this Kabupaten */}
-                {activePopup.stats.poskoList && activePopup.stats.poskoList.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-sky-800 flex items-center gap-1">
-                      <Tent className="w-3.5 h-3.5 text-sky-600" />
-                      Pos Pengungsian ({activePopup.stats.poskoList.length} Posko):
-                    </p>
-                    <div className="space-y-1.5">
-                      {activePopup.stats.poskoList.map((pos: any, idx: number) => (
-                        <div key={idx} className="rounded-xl border border-sky-100 bg-sky-50/40 p-2 text-xs">
-                          <div className="flex items-start justify-between gap-1">
-                            <span className="font-bold text-slate-800 text-[11px] truncate">{pos.nama || pos.nama_pos}</span>
-                            <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-white border border-sky-200 text-sky-800 shrink-0">
-                              {(pos.jumlah_jiwa || pos.jiwa || 0).toLocaleString('id-ID')} Jiwa
-                            </span>
-                          </div>
-                          <div className="mt-1 text-[10px] text-slate-500 font-medium truncate">
-                            {pos.lokasi_spesifik || pos.kecamatan || 'Posko Pengungsian'}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Events list in this Kabupaten */}
+                {/* Log Panggilan Kedaruratan Terkini */}
                 {activePopup.stats.eventsList && activePopup.stats.eventsList.length > 0 && (
                   <div className="space-y-1.5">
                     <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
-                      Titik Kejadian Bencana ({activePopup.stats.eventsList.length}):
+                      Log Panggilan Kedaruratan Terkini ({activePopup.stats.eventsList.length}):
                     </p>
                     <div className="space-y-1.5">
-                      {activePopup.stats.eventsList.map((item, idx) => (
+                      {activePopup.stats.eventsList.map((item: any, idx: number) => (
                         <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50/50 p-2 text-xs">
                           <div className="flex justify-between items-start">
-                            <span className="font-bold text-teal-800">{formatDisasterName(item.jenis_bencana)}</span>
+                            <span className="font-bold text-teal-800">{item.kategori_layanan || item.jenis_layanan || formatDisasterName(item.jenis_bencana) || 'Panggilan Medis'}</span>
                             <span className="text-[10px] text-slate-400">{item.tgl_kejadian}</span>
                           </div>
                           <div className="mt-1 text-[10px] text-slate-500">
                             {item.kecamatan && <span>Kec. {item.kecamatan}</span>}
-                            {item.nama_desa && <span>, Desa {item.nama_desa}</span>}
+                            {item.desa && <span>, {item.desa}</span>}
                           </div>
                           <div className="mt-1 flex items-center justify-between border-t border-dashed border-slate-200 pt-1">
-                            <span className="text-[10px] text-slate-400">Total Korban:</span>
-                            <span className="font-bold text-red-600">{item.total_korban} orang</span>
+                            <span className="text-[10px] text-slate-400">Status Tindak Lanjut:</span>
+                            <span className="font-bold text-emerald-700">{item.status_penanganan_code || 'Selesai'}</span>
                           </div>
                         </div>
                       ))}
@@ -4668,13 +4666,13 @@ export default function DisasterMap({
           {/* Pin Marker (Korban) legend */}
           {showCasualtyLegend && (
             <div className="border-t border-slate-100 pt-2">
-              <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-red-600">Skala Dampak Korban Bencana</p>
+              <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-teal-800">Tingkat Kedaruratan Panggilan</p>
               <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9.5px]">
                 {[
-                  { label: '0 korban', color: '#94a3b8' },
-                  { label: '1 – 5 korban', color: '#facc15' },
-                  { label: '6 – 20 korban', color: '#f97316' },
-                  { label: '> 20 korban', color: '#dc2626' },
+                  { label: 'Informasi / Non-Gadar', color: '#94a3b8' },
+                  { label: 'Urgensi Sedang (P3)', color: '#facc15' },
+                  { label: 'Gawat Darurat (P2)', color: '#f97316' },
+                  { label: 'Kritis / Trauma (P1)', color: '#dc2626' },
                 ].map((b, i) => (
                   <div key={i} className="flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-slate-200 shadow-xs animate-pulse" style={{ background: b.color }} />

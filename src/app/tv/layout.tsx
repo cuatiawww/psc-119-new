@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'SIPKK EOC - Command Center Video Wall Mode',
-  description: 'Tampilan Layar Penuh (TV Wall) Sistem Informasi Penanggulangan Krisis Kesehatan - Kementerian Kesehatan RI',
+  title: 'PSC 119 - Command Center Video Wall Mode',
+  description: 'Tampilan Layar Penuh (TV Wall) Layanan Gawat Darurat Medis PSC 119 - Kementerian Kesehatan RI',
 }
 
 export default function TvLayout({ children }: { children: React.ReactNode }) {

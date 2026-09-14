@@ -41,15 +41,17 @@ export default function LoginPage() {
   const router = useRouter()
   const { isAuthenticated, isInitialized, initialize, login, loginAsGuest } = useAuthStore()
 
-  const [loginTab, setLoginTab] = useState<'psc' | 'sipkk'>('psc')
+  const [loginTab, setLoginTab] = useState<'psc' | 'admin'>('psc')
   const [kodePscInput, setKodePscInput] = useState('')
 
   const handlePscSubmit = (e: FormEvent) => {
     e.preventDefault()
     const clean = kodePscInput.trim().toUpperCase()
     if (clean) {
+      localStorage.setItem('auth_kode_psc', clean)
       router.push(`/?kode_psc=${encodeURIComponent(clean)}`)
     } else {
+      localStorage.removeItem('auth_kode_psc')
       router.push('/')
     }
   }
@@ -57,8 +59,8 @@ export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
 
-  const [bgSrc, setBgSrc] = useState<string>(localAsset('BACKGROUND-SIPKK NEW.png'))
-  const [logoSrc, setLogoSrc] = useState<string>(localAsset('logo_putih.png'))
+  const [bgSrc, setBgSrc] = useState<string>(localAsset('bg header.png'))
+  const [logoSrc, setLogoSrc] = useState<string>(localAsset('Logo-Kemenkes.png'))
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -69,42 +71,16 @@ export default function LoginPage() {
   const [captchaValue, setCaptchaValue] = useState('')
   const [loadingCaptcha, setLoadingCaptcha] = useState(false)
 
-  const [settings, setSettings] = useState({
-    frontend_app_title: 'Indikator Penilaian Kinerja Faskes',
-    frontend_app_subtitle: 'Sistem pemantauan terpadu untuk melihat capaian, sebaran, dan perkembangan fasilitas kesehatan di seluruh wilayah Indonesia.',
-    frontend_login_card_title: 'Dashboard Faskes',
-    frontend_login_card_subtitle: 'Silakan masuk untuk mengakses data fasilitas kesehatan.',
-    frontend_login_note: 'Akses terbatas untuk pengguna yang berwenang.\nHubungi admin jika mengalami kendala masuk.',
+  const [settings] = useState({
+    frontend_app_title: 'PUBLIC SAFETY CENTER 119',
+    frontend_app_subtitle: 'Sistem komando dan pemantauan terpadu panggilan gawat darurat medis, penugasan armada ambulans, serta jejaring rujukan pra-rumah sakit SPGDT di seluruh wilayah Indonesia.',
+    frontend_login_card_title: 'Dashboard PSC 119',
+    frontend_login_card_subtitle: 'Silakan pilih metode masuk untuk mengakses pemantauan kedaruratan.',
+    frontend_login_note: 'Akses terbatas untuk petugas dan operator PSC 119 yang berwenang.\nHubungi admin jika mengalami kendala masuk.',
     frontend_footer_text: '© 2026 Kementerian Kesehatan Republik Indonesia',
-    login_logo: localAsset('logo.png'),
-    login_background: localAsset('BACKGROUND-SIPKK NEW.png'),
+    login_logo: localAsset('Logo-Kemenkes.png'),
+    login_background: localAsset('bg header.png'),
   })
-
-  useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const res = await fetch(buildApiUrl('/api/settings'))
-        const payload = await res.json()
-        if (payload?.success && payload?.settings) {
-          setSettings(prev => ({
-            ...prev,
-            ...payload.settings
-          }))
-          const bg = payload.settings.frontend_login_background || payload.settings.login_background
-          if (bg) {
-            setBgSrc(getAssetUrl(bg))
-          }
-          const logo = payload.settings.frontend_login_logo || payload.settings.login_logo
-          if (logo) {
-            setLogoSrc(getAssetUrl(logo))
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch settings:', err)
-      }
-    }
-    fetchSettings()
-  }, [])
 
   const fetchCaptcha = useCallback(async () => {
     setLoadingCaptcha(true)
@@ -201,17 +177,17 @@ export default function LoginPage() {
       <div className="relative hidden min-h-screen overflow-hidden lg:flex lg:flex-col">
         {/* Background image */}
         <Image
-          src={bgSrc || localAsset('BACKGROUND-SIPKK NEW.png')}
-          alt="Background SIPKK"
+          src={bgSrc || localAsset('bg header.png')}
+          alt="Background PSC 119"
           fill
           priority
           sizes="60vw"
           className="object-cover object-center"
-          onError={() => setBgSrc(localAsset('BACKGROUND-SIPKK NEW.png'))}
+          onError={() => setBgSrc(localAsset('bg header.png'))}
         />
 
         {/* Overlay gradient — matches dashboard's teal palette */}
-        <div className="absolute inset-0 bg-gradient-to-br from-teal-950/80 via-teal-900/65 to-[#0e6b65]/50" />
+        <div className="absolute inset-0 bg-gradient-to-br from-teal-950/85 via-teal-900/70 to-[#0e6b65]/55" />
 
         {/* Subtle grid texture overlay */}
         <div
@@ -226,31 +202,35 @@ export default function LoginPage() {
         <div className="relative z-10 flex h-full flex-col justify-between p-10 xl:p-12">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <Image
-              src={logoSrc || localAsset('logo_putih.png')}
-              alt="Logo SIPKK"
-              width={180}
-              height={50}
-              className="h-auto w-[180px] object-contain"
-              priority
-              onError={() => setLogoSrc(localAsset('logo_putih.png'))}
-            />
+            <div className="inline-flex items-center gap-3 rounded-2xl bg-white/95 px-4 py-2.5 shadow-md backdrop-blur-xs border border-white/50">
+              <Image
+                src={logoSrc || localAsset('Logo-Kemenkes.png')}
+                alt="Logo Kemenkes RI"
+                width={140}
+                height={42}
+                className="h-8 w-auto object-contain"
+                priority
+                onError={() => setLogoSrc(localAsset('Logo-Kemenkes.png'))}
+              />
+              <div className="border-l border-teal-600/30 pl-3">
+                <p className="text-[12px] font-black uppercase tracking-wider text-teal-900 leading-tight">PSC 119</p>
+                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-none">Kemenkes RI</p>
+              </div>
+            </div>
           </div>
 
           {/* Main copy */}
           <div className="max-w-xl pb-4">
-            <h1 className="mt-4 text-[42px] font-extrabold leading-[1.1] tracking-tight text-white xl:text-[52px]">
+            <h1 className="mt-4 text-[40px] font-extrabold leading-[1.15] tracking-tight text-white xl:text-[50px] uppercase">
               {settings.frontend_app_title}
             </h1>
-            <p className="mt-4 text-[15px] leading-relaxed text-teal-100/80 xl:text-[16px]">
+            <p className="mt-4 text-[15px] leading-relaxed text-teal-100/90 xl:text-[16px]">
               {settings.frontend_app_subtitle}
             </p>
-
-
           </div>
 
           {/* Footer credit */}
-          <p className="text-[12px] text-teal-300/50">
+          <p className="text-[12px] text-teal-300/60 font-semibold">
             {settings.frontend_footer_text}
           </p>
         </div>
@@ -262,15 +242,20 @@ export default function LoginPage() {
 
           {/* Mobile-only logo */}
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <Image
-              src={localAsset('logo.png')}
-              alt="Logo SIPKK"
-              width={150}
-              height={45}
-              className="h-auto w-[150px] object-contain"
-              priority
-              onError={() => setLogoSrc(localAsset('logo.png'))}
-            />
+            <div className="rounded-xl border border-teal-100 bg-white px-3.5 py-2 shadow-sm flex items-center gap-3">
+              <Image
+                src={localAsset('Logo-Kemenkes.png')}
+                alt="Logo Kemenkes PSC 119"
+                width={140}
+                height={40}
+                className="h-8 w-auto object-contain"
+                priority
+              />
+              <div className="border-l border-teal-200 pl-2.5">
+                <p className="text-xs font-black uppercase tracking-wider text-teal-800 leading-tight">PSC 119</p>
+                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none">Kemenkes RI</p>
+              </div>
+            </div>
           </div>
 
           {/* Card */}
@@ -289,7 +274,7 @@ export default function LoginPage() {
                 Silakan pilih metode masuk untuk mengakses pemantauan kedaruratan.
               </p>
 
-              {/* Tab Selector: Unit PSC 119 vs Akun SIPKK */}
+              {/* Tab Selector: Unit PSC 119 vs Operator / Admin */}
               <div className="mt-4 flex items-center rounded-xl bg-slate-100 p-1 border border-slate-200">
                 <button
                   type="button"
@@ -304,14 +289,14 @@ export default function LoginPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setLoginTab('sipkk'); setError('') }}
+                  onClick={() => { setLoginTab('admin'); setError('') }}
                   className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition ${
-                    loginTab === 'sipkk'
+                    loginTab === 'admin'
                       ? 'bg-teal-700 text-white shadow-xs'
                       : 'text-slate-600 hover:text-teal-800'
                   }`}
                 >
-                  Akun SIPKK / Admin
+                  Operator / Admin
                 </button>
               </div>
             </div>

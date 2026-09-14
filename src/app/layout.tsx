@@ -12,33 +12,7 @@ const roboto = Roboto({
   display: 'swap',
 });
 
-export async function generateMetadata(): Promise<Metadata> {
-  const backendBase = (
-    process.env.SIPKK_BACKEND_BASE_URL ||
-    process.env.NEXT_PUBLIC_SIPKK_BACKEND_BASE_URL ||
-    'https://sipkk-new.mediaciptainformasi.co.id'
-  ).replace(/\/+$/, '')
-
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 2000)
-
-  try {
-    const res = await fetch(`${backendBase}/api/settings`, {
-      next: { revalidate: 3600 },
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId)
-    const payload = await res.json();
-    if (payload?.success && payload?.settings) {
-      return {
-        title: payload.settings.frontend_app_title || "Dashboard PSC 119 — SPGDT Kemenkes RI",
-        description: payload.settings.frontend_app_subtitle || "Sistem Pemantauan Terpadu Layanan Kedaruratan Medis & Panggilan Gawat Darurat 119 Kementerian Kesehatan RI.",
-      };
-    }
-  } catch (error) {
-    clearTimeout(timeoutId)
-  }
-
+export function generateMetadata(): Metadata {
   return {
     title: "Dashboard PSC 119 — SPGDT Kemenkes RI",
     description: "Sistem Pemantauan Terpadu Layanan Kedaruratan Medis & Panggilan Gawat Darurat 119 Kementerian Kesehatan RI.",
