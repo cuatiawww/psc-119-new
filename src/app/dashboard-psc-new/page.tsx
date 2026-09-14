@@ -14,11 +14,10 @@ function DashboardFallback() {
   )
 }
 
-export default function Page() {
+export default function DashboardPscNewPage() {
   return (
     <Suspense fallback={<DashboardFallback />}>
       <DashboardKejadianPage />
     </Suspense>
   )
 }
-

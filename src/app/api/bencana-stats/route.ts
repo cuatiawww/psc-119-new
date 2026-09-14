@@ -14,16 +14,21 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const tahun = searchParams.get('year') || searchParams.get('tahun') || '2026'
+    const month = searchParams.get('month') || searchParams.get('bulan') || ''
+    const kode_psc = searchParams.get('kode_psc') || ''
     const province = searchParams.get('province') || ''
     const kabupaten = searchParams.get('kabupaten') || ''
 
-    const cacheKey = `${tahun}-${province}-${kabupaten}`
+    const cacheKey = `${tahun}-${month}-${province}-${kabupaten}-${kode_psc}`
     if (cachedResponse && cachedResponse.key === cacheKey && Date.now() - cachedResponse.timestamp < CACHE_TTL_MS) {
       return NextResponse.json(cachedResponse.data)
     }
 
     const formData = new FormData()
     formData.append('tahun', tahun)
+    if (kode_psc) formData.append('kode_psc', kode_psc)
+    if (province) formData.append('kd_prop', province)
+    if (kabupaten) formData.append('kd_kab', kabupaten)
     formData.append('page', '1')
     formData.append('per_page', '100') // Ambil 100 panggilan terbaru
 
@@ -46,7 +51,25 @@ export async function GET(req: Request) {
     }
 
     const pscJson = await pscRes.json()
-    const calls: PscCallItem[] = pscJson.data || []
+    let calls: PscCallItem[] = pscJson.data || []
+    
+    // Filter berdasarkan bulan jika dipilih
+    if (month && month !== 'all' && month !== 'semua') {
+      const monthNum = parseInt(month, 10)
+      if (!isNaN(monthNum) && monthNum >= 1 && monthNum <= 12) {
+        calls = calls.filter((c) => {
+          const dateStr = c.tgl_pelaporan_panggilan || c.tanggal_panggilan || ''
+          if (dateStr.includes('-')) {
+            const parts = dateStr.split('-')
+            if (parts.length >= 2 && parseInt(parts[1], 10) === monthNum) return true
+          }
+          const d = new Date(dateStr)
+          if (!isNaN(d.getTime()) && d.getMonth() + 1 === monthNum) return true
+          return false
+        })
+      }
+    }
+
     const totalCount = pscJson.total_data || calls.length
 
     let totalEmergency = 0
