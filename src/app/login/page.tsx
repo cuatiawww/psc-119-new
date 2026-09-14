@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { AlertCircle, Eye, EyeOff, Loader2, LockKeyhole, LogIn, UserRound, RefreshCw } from 'lucide-react'
+import { AlertCircle, Eye, EyeOff, Loader2, LockKeyhole, LogIn, UserRound, RefreshCw, Phone, ChevronRight } from 'lucide-react'
 import { useAuthStore, type User } from '@/lib/authStore'
 import { buildApiUrl } from '@/lib/utils/api'
 
@@ -40,6 +40,19 @@ const getAssetUrl = (url: string) => {
 export default function LoginPage() {
   const router = useRouter()
   const { isAuthenticated, isInitialized, initialize, login, loginAsGuest } = useAuthStore()
+
+  const [loginTab, setLoginTab] = useState<'psc' | 'sipkk'>('psc')
+  const [kodePscInput, setKodePscInput] = useState('')
+
+  const handlePscSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    const clean = kodePscInput.trim().toUpperCase()
+    if (clean) {
+      router.push(`/?kode_psc=${encodeURIComponent(clean)}`)
+    } else {
+      router.push('/')
+    }
+  }
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -265,22 +278,119 @@ export default function LoginPage() {
             className="w-full rounded-[20px] border border-[#c8dedd] bg-white p-7 shadow-[0_20px_60px_rgba(15,118,110,0.10)] sm:p-8 lg:border-0 lg:shadow-none"
           >
             {/* Header */}
-            <div className="mb-7">
+            <div className="mb-6">
               <span className="inline-block rounded-full bg-teal-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-teal-700">
-                Masuk Akun
+                Portal Akses Terpadu
               </span>
-              <h2 className="mt-3 text-[28px] font-extrabold leading-tight tracking-tight text-slate-900 sm:text-[32px]">
-                {settings.frontend_login_card_title}
+              <h2 className="mt-3 text-[26px] sm:text-[30px] font-extrabold leading-tight tracking-tight text-slate-900">
+                Dashboard PSC 119
               </h2>
-              <p className="mt-1.5 text-[14px] text-slate-500">
-                {settings.frontend_login_card_subtitle}
+              <p className="mt-1 text-[13px] text-slate-500">
+                Silakan pilih metode masuk untuk mengakses pemantauan kedaruratan.
               </p>
+
+              {/* Tab Selector: Unit PSC 119 vs Akun SIPKK */}
+              <div className="mt-4 flex items-center rounded-xl bg-slate-100 p-1 border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => { setLoginTab('psc'); setError('') }}
+                  className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition ${
+                    loginTab === 'psc'
+                      ? 'bg-teal-700 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-teal-800'
+                  }`}
+                >
+                  Unit PSC 119
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLoginTab('sipkk'); setError('') }}
+                  className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition ${
+                    loginTab === 'sipkk'
+                      ? 'bg-teal-700 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-teal-800'
+                  }`}
+                >
+                  Akun SIPKK / Admin
+                </button>
+              </div>
             </div>
 
             {/* Divider */}
             <div className="mb-6 h-px bg-slate-100" />
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            {loginTab === 'psc' ? (
+              <form onSubmit={handlePscSubmit} className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-[13px] font-bold text-slate-700">
+                    Kode Unit PSC 119
+                  </label>
+                  <div className="flex h-12 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 transition-all duration-150 focus-within:border-teal-500 focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(20,184,166,0.12)]">
+                    <Phone className="h-[18px] w-[18px] flex-shrink-0 text-slate-400" />
+                    <input
+                      value={kodePscInput}
+                      onChange={(e) => setKodePscInput(e.target.value)}
+                      className="h-full min-w-0 flex-1 bg-transparent text-[14px] font-mono font-bold uppercase text-slate-900 outline-none placeholder:font-normal placeholder:font-sans placeholder:text-slate-400"
+                      placeholder="Contoh: PSC9287"
+                    />
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    Masukkan kode spesifik PSC atau kosongkan untuk melihat data seluruh wilayah nasional.
+                  </p>
+                </div>
+
+                {/* Quick Unit Presets */}
+                <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-3">
+                  <p className="text-[11px] font-bold text-teal-800 mb-1.5">Akses Cepat Unit:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setKodePscInput('PSC9287')}
+                      className="rounded-lg border border-teal-200 bg-white px-2.5 py-1 text-[11px] font-bold text-teal-700 hover:bg-teal-50 transition cursor-pointer"
+                    >
+                      PSC9287 (PSC 119 Ciangsana)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setKodePscInput('')}
+                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                    >
+                      Semua Unit (Nasional)
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="mt-2 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 text-[13px] font-extrabold uppercase tracking-[0.1em] text-white shadow-[0_8px_24px_rgba(15,118,110,0.28)] transition-all hover:bg-teal-800 hover:shadow-[0_10px_28px_rgba(15,118,110,0.36)] active:scale-[0.99]"
+                >
+                  <span>Buka Dashboard PSC 119</span>
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+
+                {/* Divider */}
+                <div className="my-4 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-slate-100" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-450">Atau</span>
+                  <div className="h-px flex-1 bg-slate-100" />
+                </div>
+
+                {/* Guest Login */}
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      loginAsGuest()
+                      router.replace('/')
+                    }}
+                    className="inline-flex items-center gap-2 text-[13px] font-extrabold text-teal-700 hover:text-teal-800 transition-colors hover:underline"
+                  >
+                    Masuk sebagai Tamu (Akses Publik)
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
               {/* Username */}
               <div>
                 <label className="mb-1.5 block text-[13px] font-bold text-slate-700">
@@ -447,6 +557,7 @@ export default function LoginPage() {
                 </button>
               </div>
             </form>
+          )}
           </div>
 
           {/* Footer note */}

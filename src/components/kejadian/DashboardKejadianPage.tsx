@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -315,41 +314,6 @@ export type SelectedRegionItem = {
 
 export default function DashboardKejadianPage() {
   const { token, isInitialized, user } = useAuthStore()
-  const searchParams = useSearchParams()
-  const router = useRouter()
-
-  // 1. Parameter Wajib (Required): kode_psc
-  const [activeKodePsc, setActiveKodePsc] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const fromUrl = new URLSearchParams(window.location.search).get('kode_psc')?.trim()
-      if (fromUrl) {
-        try { sessionStorage.setItem('psc_active_code', fromUrl) } catch {}
-        return fromUrl
-      }
-      try {
-        return sessionStorage.getItem('psc_active_code') || ''
-      } catch {
-        return ''
-      }
-    }
-    return ''
-  })
-
-  // Sinkronisasi otomatis jika query parameter kode_psc berubah
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const fromUrl = searchParams?.get('kode_psc')?.trim()
-      if (fromUrl && fromUrl !== activeKodePsc) {
-        setActiveKodePsc(fromUrl)
-        try { sessionStorage.setItem('psc_active_code', fromUrl) } catch {}
-      }
-    }
-  }, [searchParams, activeKodePsc])
-
-  // 2. Filter Global PSC: HANYA Bulan dan Tahun
-  const [selectedMonth, setSelectedMonth] = useState<string>('all') // 'all' atau '1'..'12'
-  const [selectedYear, setSelectedYear] = useState<string>('2026')
-  const [manualCodeInput, setManualCodeInput] = useState<string>('')
 
   const [data, setData] = useState<ApiResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -378,6 +342,12 @@ export default function DashboardKejadianPage() {
   const [province, setProvince] = useState('')
   const [kabupaten, setKabupaten] = useState('')
   const [tahun, setTahun] = useState('2026')
+  const [activeKodePsc, setActiveKodePsc] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('kode_psc')?.trim() || ''
+    }
+    return ''
+  })
   const [filterStartDate, setFilterStartDate] = useState<string | undefined>(undefined)
   const [filterEndDate, setFilterEndDate] = useState<string | undefined>(undefined)
   const [ewsAlertQueue, setEwsAlertQueue] = useState<any[]>([])
@@ -1423,20 +1393,9 @@ export default function DashboardKejadianPage() {
     return undefined // Default ke mode Nasional
   }, [province, kabupaten])
 
-  const activePscName = useMemo(() => {
-    if (data?.markers && data.markers.length > 0) {
-      const first = (data.markers[0] as any)?.raw_psc
-      if (first?.nama_psc) return first.nama_psc
-    }
-    return activeKodePsc ? `PSC 119 (${activeKodePsc})` : ''
-  }, [data?.markers, activeKodePsc])
-
   const getRegionLabel = useCallback(() => {
-    if (activeKodePsc) {
-      return activePscName || `UNIT ${activeKodePsc}`
-    }
     return activeRegionConcatenatedLabel
-  }, [activeKodePsc, activePscName, activeRegionConcatenatedLabel])
+  }, [activeRegionConcatenatedLabel])
 
   const getCardDetailInfo = useCallback((label: string) => {
     const region = getRegionLabel()
@@ -1593,7 +1552,6 @@ export default function DashboardKejadianPage() {
   }, [])
 
   const fetchData = useCallback(async () => {
-    if (!activeKodePsc) return
     try {
       setLoading(true)
       setError(null)
@@ -1601,15 +1559,25 @@ export default function DashboardKejadianPage() {
       let url = buildBencanaStatsUrl()
       const queryParams: string[] = []
 
-      // Global required parameter: kode_psc
-      queryParams.push(`kode_psc=${encodeURIComponent(activeKodePsc)}`)
+      const isSemuaProv = !province || province.toLowerCase().includes('semua')
+      const isSemuaKab = !kabupaten || kabupaten.toLowerCase().includes('semua')
 
-      // Filter Bulan & Tahun
-      if (selectedMonth && selectedMonth !== 'all' && selectedMonth !== 'semua') {
-        queryParams.push(`month=${encodeURIComponent(selectedMonth)}`)
+      if (province && !isSemuaProv) {
+        queryParams.push(`province=${encodeURIComponent(province)}`)
       }
-      if (selectedYear && /^\d{4}$/.test(selectedYear)) {
-        queryParams.push(`year=${encodeURIComponent(selectedYear)}`)
+      if (kabupaten && !isSemuaKab) {
+        queryParams.push(`kabupaten=${encodeURIComponent(kabupaten)}`)
+      }
+      if (filterStartDate && filterEndDate) {
+        queryParams.push(`start_date=${encodeURIComponent(filterStartDate)}`)
+        queryParams.push(`end_date=${encodeURIComponent(filterEndDate)}`)
+      } else if (tahun && /^\d{4}$/.test(tahun)) {
+        queryParams.push(`year=${encodeURIComponent(tahun)}`)
+      }
+
+      const currentKodePsc = activeKodePsc || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('kode_psc')?.trim() || '' : '')
+      if (currentKodePsc) {
+        queryParams.push(`kode_psc=${encodeURIComponent(currentKodePsc)}`)
       }
 
       if (queryParams.length > 0) {
@@ -1619,7 +1587,7 @@ export default function DashboardKejadianPage() {
       const headers: Record<string, string> = { Accept: 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
 
-      console.log('[fetchData PSC] Fetching:', url)
+      console.log('[fetchData] Fetching:', url)
       const response = await fetch(url, {
         method: 'GET',
         headers,
@@ -1628,19 +1596,19 @@ export default function DashboardKejadianPage() {
 
       const json = await response.json().catch(() => null)
       if (json?.summary) {
-        console.log('[fetchData PSC] markers count:', json.markers?.length || 0)
+        console.log('[fetchData] markers count:', json.markers?.length || 0)
         setData(json)
         return
       }
       setData(null)
       throw new Error(json?.message || 'Response tidak valid dari server.')
     } catch (err) {
-      console.error('[bencana-stats PSC]', err)
+      console.error('[bencana-stats]', err)
       setError(err instanceof Error ? err.message : 'Terjadi kesalahan sistem.')
     } finally {
       setLoading(false)
     }
-  }, [activeKodePsc, selectedMonth, selectedYear, token])
+  }, [token, province, kabupaten, tahun])
 
   const handleSyncMv = async () => {
     if (isSyncingMv) return
@@ -1975,119 +1943,6 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
     }
   }, [data])
 
-  // Rule Wajib (Required): Jika kode_psc kosong, dashboard TIDAK ditampilkan dan berikan warning
-  if (!activeKodePsc) {
-    return (
-      <main className="min-h-screen w-full bg-[#0a1120] text-slate-100 flex flex-col justify-between relative overflow-hidden font-sans">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[350px] bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 right-0 w-[500px] h-[350px] bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <header className="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md px-6 py-4 flex items-center justify-between z-10">
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-xl border border-teal-500/30 bg-teal-950/50 p-1.5 shadow-sm">
-              <Image
-                src={`${basePath}/kemenkes.png`}
-                alt="Logo Kemenkes"
-                width={36}
-                height={36}
-                className="h-auto w-full"
-                priority
-              />
-            </div>
-            <div>
-              <p className="text-sm font-black tracking-wide text-teal-400">SISTEM INFORMASI TERPADU PSC 119</p>
-              <p className="text-xs text-slate-400">Kementerian Kesehatan Republik Indonesia</p>
-            </div>
-          </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-950/40 px-3 py-1 text-xs font-semibold text-rose-300">
-            <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
-            Akses Dibatasi
-          </span>
-        </header>
-
-        <div className="flex-1 flex items-center justify-center p-6 z-10">
-          <div className="max-w-xl w-full rounded-3xl border border-slate-800 bg-slate-950/90 p-8 shadow-2xl backdrop-blur-xl text-center relative">
-            <div className="mx-auto mb-6 grid h-20 w-20 place-items-center rounded-2xl border border-rose-500/30 bg-gradient-to-b from-rose-500/20 to-rose-900/30 text-rose-400 shadow-inner">
-              <ShieldAlert className="h-10 w-10" />
-            </div>
-
-            <div className="inline-block mb-3 px-3 py-1 rounded-full bg-rose-950/60 border border-rose-600/40 text-rose-300 text-[11px] font-black uppercase tracking-wider">
-              Parameter Global Wajib (Required)
-            </div>
-
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Akses Dibatasi: Kode PSC Diperlukan
-            </h1>
-            <p className="mt-3 text-sm sm:text-base leading-relaxed text-slate-300">
-              Dashboard Intelijen Kedaruratan PSC 119 memerlukan parameter global <code className="bg-slate-800 text-teal-300 px-2 py-0.5 rounded font-mono text-xs">kode_psc</code> untuk memuat log panggilan kedaruratan, armada ambulans, dan data kinerja respon waktu unit PSC Anda.
-            </p>
-
-            <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 text-left font-mono text-xs">
-              <div className="text-[10px] uppercase font-bold text-slate-400 mb-1">Format URL Akses Resmi:</div>
-              <div className="text-teal-300 break-all select-all font-semibold">
-                https://domain/dashboard-psc-new?kode_psc=PSCxxxx
-              </div>
-            </div>
-
-            <div className="mt-6 border-t border-slate-800/80 pt-6">
-              <p className="text-xs font-semibold text-slate-400 mb-3">
-                Atau masukkan Kode PSC untuk pengujian / akses cepat:
-              </p>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  const trimmed = manualCodeInput.trim().toUpperCase()
-                  if (trimmed) {
-                    try { sessionStorage.setItem('psc_active_code', trimmed) } catch {}
-                    setActiveKodePsc(trimmed)
-                    router.push(`?kode_psc=${encodeURIComponent(trimmed)}`)
-                  }
-                }}
-                className="flex items-center gap-2"
-              >
-                <input
-                  type="text"
-                  value={manualCodeInput}
-                  onChange={(e) => setManualCodeInput(e.target.value)}
-                  placeholder="Contoh: PSC9287"
-                  className="flex-1 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white placeholder:text-slate-500 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 uppercase font-mono font-bold"
-                />
-                <button
-                  type="submit"
-                  disabled={!manualCodeInput.trim()}
-                  className="rounded-xl bg-[#047D78] hover:bg-[#036662] px-5 py-3 text-xs font-black uppercase tracking-wider text-white transition active:scale-95 disabled:opacity-40 cursor-pointer flex items-center gap-1.5"
-                >
-                  <span>Buka</span>
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </form>
-
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs">
-                <span className="text-slate-500 text-[11px]">Contoh Unit:</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const code = 'PSC9287'
-                    try { sessionStorage.setItem('psc_active_code', code) } catch {}
-                    setActiveKodePsc(code)
-                    router.push(`?kode_psc=${code}`)
-                  }}
-                  className="rounded-lg border border-teal-500/30 bg-teal-950/40 px-2.5 py-1 text-[11px] font-bold text-teal-300 hover:bg-teal-900/50 transition cursor-pointer"
-                >
-                  PSC9287 (PSC 119 Ciangsana)
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <footer className="border-t border-slate-800/80 bg-slate-950/50 py-3 text-center text-xs text-slate-500">
-          SPGDT 119 Kemenkes RI • Sistem Informasi Terpadu Public Safety Center
-        </footer>
-      </main>
-    )
-  }
-
   if (!isInitialized) {
     return (
       <div className="flex min-h-[500px] w-full items-center justify-center">
@@ -2182,96 +2037,256 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
         <DashboardBanjirEoc />
       ) : (
         <>
-          {/* Filter Global PSC 119: Hanya Bulan & Tahun */}
-          <section className="w-full bg-[#fbffff] z-10 mb-2">
-            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 w-full">
-              {/* Info Unit PSC Aktif */}
-              <div className="flex items-center gap-3 bg-white border border-teal-200/80 rounded-2xl px-4 py-2.5 shadow-xs">
-                <div className="grid h-10 w-10 place-items-center rounded-xl bg-teal-50 text-teal-700 shrink-0">
-                  <Phone className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-teal-800 tracking-wider font-mono">
-                      {activeKodePsc}
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      API Terhubung
-                    </span>
-                  </div>
-                  <p className="text-sm font-bold text-slate-800 truncate max-w-[280px]">
-                    {activePscName || 'Unit PSC 119 Terverifikasi'}
-                  </p>
-                </div>
-              </div>
+          {/* Smart Search, Info Filter & Reset Button Grid */}
+          <section className="grid grid-cols-1 md:grid-cols-[8fr_6fr_3fr_3fr] gap-4 w-full items-start z-20 relative">
 
-              {/* Filter Bulan & Tahun */}
-              <div className="flex flex-wrap items-center justify-between lg:justify-end gap-2.5 bg-white border border-slate-200/90 rounded-2xl p-2 sm:p-2.5 shadow-xs flex-1 lg:flex-initial">
-                {/* Dropdown Bulan */}
-                <div className="flex items-center gap-1.5 min-w-[170px]">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 pl-1.5">Bulan:</span>
-                  <select
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="flex-1 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-teal-500 focus:bg-white transition cursor-pointer"
-                  >
-                    <option value="all">Semua Bulan (Jan - Des)</option>
-                    <option value="1">01 - Januari</option>
-                    <option value="2">02 - Februari</option>
-                    <option value="3">03 - Maret</option>
-                    <option value="4">04 - April</option>
-                    <option value="5">05 - Mei</option>
-                    <option value="6">06 - Juni</option>
-                    <option value="7">07 - Juli</option>
-                    <option value="8">08 - Agustus</option>
-                    <option value="9">09 - September</option>
-                    <option value="10">10 - Oktober</option>
-                    <option value="11">11 - November</option>
-                    <option value="12">12 - Desember</option>
-                  </select>
-                </div>
-
-                {/* Dropdown Tahun */}
-                <div className="flex items-center gap-1.5 min-w-[130px]">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Tahun:</span>
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(e.target.value)}
-                    className="flex-1 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-teal-500 focus:bg-white transition cursor-pointer"
-                  >
-                    <option value="2026">2026</option>
-                    <option value="2025">2025</option>
-                    <option value="2024">2024</option>
-                    <option value="2023">2023</option>
-                  </select>
-                </div>
-
-                {/* Tombol Terapkan */}
+        {/* Column 1: Smart Search Bar */}
+        <div className="relative w-full z-20">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[#6b7280]">
+            Pencarian Wilayah
+          </p>
+          <div className="relative flex items-center">
+            <Search className="absolute left-4 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setShowSuggestions(true)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  if (searchQuery.trim().length >= 2) {
+                    const text = searchQuery.trim()
+                    const exists = selectedRegions.some((item) => (item.label || '').toLowerCase() === text.toLowerCase())
+                    if (!exists) {
+                      const newItem: SelectedRegionItem = {
+                        id: `typed-${text}-${Date.now()}`,
+                        type: 'kabupaten',
+                        label: text,
+                        province_name: text,
+                        kabupaten_name: text,
+                        kecamatan_name: text,
+                        desa_name: text,
+                      }
+                      setSelectedRegions((prev) => [...prev, newItem])
+                    }
+                    setSearchQuery('')
+                    setShowSuggestions(false)
+                  }
+                  fetchData()
+                }
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              placeholder="Cari Provinsi, Kab/Kota, Kecamatan, atau Desa..."
+              className="w-full rounded-2xl border border-slate-200 bg-white h-12 pl-11 pr-36 text-sm font-medium shadow-sm outline-none placeholder:text-slate-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all"
+            />
+            
+            {/* Action buttons inside the search bar */}
+            <div className="absolute right-1.5 top-1.5 bottom-1.5 flex items-center gap-1">
+              {isSearching ? (
+                <Loader2 className="h-4 w-4 animate-spin text-teal-600 mr-2" />
+              ) : searchQuery ? (
                 <button
+                  onClick={() => {
+                    setSearchQuery('')
+                    setSuggestions([])
+                  }}
                   type="button"
-                  onClick={() => fetchData()}
-                  className="h-9 px-4 rounded-xl bg-[#047D78] hover:bg-[#036662] text-white text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
-                  title="Terapkan Filter Bulan & Tahun"
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition mr-0.5"
                 >
-                  <CheckCircle2 className="h-3.5 w-3.5 text-teal-200" />
-                  <span>TERAPKAN</span>
+                  <X className="h-4 w-4" />
                 </button>
+              ) : null}
 
-                {/* Tombol Sync Data */}
-                <button
-                  type="button"
-                  onClick={() => fetchData()}
-                  disabled={loading}
-                  className="h-9 px-3.5 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5 transition active:scale-95 cursor-pointer disabled:opacity-50"
-                  title="Sinkronisasi data langsung dari server PSC"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-                  <span className="hidden sm:inline">SYNC DATA</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  fetchData()
+                }}
+                className="h-9 px-3.5 rounded-xl bg-[#047D78] hover:bg-[#036662] text-white text-xs font-extrabold uppercase tracking-wider flex items-center gap-1 shadow-sm transition active:scale-95 cursor-pointer"
+                title="Terapkan Filter Wilayah"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 text-teal-200" />
+                <span>TERAPKAN</span>
+              </button>
             </div>
-          </section>
+          </div>
+
+          {/* Dropdown Suggestions */}
+          {showSuggestions && suggestions.length > 0 && (
+            <>
+              {/* Backdrop to close dropdown on outer click */}
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowSuggestions(false)}
+              />
+
+              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 max-h-[320px] overflow-y-auto rounded-2xl border border-slate-100 bg-white p-2 shadow-[0_12px_40px_rgba(0,0,0,0.12)]">
+                {suggestions.map((sug, idx) => {
+                  let badgeClass = 'bg-slate-50 text-slate-700 border-slate-200'
+                  if (sug.type === 'provinsi') badgeClass = 'bg-teal-50 text-teal-700 border-teal-150'
+                  if (sug.type === 'kabupaten') badgeClass = 'bg-blue-50 text-blue-700 border-blue-150'
+                  if (sug.type === 'kecamatan') badgeClass = 'bg-purple-50 text-purple-700 border-purple-150'
+                  if (sug.type === 'desa') badgeClass = 'bg-amber-50 text-amber-700 border-amber-150'
+
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleSelectSuggestion(sug)}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-teal-50/50 transition-colors"
+                    >
+                      <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
+                      <span className="flex-1 truncate">{sug.label}</span>
+                      <span className={`rounded-lg border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${badgeClass}`}>
+                        {sug.type}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
+
+          {showSuggestions && searchQuery.trim().length >= 2 && !isSearching && suggestions.length === 0 && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowSuggestions(false)} />
+              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 rounded-2xl border border-slate-100 bg-white p-4 text-center shadow-[0_12px_40px_rgba(0,0,0,0.12)]">
+                <p className="text-xs text-slate-400 italic">Tidak ditemukan wilayah dengan kata kunci "{searchQuery}"</p>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Column 2: Info Filter Panel */}
+        <div className="w-full">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[#6b7280]">
+            Info Filter Aktif
+          </p>
+          <div className="flex items-center rounded-2xl border border-teal-100 bg-[#f6fffd] px-3.5 text-xs shadow-[0_6px_18px_rgba(20,120,116,0.04)] h-12 w-full">
+            <div className="overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] flex items-center gap-2 text-slate-650 font-semibold w-full whitespace-nowrap">
+              <span className="inline-flex items-center gap-1.5 bg-teal-50/60 border border-teal-100/80 px-2.5 py-1 rounded-xl text-[11px]">
+                <span className="text-slate-400 font-semibold">Cakupan:</span>
+                <span className="font-black text-teal-800 uppercase">{displayCakupan}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 bg-teal-50/60 border border-teal-100/80 px-2.5 py-1 rounded-xl text-[11px]">
+                <span className="text-slate-400 font-semibold">Provinsi:</span>
+                <span className="font-black text-teal-800 uppercase">{displayProvinces}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 bg-teal-50/60 border border-teal-100/80 px-2.5 py-1 rounded-xl text-[11px]">
+                <span className="text-slate-400 font-semibold">Kab/Kota:</span>
+                <span className="font-black text-teal-800 uppercase">{displayKabupaten}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 bg-teal-50/60 border border-teal-100/80 px-2.5 py-1 rounded-xl text-[11px]">
+                <span className="text-slate-400 font-semibold">Tahun:</span>
+                <span className="font-black text-teal-800 uppercase">{tahun}</span>
+              </span>
+              {activeKodePsc && (
+                <span className="inline-flex items-center gap-1.5 bg-teal-100/90 border border-teal-300 px-2.5 py-1 rounded-xl text-[11px]">
+                  <span className="text-teal-700 font-semibold">Unit PSC:</span>
+                  <span className="font-black text-teal-900 uppercase font-mono">{activeKodePsc}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Column 3: Reset Filter Button */}
+        <div className="w-full">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[#6b7280]">
+            Reset Filter
+          </p>
+          <button
+            onClick={handleResetFilter}
+            disabled={!showResetButton}
+            title="Reset Filter"
+            className={`flex w-full items-center justify-center gap-2 rounded-2xl border px-4 text-xs font-extrabold shadow-sm transition-all outline-none h-12 uppercase tracking-wider ${showResetButton
+              ? 'border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 hover:-translate-y-0.5 active:scale-95'
+              : 'border-slate-200 bg-slate-50/50 text-slate-400 cursor-not-allowed'
+              }`}
+          >
+            <RefreshCw className="h-4 w-4 shrink-0" />
+            <span>RESET FILTER</span>
+          </button>
+        </div>
+
+        {/* Column 4: Sync Data Button */}
+        <div className="w-full">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[#6b7280]">
+            Sync Data
+          </p>
+          <button
+            onClick={handleSyncMv}
+            disabled={isSyncingMv}
+            title="Refresh Materialized View"
+            className={`flex w-full items-center justify-center gap-2 rounded-2xl border px-4 text-xs font-extrabold shadow-sm transition-all outline-none h-12 uppercase tracking-wider ${
+              isSyncingMv
+                ? 'border-slate-200 bg-slate-50/50 text-slate-400 cursor-not-allowed'
+                : 'border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 hover:-translate-y-0.5 active:scale-95'
+            }`}
+          >
+            {isSyncingMv ? (
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-400" />
+            ) : (
+              <RefreshCw className="h-4 w-4 shrink-0" />
+            )}
+            <span>{isSyncingMv ? 'Syncing...' : 'Sync Data'}</span>
+          </button>
+        </div>
+      </section>
+
+      {/* Selected Regions Chips (Memanjang ke kanan penuh w-full agar tidak cepat turun baris) */}
+      {selectedRegions.length > 0 && (
+        <div className="w-full flex flex-wrap items-center gap-2 -mt-2 z-10">
+          <span className="text-[11px] font-bold text-slate-500 mr-1">Terpilih ({selectedRegions.length}):</span>
+          {selectedRegions.map((reg) => {
+            let badgeStyle = 'bg-teal-50 text-teal-800 border-teal-200'
+            if (reg.type === 'provinsi') badgeStyle = 'bg-teal-100/70 text-teal-800 border-teal-300'
+            if (reg.type === 'kabupaten') badgeStyle = 'bg-blue-100/70 text-blue-800 border-blue-300'
+            if (reg.type === 'kecamatan') badgeStyle = 'bg-purple-100/70 text-purple-800 border-purple-300'
+            if (reg.type === 'desa') badgeStyle = 'bg-amber-100/70 text-amber-800 border-amber-300'
+
+            return (
+              <span
+                key={reg.id}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-semibold shadow-xs transition-all ${badgeStyle}`}
+              >
+                <MapPin className="h-3 w-3 shrink-0 opacity-70" />
+                <span>{reg.label}</span>
+                <span className="rounded bg-white/60 px-1 py-0.2 text-[9px] font-black uppercase tracking-wider">
+                  {reg.type}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveSelectedRegion(reg.id)}
+                  className="ml-0.5 rounded-full p-0.5 hover:bg-black/10 transition cursor-pointer"
+                  title="Hapus filter wilayah ini"
+                >
+                  <X className="h-3 w-3 text-slate-500 hover:text-slate-900" />
+                </button>
+              </span>
+            )
+          })}
+          <button
+            type="button"
+            onClick={handleClearAllSelectedRegions}
+            className="text-[11px] font-bold text-rose-600 hover:text-rose-800 underline ml-1 cursor-pointer"
+          >
+            Hapus Semua
+          </button>
+        </div>
+      )}
+
+      {/* Filter Wilayah Section */}
+      <section className="w-full bg-[#fbffff] z-10">
+        <FilterDropdownBar
+          onSummaryChange={handleSummaryChange}
+          selectedProvinceName={province}
+          selectedKabupatenName={kabupaten}
+        />
+      </section>
 
       {/* Summary Cards Grid */}
       <section className="flex w-full overflow-x-auto gap-4 pb-3.5 snap-x snap-mandatory scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 sm:pb-0 sm:overflow-visible">
