@@ -378,46 +378,10 @@ export default function DashboardKejadianPage() {
         if (kabName) setKabupaten(kabName)
         setCakupan('kabupaten-kota')
 
-        // Terapkan wilayah_scope terkunci ke useAuthStore
-        const currentAuthUser = useAuthStore.getState().user
-        useAuthStore.setState({
-          user: {
-            ...(currentAuthUser || {
-              id_user: 9287,
-              username: activeKodePsc,
-              email: `${activeKodePsc.toLowerCase()}@psc119.kemkes.go.id`,
-              nama_lengkap: center.nama_psc || `PSC 119 ${activeKodePsc}`,
-              level_user_id: 2,
-              level_name: 'Operator PSC',
-            }),
-            wilayah_scope: {
-              mode: 'kabupaten',
-              access_label: `${center.nama_psc} (${kabName}, ${provName})`,
-              cakupan: {
-                id: 'kabupaten-kota',
-                value: 'kabupaten-kota',
-                label: 'KABUPATEN/KOTA',
-                locked: true,
-              },
-              provinsi: {
-                id: center.kd_prop,
-                value: provName.toLowerCase(),
-                label: provName,
-                locked: true,
-                options: [{ id: center.kd_prop, label: provName }],
-              },
-              kabupaten: {
-                id: center.kd_kab,
-                value: kabName.toLowerCase(),
-                label: kabName,
-                locked: true,
-                options: [{ id: center.kd_kab, label: kabName }],
-              },
-            },
-          },
-        })
+        // Terapkan wilayah operasional dan login unit ke useAuthStore
+        useAuthStore.getState().loginAsPscUnit(activeKodePsc, center)
       } catch (err) {
-        console.error('Gagal memuat profil unit PSC untuk penguncian wilayah:', err)
+        console.error('Gagal memuat profil unit PSC untuk wilayah operasional:', err)
       }
     }
 
@@ -2125,20 +2089,17 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
         {/* Column 1: Smart Search Bar or Locked Unit Status */}
         <div className="relative w-full z-20">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[#6b7280]">
-            {isKabLocked ? 'Status Wilayah Unit PSC' : 'Pencarian Wilayah'}
+            {isKabLocked ? 'Wilayah Operasional Unit' : 'Pencarian Wilayah'}
           </p>
           {isKabLocked ? (
             <div className="flex items-center gap-2.5 h-12 w-full rounded-2xl border border-teal-200/90 bg-[#f0fbf9] px-3.5 shadow-xs">
               <Lock className="h-4 w-4 text-teal-700 shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-teal-700 leading-tight">Wilayah Terkunci Sesuai Unit PSC</p>
+                <p className="text-[10px] font-semibold text-teal-700 leading-tight">Wilayah Operasional Unit PSC</p>
                 <p className="truncate text-xs font-black text-teal-900 uppercase">
                   {user?.wilayah_scope?.access_label || `${displayKabupaten}, ${displayProvinces}`}
                 </p>
               </div>
-              <span className="text-[9px] font-black uppercase tracking-wider bg-teal-700 text-white px-2 py-0.5 rounded-md shrink-0">
-                TERKUNCI
-              </span>
             </div>
           ) : (
             <>

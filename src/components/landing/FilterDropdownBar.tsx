@@ -520,7 +520,7 @@ export default function FilterDropdownBar({ onSummaryChange, selectedProvinceNam
                 disabled={locked}
                 aria-expanded={isOpen}
                 aria-haspopup="listbox"
-                title={locked ? 'Filter dikunci sesuai wilayah akun' : undefined}
+                title={locked ? 'Wilayah operasional unit PSC' : undefined}
                 className={`
                   group flex w-full items-center gap-2 sm:gap-2.5 rounded-xl px-2.5 py-2.5 sm:px-3.5 sm:py-2
                   transition-colors duration-150
@@ -548,10 +548,7 @@ export default function FilterDropdownBar({ onSummaryChange, selectedProvinceNam
                 </span>
 
                 {locked ? (
-                  <span className="ml-auto flex items-center gap-1 rounded-md bg-teal-50 border border-teal-200/80 px-1.5 py-0.5" title="Filter dikunci sesuai unit wilayah">
-                    <Lock className="h-3 w-3 text-teal-700" />
-                    <span className="text-[9px] font-bold text-teal-850 uppercase tracking-tighter">Kunci</span>
-                  </span>
+                  <Lock className="ml-auto h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0 text-slate-400" />
                 ) : (
                   <ChevronDown
                     className={`

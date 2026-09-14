@@ -39,19 +39,35 @@ const getAssetUrl = (url: string) => {
 
 export default function LoginPage() {
   const router = useRouter()
-  const { isAuthenticated, isInitialized, initialize, login, loginAsGuest } = useAuthStore()
+  const { isAuthenticated, isInitialized, initialize, login, loginAsGuest, loginAsPscUnit, logout } = useAuthStore()
 
   const [loginTab, setLoginTab] = useState<'psc' | 'admin'>('psc')
   const [kodePscInput, setKodePscInput] = useState('')
 
-  const handlePscSubmit = (e: FormEvent) => {
+  const handlePscSubmit = async (e: FormEvent) => {
     e.preventDefault()
     const clean = kodePscInput.trim().toUpperCase()
     if (clean) {
-      localStorage.setItem('auth_kode_psc', clean)
-      router.push(`/?kode_psc=${encodeURIComponent(clean)}`)
+      setLoading(true)
+      try {
+        let center: any = null
+        try {
+          const res = await fetch(`/api/psc/centers?kode_psc=${encodeURIComponent(clean)}`)
+          if (res.ok) {
+            const json = await res.json()
+            center = json?.data?.[0]
+          }
+        } catch (fetchErr) {
+          console.error('Gagal memuat profil unit psc:', fetchErr)
+        }
+
+        loginAsPscUnit(clean, center)
+        router.push(`/?kode_psc=${encodeURIComponent(clean)}`)
+      } finally {
+        setLoading(false)
+      }
     } else {
-      localStorage.removeItem('auth_kode_psc')
+      logout()
       router.push('/')
     }
   }

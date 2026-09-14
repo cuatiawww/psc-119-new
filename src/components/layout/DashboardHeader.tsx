@@ -367,7 +367,8 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
   const hasUnread = notificationsList.some(n => !n.read)
   
   const isMasyarakat = user?.level_name?.toLowerCase().includes('masyarakat') || false
-  const isTamu = !isAuthenticated || isGuest
+  const isUserLoggedIn = isAuthenticated || Boolean(user?.nama_lengkap)
+  const isTamu = !isUserLoggedIn
   const showAksesSistem = !(isMasyarakat || isTamu)
 
   const handleMarkAllAsRead = () => {
@@ -433,10 +434,11 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
       window.removeEventListener('sipkk-region-changed', handleRegionChange)
     }
   }, [user])
-  const initialName = isAuthenticated ? (user?.nama_lengkap || user?.username || 'Pengguna') : 'Tamu (Guest)'
-  const roleName = isAuthenticated ? (user?.level_name || (user?.level_user_id === 1 ? 'Super Administrator' : 'Admin')) : 'Akses Publik'
-  const userEmail = isAuthenticated ? (user?.email || `${user?.username || 'admin'}@faskes.go.id`) : 'guest@faskes.go.id'
-  const accessLabel = isAuthenticated ? (user?.wilayah_scope?.access_label || 'Pusat pemantauan nasional fasilitas kesehatan') : 'Pusat pemantauan publik fasilitas kesehatan'
+  const isUnitAccount = Boolean(user?.username && (user.username.toUpperCase().startsWith('PSC') || user.level_name?.toLowerCase().includes('psc')))
+  const initialName = isUserLoggedIn ? (user?.nama_lengkap || user?.username || 'Pengguna') : 'Tamu (Guest)'
+  const roleName = isUserLoggedIn ? (user?.level_name || (user?.level_user_id === 1 ? 'Super Administrator' : (isUnitAccount ? 'Unit PSC 119' : 'Admin'))) : 'Akses Publik'
+  const userEmail = isUserLoggedIn ? (user?.email || `${user?.username || 'admin'}@faskes.go.id`) : 'guest@faskes.go.id'
+  const accessLabel = isUserLoggedIn ? (user?.wilayah_scope?.access_label || 'Pusat pemantauan nasional fasilitas kesehatan') : 'Pusat pemantauan publik fasilitas kesehatan'
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
@@ -714,7 +716,7 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
                   <ChevronDown className={`h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-500 transition ${profileOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {profileOpen ? (
-                  isAuthenticated ? (
+                  isUserLoggedIn ? (
                     <div className="absolute right-0 top-14 z-50 w-72 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">

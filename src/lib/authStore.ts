@@ -32,6 +32,17 @@ export interface WilayahScope {
   kabupaten: WilayahScopeOption
 }
 
+export interface PscCenterPayload {
+  id?: number | string
+  kode_psc?: string
+  nama_psc?: string
+  provinsi?: string
+  kabupaten?: string
+  kd_prop?: string | number
+  kd_kab?: string | number
+  [key: string]: unknown
+}
+
 interface AuthState {
   token: string | null
   user: User | null
@@ -40,6 +51,7 @@ interface AuthState {
   isInitialized: boolean
   login: (token: string, user: User) => void
   loginAsGuest: () => void
+  loginAsPscUnit: (kodePsc: string, centerData?: PscCenterPayload | null) => void
   logout: () => void
   initialize: () => void
 }
@@ -54,13 +66,85 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.setItem('auth_token', token)
     localStorage.setItem('auth_user', JSON.stringify(user))
     localStorage.removeItem('auth_guest')
+    localStorage.removeItem('auth_kode_psc')
     set({ token, user, isAuthenticated: true, isGuest: false })
   },
   loginAsGuest: () => {
     localStorage.setItem('auth_guest', 'true')
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_user')
+    localStorage.removeItem('auth_kode_psc')
     set({ token: null, user: null, isAuthenticated: false, isGuest: true })
+  },
+  loginAsPscUnit: (kodePsc, centerData) => {
+    const cleanKode = kodePsc.trim().toUpperCase()
+    const provName = (centerData?.provinsi || '').trim()
+    const kabName = (centerData?.kabupaten || '').trim()
+    const namaPsc = centerData?.nama_psc || `PSC 119 ${cleanKode}`
+
+    const unitUser: User = {
+      id_user: centerData?.id || 9287,
+      username: cleanKode,
+      email: `${cleanKode.toLowerCase()}@psc119.kemkes.go.id`,
+      nama_lengkap: namaPsc,
+      level_user_id: 2,
+      level_name: 'Unit PSC 119',
+      wilayah_scope: (provName || kabName) ? {
+        mode: 'kabupaten',
+        access_label: `${namaPsc} (${kabName || 'Wilayah'}, ${provName || 'Indonesia'})`,
+        cakupan: {
+          id: 'kabupaten-kota',
+          value: 'kabupaten-kota',
+          label: 'KABUPATEN/KOTA',
+          locked: true,
+        },
+        provinsi: {
+          id: centerData?.kd_prop || '',
+          value: provName.toLowerCase(),
+          label: provName,
+          locked: true,
+          options: [{ id: centerData?.kd_prop || '', label: provName }],
+        },
+        kabupaten: {
+          id: centerData?.kd_kab || '',
+          value: kabName.toLowerCase(),
+          label: kabName,
+          locked: true,
+          options: [{ id: centerData?.kd_kab || '', label: kabName }],
+        },
+      } : {
+        mode: 'kabupaten',
+        access_label: namaPsc,
+        cakupan: {
+          id: 'kabupaten-kota',
+          value: 'kabupaten-kota',
+          label: 'KABUPATEN/KOTA',
+          locked: true,
+        },
+        provinsi: {
+          label: '',
+          locked: true,
+        },
+        kabupaten: {
+          label: '',
+          locked: true,
+        },
+      },
+    }
+
+    const unitToken = `psc-unit-${cleanKode}`
+    localStorage.setItem('auth_token', unitToken)
+    localStorage.setItem('auth_user', JSON.stringify(unitUser))
+    localStorage.setItem('auth_kode_psc', cleanKode)
+    localStorage.removeItem('auth_guest')
+
+    set({
+      token: unitToken,
+      user: unitUser,
+      isAuthenticated: true,
+      isGuest: false,
+      isInitialized: true,
+    })
   },
   logout: () => {
     // Ambil token sebelum dihapus untuk dikirim ke backend
@@ -70,10 +154,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_user')
     localStorage.removeItem('auth_guest')
-    set({ token: null, user: null, isAuthenticated: false, isGuest: false })
+    localStorage.removeItem('auth_kode_psc')
+    localStorage.setItem('auth_guest', 'true')
+    set({ token: null, user: null, isAuthenticated: false, isGuest: true })
 
-    // Single Sign-Out: hit backend Yii2 agar session server juga terhapus
-    if (currentToken) {
+    // Single Sign-Out: hit backend Yii2 agar session server juga terhapus jika bukan token lokal psc-unit
+    if (currentToken && !currentToken.startsWith('psc-unit-')) {
       const backendBase = process.env.NEXT_PUBLIC_SIPKK_BACKEND_BASE_URL || 'https://sipkk-new.mediaciptainformasi.co.id'
       fetch(`${backendBase}/api/logout`, {
         method: 'POST',
@@ -87,17 +173,71 @@ export const useAuthStore = create<AuthState>((set) => ({
         // Abaikan error jaringan — logout lokal sudah berhasil
       })
     }
+
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      if (url.searchParams.has('kode_psc')) {
+        url.searchParams.delete('kode_psc')
+        window.location.href = url.pathname + (url.search ? url.search : '')
+      }
+    }
   },
   initialize: () => {
     if (typeof window === 'undefined') return
+    const urlKodePsc = new URLSearchParams(window.location.search).get('kode_psc')?.trim()
+    const storedKodePsc = localStorage.getItem('auth_kode_psc')
+    const activeKode = urlKodePsc || storedKodePsc
+
     const token = localStorage.getItem('auth_token')
     const userStr = localStorage.getItem('auth_user')
     const isGuestStr = localStorage.getItem('auth_guest')
+
+    // Jika ada kode unit PSC dari URL atau local storage, pulihkan sesi unit sebagai akun terotentikasi
+    if (activeKode) {
+      localStorage.setItem('auth_kode_psc', activeKode.toUpperCase())
+      let userObj: User | null = null
+      if (userStr) {
+        try {
+          const parsed = JSON.parse(userStr)
+          if (parsed?.username?.toUpperCase() === activeKode.toUpperCase()) {
+            userObj = parsed
+          }
+        } catch {
+          // ignore parsing error
+        }
+      }
+
+      if (!userObj) {
+        userObj = {
+          id_user: 9287,
+          username: activeKode.toUpperCase(),
+          email: `${activeKode.toLowerCase()}@psc119.kemkes.go.id`,
+          nama_lengkap: `PSC 119 ${activeKode.toUpperCase()}`,
+          level_user_id: 2,
+          level_name: 'Unit PSC 119',
+        }
+      }
+
+      const unitToken = token || `psc-unit-${activeKode.toUpperCase()}`
+      localStorage.setItem('auth_token', unitToken)
+      localStorage.setItem('auth_user', JSON.stringify(userObj))
+      localStorage.removeItem('auth_guest')
+
+      set({
+        token: unitToken,
+        user: userObj,
+        isAuthenticated: true,
+        isGuest: false,
+        isInitialized: true,
+      })
+      return
+    }
+
     if (token && userStr) {
       try {
         const user = JSON.parse(userStr)
         set({ token, user, isAuthenticated: true, isGuest: false, isInitialized: true })
-      } catch (e) {
+      } catch {
         localStorage.removeItem('auth_token')
         localStorage.removeItem('auth_user')
         set({ token: null, user: null, isAuthenticated: false, isGuest: true, isInitialized: true })
