@@ -36,6 +36,7 @@ import { useHeaderStore } from '@/lib/headerStore'
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
 import { useAuthStore } from '@/lib/authStore'
 import { buildRegionsUrl } from '@/lib/utils/api'
+import { INDONESIA_PROVINCES, INDONESIA_MAP_VIEWBOX } from '@/lib/indonesiaMapData'
 
 // Data model type
 export type LaporanItem = {
@@ -1730,125 +1731,156 @@ export default function UnduhLaporanPage() {
       </tr>
     `
 
-    // RENDER PURE VECTOR SVG INDONESIA SPATIAL HOTSPOT MAP (HIGH-RESOLUTION EXECUTIVE DESIGN)
+    // RENDER PURE VECTOR SVG INDONESIA SPATIAL HOTSPOT MAP (REAL BAKOSURTANAL GEOGRAPHIC POLYGONS)
     const renderSvgIndonesiaMap = (provList: [string, number][]) => {
       const provMap = new Map<string, number>()
       provList.forEach(([pName, cnt]) => {
-        const cleanP = pName.toUpperCase().replace(/^(PROVINSI|PROV\.|PROV)\s+/gi, '').trim()
+        const cleanP = pName
+          .toUpperCase()
+          .replace(/^(PROVINSI|PROV\.|PROV)\s+/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim()
         provMap.set(cleanP, cnt)
       })
 
-      const getProvColor = (name: string) => {
-        const cnt = provMap.get(name) || 0
-        if (cnt === 0) return '#e2e8f0'
-        if (cnt <= 10) return '#eab308'
-        if (cnt <= 30) return '#f97316'
-        if (cnt <= 50) return '#ef4444'
-        return '#b91c1c'
+      const getIncidentCount = (aliases: string[]) => {
+        for (const alias of aliases) {
+          const cleanAlias = alias.toUpperCase().replace(/^(PROVINSI|PROV\.|PROV)\s+/gi, '').trim()
+          if (provMap.has(cleanAlias)) {
+            return provMap.get(cleanAlias) || 0
+          }
+        }
+        for (const alias of aliases) {
+          const cleanAlias = alias.toUpperCase().replace(/^(PROVINSI|PROV\.|PROV)\s+/gi, '').trim()
+          for (const [key, val] of provMap.entries()) {
+            if (key.includes(cleanAlias) || cleanAlias.includes(key)) {
+              return val
+            }
+          }
+        }
+        return 0
       }
 
-      const sumateraColor = getProvColor('SUMATERA UTARA') !== '#e2e8f0' ? getProvColor('SUMATERA UTARA') : getProvColor('SUMATERA BARAT') !== '#e2e8f0' ? getProvColor('SUMATERA BARAT') : getProvColor('ACEH')
-      const jawaColor = getProvColor('JAWA TIMUR') !== '#e2e8f0' ? getProvColor('JAWA TIMUR') : getProvColor('JAWA BARAT') !== '#e2e8f0' ? getProvColor('JAWA BARAT') : getProvColor('JAWA TENGAH')
-      const kalimantanColor = getProvColor('KALIMANTAN SELATAN') !== '#e2e8f0' ? getProvColor('KALIMANTAN SELATAN') : getProvColor('KALIMANTAN BARAT') !== '#e2e8f0' ? getProvColor('KALIMANTAN BARAT') : getProvColor('KALIMANTAN TIMUR')
-      const sulawesiColor = getProvColor('SULAWESI SELATAN') !== '#e2e8f0' ? getProvColor('SULAWESI SELATAN') : getProvColor('SULAWESI TENGAH')
-      const nusaTenggaraColor = getProvColor('NUSA TENGGARA BARAT') !== '#e2e8f0' ? getProvColor('NUSA TENGGARA BARAT') : getProvColor('NUSA TENGGARA TIMUR')
-      const malukuColor = getProvColor('MALUKU') !== '#e2e8f0' ? getProvColor('MALUKU') : getProvColor('MALUKU UTARA')
-      const papuaColor = getProvColor('PAPUA') !== '#e2e8f0' ? getProvColor('PAPUA') : getProvColor('PAPUA BARAT')
-
-      const provCoords: Record<string, { x: number; y: number; label: string }> = {
-        'JAWA TIMUR': { x: 220, y: 145, label: 'JATIM' },
-        'JAWA BARAT': { x: 150, y: 142, label: 'JABAR' },
-        'JAWA TENGAH': { x: 185, y: 144, label: 'JATENG' },
-        'MALUKU': { x: 345, y: 95, label: 'MALUKU' },
-        'KALIMANTAN SELATAN': { x: 200, y: 102, label: 'KALSEL' },
-        'NUSA TENGGARA BARAT': { x: 270, y: 147, label: 'NTB' },
-        'NUSA TENGGARA TIMUR': { x: 300, y: 148, label: 'NTT' },
-        'SULAWESI SELATAN': { x: 275, y: 110, label: 'SULSEL' },
-        'KALIMANTAN BARAT': { x: 165, y: 75, label: 'KALBAR' },
-        'SULAWESI TENGAH': { x: 275, y: 85, label: 'SULTENG' },
-        'SULAWESI UTARA': { x: 295, y: 60, label: 'SULUT' },
-        'BANTEN': { x: 135, y: 140, label: 'BANTEN' },
-        'KALIMANTAN TENGAH': { x: 185, y: 85, label: 'KALTENG' },
-        'MALUKU UTARA': { x: 345, y: 65, label: 'MALUT' },
-        'D.I. YOGYAKARTA': { x: 180, y: 146, label: 'DIY' },
-        'ACEH': { x: 45, y: 40, label: 'ACEH' },
-        'RIAU': { x: 90, y: 70, label: 'RIAU' },
-        'SUMATERA BARAT': { x: 75, y: 75, label: 'SUMBAR' },
-        'SUMATERA UTARA': { x: 60, y: 55, label: 'SUMUT' },
-        'SUMATERA SELATAN': { x: 115, y: 105, label: 'SUMSEL' },
-        'LAMPUNG': { x: 125, y: 125, label: 'LAMPUNG' },
-        'KALIMANTAN TIMUR': { x: 220, y: 75, label: 'KALTIM' },
-        'PAPUA': { x: 430, y: 90, label: 'PAPUA' },
+      const getChoroplethColor = (cnt: number) => {
+        if (cnt === 0) return '#dcfce7' // subtle pale emerald/teal for 0 kejadian
+        if (cnt <= 10) return '#fde047' // yellow
+        if (cnt <= 30) return '#fb923c' // orange
+        if (cnt <= 50) return '#ef4444' // red
+        return '#991b1b' // deep dark red
       }
 
+      // Render actual high-resolution polygon paths
+      const pathsHtml = INDONESIA_PROVINCES.map((prov) => {
+        const cnt = getIncidentCount(prov.names)
+        const fillColor = getChoroplethColor(cnt)
+        return `<path d="${prov.path}" fill="${fillColor}" stroke="#ffffff" stroke-width="0.75" stroke-linejoin="round">
+          <title>${prov.names[0]}: ${cnt} Kejadian</title>
+        </path>`
+      }).join('\n')
+
+      // Hotspot callout badges for top provinces with actual incidents
       const hotspotBadges: string[] = []
-      provList.slice(0, 5).forEach(([provName, count], idx) => {
-        const cleanProv = provName.toUpperCase().replace(/^(PROVINSI|PROV\.|PROV)\s+/gi, '').trim()
-        const info = provCoords[cleanProv] || { x: 150 + idx * 45, y: 70 + (idx % 2) * 20, label: cleanProv.substring(0, 6) }
-        
-        let color = '#b91c1c'
-        if (idx === 0) color = '#b91c1c'
-        else if (idx <= 2) color = '#ef4444'
-        else color = '#f97316'
+      const topProvs = provList.filter(([_, c]) => c > 0).slice(0, 6)
+
+      topProvs.forEach(([pName, count], idx) => {
+        const cleanP = pName.toUpperCase().replace(/^(PROVINSI|PROV\.|PROV)\s+/gi, '').trim()
+        const matched = INDONESIA_PROVINCES.find((p) =>
+          p.names.some((n) => n.toUpperCase().includes(cleanP) || cleanP.includes(n.toUpperCase()))
+        )
+
+        const cx = matched ? matched.cx : 180 + idx * 90
+        const cy = matched ? matched.cy : 130 + (idx % 2) * 35
+        const shortName = cleanP.length > 8 ? cleanP.substring(0, 7) : cleanP
+
+        let badgeColor = '#b91c1c'
+        if (idx === 0) badgeColor = '#991b1b'
+        else if (idx <= 2) badgeColor = '#dc2626'
+        else badgeColor = '#ea580c'
 
         hotspotBadges.push(`
-          <g transform="translate(${info.x}, ${info.y})">
-            <circle cx="0" cy="0" r="6.5" fill="${color}" stroke="#ffffff" stroke-width="1.5" />
-            <circle cx="0" cy="0" r="9" fill="${color}" opacity="0.25" />
-            <rect x="-24" y="-18" width="48" height="11" rx="3" fill="#0f172a" opacity="0.9" />
-            <text x="0" y="-10" font-size="6" font-weight="900" fill="#ffffff" text-anchor="middle">
-              ${info.label} (${count})
+          <g transform="translate(${cx}, ${cy})">
+            <circle cx="0" cy="0" r="11" fill="${badgeColor}" opacity="0.2">
+              <animate attributeName="r" values="6;13;6" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.35;0.05;0.35" dur="2s" repeatCount="indefinite" />
+            </circle>
+            <circle cx="0" cy="0" r="5" fill="${badgeColor}" stroke="#ffffff" stroke-width="1.5" />
+            <rect x="-28" y="-19" width="56" height="14" rx="4" fill="#0f172a" opacity="0.94" stroke="#ffffff" stroke-width="0.6" />
+            <text x="0" y="-9.5" font-size="7" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="0.2">
+              ${shortName} (${count})
             </text>
           </g>
         `)
       })
 
       return `
-        <svg viewBox="0 0 500 170" width="100%" height="190" style="background: #f0fdfa; border-radius: 8px; border: 1px solid #ccfbf1; font-family: sans-serif;">
-          <!-- Grid lines -->
-          <line x1="0" y1="45" x2="500" y2="45" stroke="#e6fffa" stroke-width="1" />
-          <line x1="0" y1="88" x2="500" y2="88" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3,3" />
-          <text x="6" y="84" font-size="6" fill="#94a3b8" font-weight="bold">GARIS KHATULISTIWA (0° EOC MONITORING)</text>
+        <svg viewBox="${INDONESIA_MAP_VIEWBOX}" width="100%" height="280" style="background: linear-gradient(180deg, #f0fdfa 0%, #e6fffa 100%); border-radius: 8px; border: 1px solid #ccfbf1; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <defs>
+            <pattern id="seaGrid" width="60" height="60" patternUnits="userSpaceOnUse">
+              <path d="M 60 0 L 0 0 0 60" fill="none" stroke="#ccfbf1" stroke-width="0.5" opacity="0.6" />
+            </pattern>
+          </defs>
 
-          <!-- REALISTIC ISLAND VECTOR PATHS -->
-          <!-- SUMATERA -->
-          <path d="M 32 38 L 48 28 L 65 35 L 85 55 L 110 82 L 132 110 L 125 125 L 110 120 L 90 95 L 68 70 L 48 55 L 35 44 Z" fill="${sumateraColor}" stroke="#ffffff" stroke-width="1.5" />
-          <!-- JAWA & BALI -->
-          <path d="M 128 138 L 155 138 L 185 140 L 225 142 L 248 145 L 246 150 L 220 148 L 180 146 L 150 144 L 128 142 Z" fill="${jawaColor}" stroke="#ffffff" stroke-width="1.5" />
-          <path d="M 250 144 L 258 144 L 258 148 L 250 148 Z" fill="${getProvColor('BALI')}" stroke="#ffffff" stroke-width="1" />
+          <!-- Maritime background grid -->
+          <rect width="100%" height="100%" fill="url(#seaGrid)" />
 
-          <!-- KALIMANTAN -->
-          <path d="M 152 70 L 180 50 L 220 48 L 235 60 L 232 90 L 210 115 L 185 118 L 158 98 L 148 80 Z" fill="${kalimantanColor}" stroke="#ffffff" stroke-width="1.5" />
+          <!-- Equator line (0° Lintang) -->
+          <line x1="0" y1="108" x2="850" y2="108" stroke="#0d9488" stroke-width="0.8" stroke-dasharray="4,4" opacity="0.45" />
+          <text x="12" y="103" font-size="7" fill="#0f766e" font-weight="800" letter-spacing="0.4">GARIS KHATULISTIWA (0° LINTANG EKATOR - EOC PSC 119)</text>
 
-          <!-- SULAWESI (K-SHAPE) -->
-          <path d="M 252 82 L 268 78 L 272 58 L 285 58 L 295 50 L 298 56 L 282 68 L 275 80 L 290 85 L 305 85 L 302 92 L 278 92 L 276 102 L 285 118 L 272 122 L 265 105 L 260 88 Z" fill="${sulawesiColor}" stroke="#ffffff" stroke-width="1.5" />
+          <!-- Longitude Lines -->
+          <line x1="92" y1="0" x2="92" y2="310" stroke="#cbd5e1" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.5" />
+          <text x="95" y="302" font-size="6.5" fill="#64748b" font-weight="600">100° BT</text>
 
-          <!-- NUSA TENGGARA CHAIN -->
-          <path d="M 262 145 L 280 145 L 280 149 L 262 149 Z" fill="${nusaTenggaraColor}" stroke="#ffffff" stroke-width="1" />
-          <path d="M 283 146 L 315 146 L 315 150 L 283 150 Z" fill="${getProvColor('NUSA TENGGARA TIMUR')}" stroke="#ffffff" stroke-width="1" />
+          <line x1="277" y1="0" x2="277" y2="310" stroke="#cbd5e1" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.5" />
+          <text x="280" y="302" font-size="6.5" fill="#64748b" font-weight="600">110° BT</text>
 
-          <!-- MALUKU CLUSTER -->
-          <path d="M 335 60 L 350 60 L 348 78 L 335 78 Z" fill="${malukuColor}" stroke="#ffffff" stroke-width="1" />
-          <path d="M 338 88 L 355 88 L 355 115 L 338 115 Z" fill="${malukuColor}" stroke="#ffffff" stroke-width="1" />
+          <line x1="462" y1="0" x2="462" y2="310" stroke="#cbd5e1" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.5" />
+          <text x="465" y="302" font-size="6.5" fill="#64748b" font-weight="600">120° BT</text>
 
-          <!-- PAPUA (BIRD'S HEAD & BODY) -->
-          <path d="M 365 72 C 370 60 380 62 385 70 L 395 72 L 440 55 L 485 75 L 480 130 L 435 130 L 398 98 L 375 88 Z" fill="${papuaColor}" stroke="#ffffff" stroke-width="1.5" />
+          <line x1="646" y1="0" x2="646" y2="310" stroke="#cbd5e1" stroke-width="0.5" stroke-dasharray="2,3" opacity="0.5" />
+          <text x="649" y="302" font-size="6.5" fill="#64748b" font-weight="600">130° BT</text>
+
+          <!-- Compass Rose (Arah Mata Angin) -->
+          <g transform="translate(810, 36)">
+            <circle cx="0" cy="0" r="16" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" opacity="0.9" />
+            <polygon points="0,-13 3,-2 0,0 -3,-2" fill="#047D78" />
+            <polygon points="0,13 3,2 0,0 -3,2" fill="#94a3b8" />
+            <polygon points="13,0 2,3 0,0 2,-3" fill="#94a3b8" />
+            <polygon points="-13,0 -2,3 0,0 -2,-3" fill="#94a3b8" />
+            <text x="0" y="-14" font-size="6.5" font-weight="900" fill="#047D78" text-anchor="middle">U</text>
+          </g>
+
+          <!-- OFFICIAL HIGH-RESOLUTION PROVINCE POLYGONS -->
+          <g id="indonesia-provinces-layer">
+            ${pathsHtml}
+          </g>
 
           <!-- HOTSPOT CALLOUT BADGES -->
-          ${hotspotBadges.join('')}
+          <g id="hotspot-badges">
+            ${hotspotBadges.join('')}
+          </g>
 
-          <!-- MAP CHOROPLETH LEGEND CARD -->
-          <g transform="translate(10, 138)">
-            <rect x="0" y="0" width="165" height="26" rx="4" fill="#ffffff" opacity="0.95" stroke="#cbd5e1" stroke-width="1" />
-            <text x="6" y="9" font-size="6" font-weight="900" fill="#0f172a">SEBARAN INTENSITAS KEJADIAN BENCANA:</text>
-            <circle cx="10" cy="18" r="3.5" fill="#eab308" />
-            <text x="16" y="20" font-size="5.5" font-weight="800" fill="#334155">1-10</text>
-            <circle cx="45" cy="18" r="3.5" fill="#f97316" />
-            <text x="51" y="20" font-size="5.5" font-weight="800" fill="#334155">11-30</text>
-            <circle cx="85" cy="18" r="3.5" fill="#ef4444" />
-            <text x="91" y="20" font-size="5.5" font-weight="800" fill="#334155">31-50</text>
-            <circle cx="125" cy="18" r="3.5" fill="#b91c1c" />
-            <text x="131" y="20" font-size="5.5" font-weight="900" fill="#b91c1c">>50</text>
+          <!-- CHOROPLETH LEGEND -->
+          <g transform="translate(14, 260)">
+            <rect x="0" y="0" width="225" height="38" rx="6" fill="#ffffff" opacity="0.96" stroke="#94a3b8" stroke-width="0.8" />
+            <text x="8" y="12" font-size="7" font-weight="900" fill="#0f172a" letter-spacing="0.3">SEBARAN INTENSITAS KEJADIAN (PROVINSI):</text>
+            <circle cx="14" cy="25" r="4.5" fill="#dcfce7" stroke="#cbd5e1" stroke-width="0.5" />
+            <text x="23" y="28" font-size="6.5" font-weight="700" fill="#475569">0</text>
+            <circle cx="50" cy="25" r="4.5" fill="#fde047" />
+            <text x="59" y="28" font-size="6.5" font-weight="700" fill="#475569">1-10</text>
+            <circle cx="95" cy="25" r="4.5" fill="#fb923c" />
+            <text x="104" y="28" font-size="6.5" font-weight="700" fill="#475569">11-30</text>
+            <circle cx="145" cy="25" r="4.5" fill="#ef4444" />
+            <text x="154" y="28" font-size="6.5" font-weight="700" fill="#475569">31-50</text>
+            <circle cx="195" cy="25" r="4.5" fill="#991b1b" />
+            <text x="204" y="28" font-size="6.5" font-weight="900" fill="#991b1b">>50</text>
+          </g>
+
+          <!-- OFFICIAL FOOTNOTE -->
+          <g transform="translate(540, 298)">
+            <text x="0" y="0" font-size="6" font-weight="700" fill="#0f766e" opacity="0.8">
+              PETA GEOSPASIAL RESMI WILAYAH KERJA PSC 119 - KEMENKES RI
+            </text>
           </g>
         </svg>
       `

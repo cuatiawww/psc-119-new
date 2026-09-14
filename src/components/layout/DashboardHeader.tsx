@@ -234,11 +234,12 @@ export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
           type="button"
           aria-label="Tutup sidebar"
           onClick={onClose}
-          className="fixed inset-0 z-30 bg-slate-900/35 backdrop-blur-[1px]"
+          className="fixed inset-0 z-50 bg-slate-900/35 backdrop-blur-[1px]"
         />
       ) : null}
+
       <aside
-        className={`fixed left-0 top-0 z-40 h-screen w-[280px] border-r border-slate-100 bg-white text-slate-800 shadow-[2px_0_12px_rgba(0,0,0,0.03)] transition-transform duration-300 ${
+        className={`fixed left-0 top-0 z-[60] h-screen w-[280px] border-r border-slate-100 bg-white text-slate-800 shadow-[2px_0_12px_rgba(0,0,0,0.03)] transition-transform duration-300 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -466,13 +467,15 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
   }, [notifOpen])
 
   return (
-    <header className="w-full max-w-full border-b-2 border-teal-400/25 bg-white overflow-hidden">
-      <div className="relative flex min-h-[118px] items-stretch overflow-hidden">
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-95"
-          style={{ backgroundImage: `url('${process.env.NEXT_PUBLIC_BASE_PATH || ''}/${(pathname === '/gempa-ntt' || pathname === '/dashboard-eoc/gempa-ntt' || pathname?.includes('gempa-ntt')) ? 'bg header_ntt.webp' : 'bg header.png'}')` }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/82 to-white/92" />
+    <header className="relative z-40 w-full max-w-full border-b-2 border-teal-400/25 bg-white">
+      <div className="relative flex min-h-[118px] items-stretch">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-95"
+            style={{ backgroundImage: `url('${process.env.NEXT_PUBLIC_BASE_PATH || ''}/${(pathname === '/gempa-ntt' || pathname === '/dashboard-eoc/gempa-ntt' || pathname?.includes('gempa-ntt')) ? 'bg header_ntt.webp' : 'bg header.png'}')` }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/82 to-white/92" />
+        </div>
         <div className="relative grid w-full max-w-full gap-4 sm:gap-5 px-4 py-4 md:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
           <div className="flex min-w-0 items-center gap-4">
             {!(pathname === '/gempa-ntt' || pathname === '/dashboard-eoc/gempa-ntt' || pathname?.includes('gempa-ntt')) && (
@@ -567,7 +570,7 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
                 </button>
 
                 {notifOpen && (
-                  <div className="absolute right-0 top-14 z-30 w-[320px] sm:w-[380px] rounded-2xl border border-slate-200 bg-white/98 backdrop-blur-md p-4 shadow-[0_12px_40px_rgba(15,118,110,0.15)] flex flex-col animate-in slide-in-from-top-2 duration-155">
+                  <div className="absolute right-0 top-14 z-50 w-[320px] sm:w-[380px] rounded-2xl border border-slate-200 bg-white/98 backdrop-blur-md p-4 shadow-2xl flex flex-col animate-in slide-in-from-top-2 duration-155">
                     {/* Header */}
                     <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                       <div className="flex items-center gap-2">
@@ -712,7 +715,7 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
                 </button>
                 {profileOpen ? (
                   isAuthenticated ? (
-                    <div className="absolute right-0 top-14 z-30 w-72 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+                    <div className="absolute right-0 top-14 z-50 w-72 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
                           <div className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-teal-500 to-cyan-500 text-sm font-extrabold text-white">
@@ -759,7 +762,7 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
                       </div>
                     </div>
                   ) : (
-                    <div className="absolute right-0 top-14 z-30 w-72 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+                    <div className="absolute right-0 top-14 z-50 w-72 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-extrabold text-slate-800">Akses Pengunjung</p>
