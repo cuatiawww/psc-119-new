@@ -424,10 +424,6 @@ export default function DashboardKejadianPage() {
   }, [activeKodePsc])
   const [filterStartDate, setFilterStartDate] = useState<string | undefined>(undefined)
   const [filterEndDate, setFilterEndDate] = useState<string | undefined>(undefined)
-  const [idExtension, setIdExtension] = useState('')
-  const [extensionOptions, setExtensionOptions] = useState<Array<{ value: string; label: string }>>([
-    { value: 'semua-extension', label: 'Semua Extension' },
-  ])
   const [isAiModalOpen, setIsAiModalOpen] = useState(false)
   const [aiModalTab, setAiModalTab] = useState<'report' | 'info'>('report')
   const [activeDetailCard, setActiveDetailCard] = useState<string | null>(null)
@@ -2018,17 +2014,16 @@ export default function DashboardKejadianPage() {
   // When should the reset button show?
   const showResetButton = useMemo(() => {
     if (selectedRegions.length > 0) return true
-    if (selectedAdminKodePsc || idExtension) return true
+    if (selectedAdminKodePsc) return true
     if (tahun !== '2026') return true
     if (isKabLocked) return false
     if (isProvLocked) return kabupaten !== ''
     return province !== ''
-  }, [selectedRegions.length, isKabLocked, isProvLocked, province, kabupaten, tahun, selectedAdminKodePsc, idExtension])
+  }, [selectedRegions.length, isKabLocked, isProvLocked, province, kabupaten, tahun, selectedAdminKodePsc])
 
   const handleResetFilter = () => {
     setSelectedRegions([])
     setSelectedAdminKodePsc('')
-    setIdExtension('')
     setFilterStartDate(undefined)
     setFilterEndDate(undefined)
     if (isKabLocked && user?.wilayah_scope?.kabupaten?.label) {
@@ -2192,32 +2187,6 @@ export default function DashboardKejadianPage() {
     window.dispatchEvent(new CustomEvent('sipkk-region-changed', { detail: label }))
   }, [getRegionLabel])
 
-  // Daftar pilihan extension dibentuk dari id_extension yang benar-benar ada di data.
-  // Daftar ini dipertahankan saat sedang memfilter agar pilihan extension lain tetap tersedia.
-  useEffect(() => {
-    if (idExtension || !Array.isArray(data?.calls)) return
-
-    const byId = new Map<string, string>()
-    data.calls.forEach((call: any) => {
-      const raw = call?.raw_psc || call
-      const rawId = raw?.id_extension ?? call?.id_extension
-      if (rawId === null || rawId === undefined || String(rawId).trim() === '') return
-
-      const value = String(rawId)
-      const name = String(raw?.extension || call?.extension || '').trim()
-      byId.set(value, name && name !== value ? `Extension ${value} (${name})` : `Extension ${value}`)
-    })
-
-    if (byId.size > 0) {
-      setExtensionOptions([
-        { value: 'semua-extension', label: 'Semua Extension' },
-        ...Array.from(byId.entries())
-          .sort(([a], [b]) => Number(a) - Number(b))
-          .map(([value, label]) => ({ value, label })),
-      ])
-    }
-  }, [data, idExtension])
-
   const getWilayahChartInfo = () => {
     if (kabupaten) {
       return {
@@ -2245,9 +2214,6 @@ export default function DashboardKejadianPage() {
     const prov = (summary.provinsi !== 'SEMUA PROVINSI' && !summary.provinsi.toUpperCase().includes('MEMUAT')) ? summary.provinsi : ''
     const kab = (summary.kabkota !== 'SEMUA KAB/KOTA' && !summary.kabkota.toUpperCase().includes('MEMUAT')) ? summary.kabkota : ''
     const cak = summary.cakupan.toLowerCase()
-    const extension = summary.idExtension && summary.idExtension !== 'semua-extension'
-      ? summary.idExtension
-      : ''
     const kodePsc = summary.kodePsc && summary.kodePsc !== 'semua-psc'
       ? summary.kodePsc
       : ''
@@ -2319,7 +2285,6 @@ export default function DashboardKejadianPage() {
     setCakupan(cak)
     setProvince(prov)
     setKabupaten(kab)
-    setIdExtension(extension)
     setSelectedAdminKodePsc(kodePsc)
     setTahun(yr)
   }, [])
@@ -2340,9 +2305,6 @@ export default function DashboardKejadianPage() {
       }
       if (kabupaten && !isSemuaKab) {
         queryParams.push(`kabupaten=${encodeURIComponent(kabupaten)}`)
-      }
-      if (idExtension) {
-        queryParams.push(`id_extension=${encodeURIComponent(idExtension)}`)
       }
       if (filterStartDate && filterEndDate) {
         queryParams.push(`start_date=${encodeURIComponent(filterStartDate)}`)
@@ -2384,7 +2346,7 @@ export default function DashboardKejadianPage() {
     } finally {
       setLoading(false)
     }
-  }, [token, province, kabupaten, tahun, filterStartDate, filterEndDate, idExtension, activeKodePsc, selectedAdminKodePsc])
+  }, [token, province, kabupaten, tahun, filterStartDate, filterEndDate, activeKodePsc, selectedAdminKodePsc])
 
   const handleSyncMv = async () => {
     if (isSyncingMv) return
@@ -3080,8 +3042,6 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           selectedProvinceName={province}
           selectedKabupatenName={kabupaten}
           selectedKodePsc={selectedAdminKodePsc}
-          selectedExtension={idExtension}
-          extensionOptions={extensionOptions}
         />
       </section>
 

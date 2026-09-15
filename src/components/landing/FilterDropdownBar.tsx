@@ -7,7 +7,7 @@ import { buildRegionsUrl } from '@/lib/utils/api'
 
 type FilterItem = {
   id: string
-  icon: 'globe' | 'pin' | 'building' | 'calendar' | 'filter' | 'search'
+  icon: 'globe' | 'pin' | 'building' | 'calendar' | 'search'
   sublabel: string
   defaultValue: string
   options: Array<{ value: string; label: string }>
@@ -19,7 +19,6 @@ export type FilterSummary = {
   provinsi: string
   kabkota: string
   tahun: string
-  idExtension: string
   kodePsc: string
   startDate?: string
   endDate?: string
@@ -30,8 +29,6 @@ type FilterDropdownBarProps = {
   selectedProvinceName?: string | null
   selectedKabupatenName?: string | null
   selectedKodePsc?: string | null
-  selectedExtension?: string | null
-  extensionOptions?: Array<{ value: string; label: string }>
 }
 
 type RegionOption = {
@@ -45,7 +42,6 @@ const iconStyles: Record<FilterItem['icon'], { bg: string; color: string }> = {
   pin: { bg: 'bg-[#E6F1FB]', color: 'text-[#185FA5]' },
   building: { bg: 'bg-[#EEEDFE]', color: 'text-[#534AB7]' },
   calendar: { bg: 'bg-[#FDF2F8]', color: 'text-[#DB2777]' },
-  filter: { bg: 'bg-[#FFF4E5]', color: 'text-[#B45309]' },
   search: { bg: 'bg-[#E8F3FF]', color: 'text-[#2563EB]' },
 }
 
@@ -53,7 +49,6 @@ function FilterIcon({ icon, className }: { icon: FilterItem['icon']; className?:
   if (icon === 'globe') return <Globe className={className} />
   if (icon === 'pin') return <MapPin className={className} />
   if (icon === 'building') return <Building2 className={className} />
-  if (icon === 'filter') return <SlidersHorizontal className={className} />
   if (icon === 'search') return <Search className={className} />
   return <Calendar className={className} />
 }
@@ -92,8 +87,6 @@ export default function FilterDropdownBar({
   selectedProvinceName,
   selectedKabupatenName,
   selectedKodePsc,
-  selectedExtension,
-  extensionOptions = [],
 }: FilterDropdownBarProps = {}) {
   const userScope = useAuthStore((state) => state.user?.wilayah_scope)
   const user = useAuthStore((state) => state.user)
@@ -161,15 +154,6 @@ export default function FilterDropdownBar({
             : dynamicKabkota,
         },
         {
-          id: 'extension',
-          icon: 'filter',
-          sublabel: 'Extension',
-          defaultValue: 'semua-extension',
-          options: extensionOptions.length > 0
-            ? extensionOptions
-            : [{ value: 'semua-extension', label: 'Semua Extension' }],
-        },
-        {
           id: 'tahun',
           icon: 'calendar',
           sublabel: 'Rentang Waktu',
@@ -225,15 +209,6 @@ export default function FilterDropdownBar({
           options: kabupatenOptions,
         },
         {
-          id: 'extension',
-          icon: 'filter',
-          sublabel: 'Extension',
-          defaultValue: 'semua-extension',
-          options: extensionOptions.length > 0
-            ? extensionOptions
-            : [{ value: 'semua-extension', label: 'Semua Extension' }],
-        },
-        {
           id: 'tahun',
           icon: 'calendar',
           sublabel: 'Rentang Waktu',
@@ -262,7 +237,7 @@ export default function FilterDropdownBar({
         label: opt.label.toUpperCase()
       }))
     }))
-  }, [isScoped, userScope, dynamicProvinces, dynamicKabkota, loadingProvinces, loadingKabkota, extensionOptions, canSelectPsc, loadingPsc, dynamicPsc])
+  }, [isScoped, userScope, dynamicProvinces, dynamicKabkota, loadingProvinces, loadingKabkota, canSelectPsc, loadingPsc, dynamicPsc])
 
   const defaultSelected = useMemo(() => {
     if (!isScoped) {
@@ -270,7 +245,6 @@ export default function FilterDropdownBar({
         cakupan: 'nasional',
         provinsi: 'semua-provinsi',
         kabkota: 'semua-kabkota',
-        extension: 'semua-extension',
         kode_psc: 'semua-psc',
         tahun: '2026',
       }
@@ -285,7 +259,6 @@ export default function FilterDropdownBar({
       cakupan: cakupanValue,
       provinsi: provinsiValue,
       kabkota: kabupatenValue,
-      extension: 'semua-extension',
       kode_psc: 'semua-psc',
       tahun: '2026',
     }
@@ -305,14 +278,13 @@ export default function FilterDropdownBar({
     setOpenId(null)
   }, [defaultSelectedStr])
 
-  // Sinkronkan filter yang dikendalikan parent, terutama saat tombol Reset ditekan.
+  // Sinkronkan filter Kode PSC yang dikendalikan parent, terutama saat tombol Reset ditekan.
   useEffect(() => {
     setSelected((prev) => ({
       ...prev,
       kode_psc: selectedKodePsc || 'semua-psc',
-      extension: selectedExtension || 'semua-extension',
     }))
-  }, [selectedKodePsc, selectedExtension])
+  }, [selectedKodePsc])
 
   // Synchronize external selectedProvinceName & selectedKabupatenName changes
   useEffect(() => {
@@ -346,7 +318,6 @@ export default function FilterDropdownBar({
                 cakupan: 'kabupaten-kota',
                 provinsi: nextProv,
                 kabkota: foundKab.value,
-                extension: selected.extension || 'semua-extension',
                 kode_psc: selected.kode_psc || 'semua-psc',
                 tahun: selected.tahun || '2026',
               })
@@ -363,7 +334,6 @@ export default function FilterDropdownBar({
               cakupan: 'provinsi',
               provinsi: nextProv,
               kabkota: 'semua-kabkota',
-              extension: selected.extension || 'semua-extension',
               kode_psc: selected.kode_psc || 'semua-psc',
               tahun: selected.tahun || '2026',
             })
@@ -374,13 +344,12 @@ export default function FilterDropdownBar({
           cakupan: 'nasional',
           provinsi: 'semua-provinsi',
           kabkota: 'semua-kabkota',
-          extension: selected.extension || 'semua-extension',
           kode_psc: selected.kode_psc || 'semua-psc',
           tahun: selected.tahun || '2026',
         })
       }
     }
-  }, [dynamicKabkota, dynamicProvinces, selectedKabupatenName, selectedProvinceName, selected.tahun, selected.extension])
+  }, [dynamicKabkota, dynamicProvinces, selectedKabupatenName, selectedProvinceName, selected.tahun, selected.kode_psc])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -571,7 +540,6 @@ export default function FilterDropdownBar({
       provinsi: provOpt ? provOpt.label : selected.provinsi || 'semua-provinsi',
       kabkota: kabOpt ? kabOpt.label : selected.kabkota || 'semua-kabkota',
       tahun: timeButtonDisplayLabel,
-      idExtension: selected.extension || 'semua-extension',
       kodePsc: selected.kode_psc || 'semua-psc',
       startDate: timeCategoryTab === 'custom' ? customStartDate : undefined,
       endDate: timeCategoryTab === 'custom' ? customEndDate : undefined,
