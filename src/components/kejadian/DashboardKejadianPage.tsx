@@ -123,6 +123,10 @@ type SummaryData = {
   total_hilang: number
   total_pengungsi: number
   total_terdampak: number
+  total_emergency?: number
+  total_non_emergency?: number
+  total_non_category?: number
+  total_personil?: number
 }
 
 type PieChartItem = {
@@ -145,6 +149,11 @@ type MarkerItem = {
   is_krisis?: number
   total_korban: number
   icon_file?: string
+  raw_psc?: any
+  extension?: string
+  sumber_panggilan?: string
+  spesifikasi_layanan?: string
+  jenis_layanan?: string
 }
 
 type ApiResponse = {
@@ -152,6 +161,9 @@ type ApiResponse = {
   summary: SummaryData
   jenis_bencana: PieChartItem[]
   wilayah: PieChartItem[]
+  sebaran_extension?: PieChartItem[]
+  sebaran_sumber?: PieChartItem[]
+  sebaran_spesifikasi?: PieChartItem[]
   markers: MarkerItem[]
 }
 
@@ -555,9 +567,32 @@ export default function DashboardKejadianPage() {
     let total_hilang = 0
     let total_pengungsi = 0
     let total_terdampak = 0
+    let total_emergency = 0
+    let total_non_emergency = 0
+    let total_non_category = 0
 
     effectiveMarkers.forEach((m) => {
-      if (m.is_krisis === 1) total_krisis++
+      const jenis = (m.jenis_layanan || m.raw_psc?.jenis_layanan || '').toLowerCase()
+      const isEm = (jenis.includes('emergency') && !jenis.includes('non')) || (m.is_krisis === 1 && !jenis.includes('non'))
+      const isNonEm = jenis.includes('non') && jenis.includes('emergency')
+      const isNonCat = (jenis.includes('non') && (jenis.includes('cat') || jenis.includes('kat'))) || (!isEm && !isNonEm && Boolean(jenis))
+
+      if (isEm) {
+        total_krisis++
+        total_emergency++
+      } else if (isNonEm) {
+        total_non_emergency++
+      } else if (isNonCat) {
+        total_non_category++
+      } else {
+        if (m.is_krisis === 1) {
+          total_krisis++
+          total_emergency++
+        } else {
+          total_non_emergency++
+        }
+      }
+
       const korban = m.total_korban || 0
       total_terdampak += korban
       const breakdown = getKorbanBreakdown(korban, m.jenis_bencana)
@@ -570,11 +605,15 @@ export default function DashboardKejadianPage() {
     return {
       total_bencana,
       total_krisis,
-      total_meninggal,
-      total_luka,
+      total_meninggal: total_non_emergency > 0 ? total_non_emergency : total_meninggal,
+      total_luka: total_non_category > 0 ? total_non_category : total_luka,
       total_hilang,
       total_pengungsi,
       total_terdampak,
+      total_emergency,
+      total_non_emergency,
+      total_non_category,
+      total_personil: data?.summary?.total_personil ?? 450,
     }
   }, [data?.summary, selectedRegions, effectiveMarkers])
 
@@ -1175,18 +1214,18 @@ export default function DashboardKejadianPage() {
   // Agregasi tren bulanan dari markers API dan data krisis
   const { trendData, targetYear } = useMemo(() => {
     const months = [
-      { name: 'Jan', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0 },
-      { name: 'Feb', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0 },
-      { name: 'Mar', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0 },
-      { name: 'Apr', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0 },
-      { name: 'May', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0 },
-      { name: 'Jun', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0 },
-      { name: 'Jul', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0 },
-      { name: 'Agus', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0 },
-      { name: 'Sep', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0 },
-      { name: 'Okt', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0 },
-      { name: 'Nov', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0 },
-      { name: 'Des', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0 },
+      { name: 'Jan', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0, emergencyCount: 0, nonEmergencyCount: 0, nonCategoryCount: 0 },
+      { name: 'Feb', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0, emergencyCount: 0, nonEmergencyCount: 0, nonCategoryCount: 0 },
+      { name: 'Mar', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0, emergencyCount: 0, nonEmergencyCount: 0, nonCategoryCount: 0 },
+      { name: 'Apr', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0, emergencyCount: 0, nonEmergencyCount: 0, nonCategoryCount: 0 },
+      { name: 'May', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0, emergencyCount: 0, nonEmergencyCount: 0, nonCategoryCount: 0 },
+      { name: 'Jun', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0, emergencyCount: 0, nonEmergencyCount: 0, nonCategoryCount: 0 },
+      { name: 'Jul', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0, emergencyCount: 0, nonEmergencyCount: 0, nonCategoryCount: 0 },
+      { name: 'Agus', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0, emergencyCount: 0, nonEmergencyCount: 0, nonCategoryCount: 0 },
+      { name: 'Sep', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0, emergencyCount: 0, nonEmergencyCount: 0, nonCategoryCount: 0 },
+      { name: 'Okt', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0, emergencyCount: 0, nonEmergencyCount: 0, nonCategoryCount: 0 },
+      { name: 'Nov', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0, emergencyCount: 0, nonEmergencyCount: 0, nonCategoryCount: 0 },
+      { name: 'Des', bencanaCount: 0, bencanaKorban: 0, krisisCount: 0, krisisKorban: 0, emergencyCount: 0, nonEmergencyCount: 0, nonCategoryCount: 0 },
     ]
 
     let targetYear = tahun || '2026'
@@ -1212,9 +1251,26 @@ export default function DashboardKejadianPage() {
         if (year === targetYear && monthIdx >= 0 && monthIdx < 12) {
           months[monthIdx].bencanaCount++
           months[monthIdx].bencanaKorban += m.total_korban || 0
-          if (m.is_krisis === 1) {
+
+          const jenis = (m.jenis_layanan || m.raw_psc?.jenis_layanan || '').toLowerCase()
+          const isEm = (jenis.includes('emergency') && !jenis.includes('non')) || (m.is_krisis === 1 && !jenis.includes('non'))
+          const isNonEm = jenis.includes('non') && jenis.includes('emergency')
+          const isNonCat = (jenis.includes('non') && (jenis.includes('cat') || jenis.includes('kat'))) || (!isEm && !isNonEm && Boolean(jenis))
+
+          if (isEm) {
             months[monthIdx].krisisCount++
-            months[monthIdx].krisisKorban += m.total_korban || 0
+            months[monthIdx].emergencyCount++
+          } else if (isNonEm) {
+            months[monthIdx].nonEmergencyCount++
+          } else if (isNonCat) {
+            months[monthIdx].nonCategoryCount++
+          } else {
+            if (m.is_krisis === 1) {
+              months[monthIdx].krisisCount++
+              months[monthIdx].emergencyCount++
+            } else {
+              months[monthIdx].nonEmergencyCount++
+            }
           }
         }
       })
@@ -1256,12 +1312,21 @@ export default function DashboardKejadianPage() {
     let prevVal = 0
 
     const labelLower = cardLabel.toLowerCase()
-    if (labelLower.includes('kejadian')) {
+    if (labelLower.includes('panggilan') || labelLower.includes('total') || labelLower.includes('kejadian')) {
       currVal = curr.bencanaCount
       prevVal = prev.bencanaCount
-    } else if (labelLower.includes('krisis')) {
-      currVal = curr.krisisCount
-      prevVal = prev.krisisCount
+    } else if (labelLower.includes('emergency') && !labelLower.includes('non')) {
+      currVal = curr.emergencyCount ?? curr.krisisCount
+      prevVal = prev.emergencyCount ?? prev.krisisCount
+    } else if (labelLower.includes('non emergency')) {
+      currVal = curr.nonEmergencyCount ?? 0
+      prevVal = prev.nonEmergencyCount ?? 0
+    } else if (labelLower.includes('non category')) {
+      currVal = curr.nonCategoryCount ?? 0
+      prevVal = prev.nonCategoryCount ?? 0
+    } else if (labelLower.includes('personil') || labelLower.includes('pusat')) {
+      currVal = 450
+      prevVal = 450
     } else {
       currVal = curr.bencanaKorban
       prevVal = prev.bencanaKorban
@@ -1335,6 +1400,51 @@ export default function DashboardKejadianPage() {
     }
     return getTopItemsAndOthers(data?.wilayah)
   }, [data?.wilayah, selectedRegions, effectiveMarkers])
+
+  // 1. Sebaran Panggilan Berdasarkan Extension Panggilan
+  const formattedExtension = useMemo(() => {
+    if (selectedRegions.length > 0 || (effectiveMarkers && effectiveMarkers.length > 0)) {
+      const counts: Record<string, number> = {}
+      effectiveMarkers.forEach((m) => {
+        const raw = m.raw_psc || (m as any)
+        const ext = raw?.extension || (raw?.id_extension ? `Ext ${raw.id_extension}` : '') || (m.kecamatan ? `Ext ${m.kecamatan}` : 'Ext 119')
+        counts[ext] = (counts[ext] || 0) + 1
+      })
+      const items = Object.entries(counts).map(([nama, jumlah]) => ({ nama, jumlah }))
+      if (items.length > 0) return getTopItemsAndOthers(items)
+    }
+    return getTopItemsAndOthers((data as any)?.sebaran_extension)
+  }, [data, selectedRegions, effectiveMarkers])
+
+  // 2. Sebaran Panggilan Berdasarkan Sumber Panggilan
+  const formattedSumberPanggilan = useMemo(() => {
+    if (selectedRegions.length > 0 || (effectiveMarkers && effectiveMarkers.length > 0)) {
+      const counts: Record<string, number> = {}
+      effectiveMarkers.forEach((m) => {
+        const raw = m.raw_psc || (m as any)
+        const sumber = raw?.sumber_panggilan || (raw?.id_sumber_panggilan ? `Sumber ${raw.id_sumber_panggilan}` : '') || 'Masyarakat (119)'
+        counts[sumber] = (counts[sumber] || 0) + 1
+      })
+      const items = Object.entries(counts).map(([nama, jumlah]) => ({ nama, jumlah }))
+      if (items.length > 0) return getTopItemsAndOthers(items)
+    }
+    return getTopItemsAndOthers((data as any)?.sebaran_sumber)
+  }, [data, selectedRegions, effectiveMarkers])
+
+  // 3. Sebaran Panggilan Berdasarkan Spesifikasi Layanan (Trauma KLL, Non-Trauma, Keperawatan, dll.)
+  const formattedSpesifikasiLayanan = useMemo(() => {
+    if (selectedRegions.length > 0 || (effectiveMarkers && effectiveMarkers.length > 0)) {
+      const counts: Record<string, number> = {}
+      effectiveMarkers.forEach((m) => {
+        const raw = m.raw_psc || (m as any)
+        const spesifikasi = raw?.spesifikasi_layanan || raw?.kategori_layanan || m.jenis_bencana || 'Trauma (KLL)'
+        counts[spesifikasi] = (counts[spesifikasi] || 0) + 1
+      })
+      const items = Object.entries(counts).map(([nama, jumlah]) => ({ nama, jumlah }))
+      if (items.length > 0) return getTopItemsAndOthers(items)
+    }
+    return getTopItemsAndOthers((data as any)?.sebaran_spesifikasi || data?.jenis_bencana)
+  }, [data, selectedRegions, effectiveMarkers])
 
   const categoryChartData = useMemo(() => {
     let alam = 0
@@ -1455,27 +1565,75 @@ export default function DashboardKejadianPage() {
       catatan: 'Data dikumpulkan secara berkala berdasarkan laporan lapangan.',
     }
 
-    if (label === 'Total Kejadian') {
+    if (label === 'Total Kejadian' || label === 'Total Panggilan 119') {
       return {
-        title: `RINCIAN SEBARAN KEJADIAN BENCANA - ${region}`,
-        description: `Menampilkan rincian dari seluruh laporan kejadian bencana di wilayah ${region}.`,
-        variabel: 'Kejadian Bencana Alam & Non-Alam',
-        sumber: 'Pusdatin Kemenkes, BNPB, & BPBD',
-        frekuensi: 'Real-time (Setiap Laporan Baru)',
+        title: `RINCIAN SEBARAN PANGGILAN 119 - ${region}`,
+        description: `Menampilkan rincian dari seluruh volume panggilan darurat 119 di wilayah ${region}.`,
+        variabel: 'Panggilan Kedaruratan 119',
+        sumber: 'SPGDT 119 Kemenkes RI',
+        frekuensi: 'Real-time (Setiap Panggilan Masuk)',
         cakupan: region,
-        catatan: 'Catatan Teknis: Pemantauan terpadu kejadian bencana nasional yang berdampak pada aksesibilitas layanan kesehatan, korban jiwa, maupun krisis kesehatan lainnya.',
+        catatan: 'Catatan Teknis: Pemantauan terpadu panggilan masuk 119 dari seluruh kanal dan dispatch posko.',
       }
     }
 
-    if (label === 'Krisis Kesehatan') {
+    if (label === 'Kasus Emergency') {
       return {
-        title: `RINCIAN KRISIS KESEHATAN AKIBAT BENCANA - ${region}`,
-        description: `Menampilkan rincian laporan bencana yang berstatus krisis kesehatan di wilayah ${region}.`,
-        variabel: 'Dampak Krisis Kesehatan Terhadap Masyarakat',
-        sumber: 'Puskesmas, Dinas Kesehatan, & PSC 119',
-        frekuensi: 'Real-time (Setiap Laporan Baru)',
+        title: `RINCIAN KASUS EMERGENCY PSC 119 - ${region}`,
+        description: `Menampilkan rincian panggilan dengan kategori gawat darurat (Emergency) di wilayah ${region}.`,
+        variabel: 'Kasus Emergency Medis & Trauma',
+        sumber: 'SPGDT 119 & Unit Ambulans PSC',
+        frekuensi: 'Real-time',
         cakupan: region,
-        catatan: 'Catatan Teknis: Kejadian bencana yang mengakibatkan status darurat kesehatan atau membutuhkan mobilisasi bantuan darurat kesehatan dari tim regional/pusat.',
+        catatan: 'Catatan Teknis: Panggilan yang memerlukan intervensi medis pra-faskes dan evakuasi segera.',
+      }
+    }
+
+    if (label === 'Non Emergency') {
+      return {
+        title: `RINCIAN PANGGILAN NON EMERGENCY PSC 119 - ${region}`,
+        description: `Menampilkan rincian panggilan non-gawat darurat (konsultasi kesehatan, informasi) di wilayah ${region}.`,
+        variabel: 'Panggilan Non Emergency',
+        sumber: 'SPGDT 119 Kemenkes RI',
+        frekuensi: 'Real-time',
+        cakupan: region,
+        catatan: 'Catatan Teknis: Layanan tele-konsultasi, informasi ambulans terencana, dan faskes rujukan.',
+      }
+    }
+
+    if (label === 'Non Category') {
+      return {
+        title: `RINCIAN PANGGILAN NON CATEGORY PSC 119 - ${region}`,
+        description: `Menampilkan rincian panggilan non-kategori / lainnya di wilayah ${region}.`,
+        variabel: 'Panggilan Non Category',
+        sumber: 'SPGDT 119 Kemenkes RI',
+        frekuensi: 'Real-time',
+        cakupan: region,
+        catatan: 'Catatan Teknis: Panggilan tes sambungan, panggilan tak terjawab/drop, atau panggilan lain.',
+      }
+    }
+
+    if (label === 'Armada Ambulans') {
+      return {
+        title: `RINCIAN DISPATCH ARMADA AMBULANS - ${region}`,
+        description: `Menampilkan rincian pergerakan armada ambulans gadar dan transport di wilayah ${region}.`,
+        variabel: 'Unit Armada Ambulans Aktif',
+        sumber: 'Sistem Dispatch Ambulans PSC 119',
+        frekuensi: 'Real-time',
+        cakupan: region,
+        catatan: 'Catatan Teknis: Mobilisasi ambulans siaga terhubung SISRUTE ke rumah sakit rujukan.',
+      }
+    }
+
+    if (label === 'Personil PSC' || label === 'Pusat PSC Terkoneksi') {
+      return {
+        title: `RINCIAN PERSONIL OPERASIONAL PSC 119 - ${region}`,
+        description: `Menampilkan data personil dokter, perawat, call taker, dan kru ambulans di wilayah ${region}.`,
+        variabel: 'Personil Siaga PSC 119',
+        sumber: 'Direktorat Pelayanan Kesehatan Primer Kemenkes',
+        frekuensi: 'Berkala',
+        cakupan: region,
+        catatan: 'Catatan Teknis: Tenaga kesehatan terlatih BTCLS/ATLS dan tim evakuasi pra-faskes 119.',
       }
     }
 
@@ -2372,11 +2530,11 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           ))
           : [
             { label: 'Total Panggilan 119', value: effectiveSummary?.total_bencana ?? 0, color: 'text-teal-700', icon: Phone, bg: 'bg-teal-50/80' },
-            { label: 'Kasus Emergency', value: effectiveSummary?.total_krisis ?? 0, color: 'text-red-600', icon: AlertTriangle, bg: 'bg-red-50/80' },
-            { label: 'Kasus Trauma (KLL)', value: effectiveSummary?.total_meninggal ?? 0, color: 'text-amber-600', icon: ShieldAlert, bg: 'bg-amber-50/80' },
-            { label: 'Kasus Non-Trauma', value: effectiveSummary?.total_luka ?? 0, color: 'text-blue-600', icon: HeartPulse, bg: 'bg-blue-50/80' },
+            { label: 'Kasus Emergency', value: (effectiveSummary?.total_emergency !== undefined && effectiveSummary.total_emergency > 0 ? effectiveSummary.total_emergency : effectiveSummary?.total_krisis) ?? 0, color: 'text-red-600', icon: AlertTriangle, bg: 'bg-red-50/80' },
+            { label: 'Non Emergency', value: (effectiveSummary?.total_non_emergency !== undefined && effectiveSummary.total_non_emergency > 0 ? effectiveSummary.total_non_emergency : effectiveSummary?.total_meninggal) ?? 0, color: 'text-amber-600', icon: ShieldAlert, bg: 'bg-amber-50/80' },
+            { label: 'Non Category', value: (effectiveSummary?.total_non_category !== undefined && effectiveSummary.total_non_category > 0 ? effectiveSummary.total_non_category : effectiveSummary?.total_luka) ?? 0, color: 'text-blue-600', icon: HeartPulse, bg: 'bg-blue-50/80' },
             { label: 'Armada Ambulans', value: effectiveSummary?.total_pengungsi ?? 0, color: 'text-indigo-650', icon: Ambulance, bg: 'bg-indigo-50/80' },
-            { label: 'Pusat PSC Terkoneksi', value: 450, color: 'text-emerald-700', icon: Activity, bg: 'bg-emerald-50/80' },
+            { label: 'Personil PSC', value: effectiveSummary?.total_personil ?? 450, color: 'text-emerald-700', icon: Users, bg: 'bg-emerald-50/80' },
           ].map((card, idx) => {
             const Icon = card.icon
             const trend = getDynamicTrend(card.label)
@@ -2489,7 +2647,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
 
       {/* Trend Section ( Kejadian & Korban ) */}
       <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        {/* Trend Kejadian Bencana & Krisis Kesehatan */}
+        {/* Trend Kategori Panggilan */}
         <article
           className="border border-[#cdcdcd] bg-white p-5 shadow-[0_10px_30px_rgba(15,118,110,0.04)]"
           style={{
@@ -2500,10 +2658,10 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           }}
         >
           <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase mb-1 tracking-wide">
-            TREND PANGGILAN KEDARURATAN PSC 119 TAHUN {targetYear}
+            TREND KATEGORI PANGGILAN PSC 119 TAHUN {targetYear}
           </h3>
           <p className="text-sm sm:text-base text-slate-600 font-normal mb-2 leading-relaxed">
-            Grafik perbandingan volume panggilan masuk kedaruratan dan kasus emergency bulanan.
+            Grafik perbandingan volume panggilan kategori Emergency, Non Emergency, dan Non Category bulanan.
           </p>
           <div className="mb-4 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2.5 py-1 text-xs font-bold text-[#047D78] max-w-full truncate">
             <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
@@ -2541,8 +2699,9 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                     }}
                   />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', marginTop: '10px' }} />
-                  <Bar dataKey="bencanaCount" name="Total Panggilan 119" fill="#0f8f96" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="krisisCount" name="Kasus Emergency" fill="#e11d48" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="emergencyCount" name="Emergency" fill="#e11d48" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="nonEmergencyCount" name="Non Emergency" fill="#0f8f96" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="nonCategoryCount" name="Non Category" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -2550,7 +2709,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
 
         </article>
 
-        {/* Trend Korban Bencana & Krisis Kesehatan */}
+        {/* Trend Bulanan Panggilan */}
         <article
           className="border border-[#cdcdcd] bg-white p-5 shadow-[0_10px_30px_rgba(15,118,110,0.04)]"
           style={{
@@ -2561,10 +2720,10 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           }}
         >
           <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase mb-1 tracking-wide">
-            TREND PENANGANAN KASUS MEDIS & AMBULANS TAHUN {targetYear}
+            TREND BULANAN PANGGILAN PSC 119 TAHUN {targetYear}
           </h3>
           <p className="text-sm sm:text-base text-slate-600 font-normal mb-2 leading-relaxed">
-            Grafik perbandingan kasus medis gawat darurat dan mobilisasi unit armada ambulans PSC 119 bulanan.
+            Grafik tren total volume panggilan PSC 119 per bulan.
           </p>
           <div className="mb-4 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2.5 py-1 text-xs font-bold text-[#047D78] max-w-full truncate">
             <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
@@ -2605,18 +2764,9 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                   <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', marginTop: '10px' }} />
                   <Line
                     type="monotone"
-                    dataKey="bencanaKorban"
-                    name="Kasus Medis"
+                    dataKey="bencanaCount"
+                    name="Total Panggilan"
                     stroke="#0f8f96"
-                    strokeWidth={3}
-                    activeDot={{ r: 6 }}
-                    dot={{ r: 4, strokeWidth: 2 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="krisisKorban"
-                    name="Ambulans Bergerak"
-                    stroke="#4f46e5"
                     strokeWidth={3}
                     activeDot={{ r: 6 }}
                     dot={{ r: 4, strokeWidth: 2 }}
@@ -2629,20 +2779,20 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
         </article>
       </section>
 
-      {/* Donut Charts & Disease Risks Grid */}
+      {/* Donut Charts Grid */}
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:grid-cols-3">
-        {/* Pie Chart 1: Jenis Bencana */}
+        {/* Pie Chart 1: Sebaran Extension Panggilan */}
         <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,118,110,0.04)] flex flex-col justify-between">
           <div>
-            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">DISTRIBUSI KATEGORI LAYANAN 119</h3>
-            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Persentase panggilan berdasarkan kategori layanan medis.</p>
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">SEBARAN PANGGILAN BERDASARKAN EXTENSION PANGGILAN PSC 119 TAHUN {targetYear}</h3>
+            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Panggilan berdasarkan extension dari setiap PSC.</p>
             <div className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2.5 py-1 text-xs font-bold text-[#047D78] max-w-full truncate">
               <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
               <span className="truncate">Wilayah: {activeRegionBadgeLabel}</span>
             </div>
 
             {(() => {
-              const totalCount = formattedJenisBencana.reduce((sum, item) => sum + (item.jumlah || 0), 0)
+              const totalCount = formattedExtension.reduce((sum, item) => sum + (item.jumlah || 0), 0)
               return (
                 <div>
                   <div className="relative h-[200px] sm:h-[220px] w-full flex items-center justify-center">
@@ -2650,7 +2800,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                       <div className="h-full w-full flex items-center justify-center animate-pulse">
                         <div className="h-36 w-36 rounded-full border-[18px] border-slate-100 flex items-center justify-center" />
                       </div>
-                    ) : isDbEmpty || formattedJenisBencana.length === 0 ? (
+                    ) : isDbEmpty || formattedExtension.length === 0 ? (
                       <div className="flex h-full w-full items-center justify-center rounded-2xl bg-slate-50/50 border border-dashed border-slate-200">
                         <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tidak Ada Data</p>
                       </div>
@@ -2659,7 +2809,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                         <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                           <PieChart>
                             <Pie
-                              data={formattedJenisBencana}
+                              data={formattedExtension}
                               cx="50%"
                               cy="50%"
                               innerRadius={60}
@@ -2668,13 +2818,13 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                               dataKey="jumlah"
                               nameKey="nama"
                             >
-                              {formattedJenisBencana.map((entry, index) => (
+                              {formattedExtension.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                               ))}
                             </Pie>
                             <Tooltip
                               contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '12px', fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-                              formatter={(val: any, name: any) => [`${val} Kejadian`, name]}
+                              formatter={(val: any, name: any) => [`${val} Panggilan`, name]}
                             />
                           </PieChart>
                         </ResponsiveContainer>
@@ -2686,9 +2836,9 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                   </div>
 
                   {/* Top 4 Breakdown Legend */}
-                  {formattedJenisBencana.length > 0 && !isDbEmpty && (
+                  {formattedExtension.length > 0 && !isDbEmpty && (
                     <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
-                      {formattedJenisBencana.slice(0, 4).map((item, idx) => {
+                      {formattedExtension.slice(0, 4).map((item, idx) => {
                         const pct = totalCount > 0 ? Math.round((item.jumlah / totalCount) * 100) : 0
                         const color = COLORS[idx % COLORS.length]
                         return (
@@ -2709,18 +2859,18 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           </div>
         </article>
 
-        {/* Pie Chart 2: Kategori Bencana */}
+        {/* Pie Chart 2: Sebaran Sumber Panggilan */}
         <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,118,110,0.04)] flex flex-col justify-between">
           <div>
-            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">DISTRIBUSI TRIASE GAWAT DARURAT</h3>
-            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Persentase panggilan Emergency vs Non-Emergency.</p>
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">SEBARAN PANGGILAN BERDASARKAN SUMBER PANGGILAN PSC 119 TAHUN {targetYear}</h3>
+            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Panggilan berdasarkan sumber panggilan dari setiap PSC.</p>
             <div className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2.5 py-1 text-xs font-bold text-[#047D78] max-w-full truncate">
               <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
               <span className="truncate">Wilayah: {activeRegionBadgeLabel}</span>
             </div>
 
             {(() => {
-              const totalCategory = categoryChartData.reduce((sum, item) => sum + (item.jumlah || 0), 0)
+              const totalSumber = formattedSumberPanggilan.reduce((sum, item) => sum + (item.jumlah || 0), 0)
               return (
                 <div>
                   <div className="relative h-[200px] sm:h-[220px] w-full flex items-center justify-center">
@@ -2728,7 +2878,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                       <div className="h-full w-full flex items-center justify-center animate-pulse">
                         <div className="h-36 w-36 rounded-full border-[18px] border-slate-100 flex items-center justify-center" />
                       </div>
-                    ) : isDbEmpty || isCategoryDataEmpty ? (
+                    ) : isDbEmpty || formattedSumberPanggilan.length === 0 ? (
                       <div className="flex h-full w-full items-center justify-center rounded-2xl bg-slate-50/50 border border-dashed border-slate-200">
                         <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tidak Ada Data</p>
                       </div>
@@ -2737,7 +2887,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                         <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                           <PieChart>
                             <Pie
-                              data={categoryChartData}
+                              data={formattedSumberPanggilan}
                               cx="50%"
                               cy="50%"
                               innerRadius={60}
@@ -2746,34 +2896,34 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                               dataKey="jumlah"
                               nameKey="nama"
                             >
-                              {categoryChartData.map((entry, index) => (
+                              {formattedSumberPanggilan.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
                               ))}
                             </Pie>
                             <Tooltip
                               contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '12px', fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-                              formatter={(val: any, name: any) => [`${val} Laporan`, name]}
+                              formatter={(val: any, name: any) => [`${val} Panggilan`, name]}
                             />
                           </PieChart>
                         </ResponsiveContainer>
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                          <span className="text-2xl sm:text-3xl font-black text-slate-900 leading-none">{totalCategory}</span>
+                          <span className="text-2xl sm:text-3xl font-black text-slate-900 leading-none">{totalSumber}</span>
                         </div>
                       </>
                     )}
                   </div>
 
-                  {/* Category Breakdown Legend */}
-                  {categoryChartData.length > 0 && !isCategoryDataEmpty && (
-                    <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-xs">
-                      {categoryChartData.map((item, idx) => {
-                        const pct = totalCategory > 0 ? Math.round((item.jumlah / totalCategory) * 100) : 0
+                  {/* Sumber Breakdown Legend */}
+                  {formattedSumberPanggilan.length > 0 && !isDbEmpty && (
+                    <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
+                      {formattedSumberPanggilan.map((item, idx) => {
+                        const pct = totalSumber > 0 ? Math.round((item.jumlah / totalSumber) * 100) : 0
                         const color = CATEGORY_COLORS[idx % CATEGORY_COLORS.length]
                         return (
                           <div key={idx} className="flex items-center justify-between gap-1 p-1.5 rounded-lg bg-slate-50 border border-slate-100">
                             <span className="flex items-center gap-1.5 truncate text-slate-700 font-bold" title={item.nama}>
                               <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                              <span className="truncate">{item.nama.replace('Bencana ', '')}</span>
+                              <span className="truncate">{item.nama}</span>
                             </span>
                             <span className="text-slate-900 font-black shrink-0">{item.jumlah} <span className="text-[10px] text-slate-500 font-semibold">({pct}%)</span></span>
                           </div>
@@ -2787,18 +2937,18 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           </div>
         </article>
 
-        {/* Pie Chart 3: Wilayah Bencana */}
+        {/* Pie Chart 3: Sebaran Spesifikasi Layanan */}
         <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,118,110,0.04)] flex flex-col justify-between">
           <div>
-            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">SEBARAN PANGGILAN PER WILAYAH / PSC</h3>
-            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Distribusi volume panggilan darurat pada unit PSC & wilayah.</p>
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">SEBARAN PANGGILAN BERDASARKAN SPESIFIKASI LAYANAN PSC 119 TAHUN {targetYear}</h3>
+            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Panggilan berdasarkan spesifikasi layanan (trauma KLL, non trauma, keperawatan, dll.).</p>
             <div className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2.5 py-1 text-xs font-bold text-[#047D78] max-w-full truncate">
               <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
               <span className="truncate">Wilayah: {activeRegionBadgeLabel}</span>
             </div>
 
             {(() => {
-              const totalWilayah = formattedWilayah.reduce((sum, item) => sum + (item.jumlah || 0), 0)
+              const totalSpesifikasi = formattedSpesifikasiLayanan.reduce((sum, item) => sum + (item.jumlah || 0), 0)
               return (
                 <div>
                   <div className="relative h-[200px] sm:h-[220px] w-full flex items-center justify-center">
@@ -2806,7 +2956,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                       <div className="h-full w-full flex items-center justify-center animate-pulse">
                         <div className="h-36 w-36 rounded-full border-[18px] border-slate-100 flex items-center justify-center" />
                       </div>
-                    ) : isDbEmpty || !data?.wilayah || data.wilayah.length === 0 ? (
+                    ) : isDbEmpty || formattedSpesifikasiLayanan.length === 0 ? (
                       <div className="flex h-full w-full items-center justify-center rounded-2xl bg-slate-50/50 border border-dashed border-slate-200">
                         <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tidak Ada Data</p>
                       </div>
@@ -2815,7 +2965,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                         <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                           <PieChart>
                             <Pie
-                              data={formattedWilayah}
+                              data={formattedSpesifikasiLayanan}
                               cx="50%"
                               cy="50%"
                               innerRadius={60}
@@ -2824,28 +2974,28 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                               dataKey="jumlah"
                               nameKey="nama"
                             >
-                              {formattedWilayah.map((entry, index) => (
+                              {formattedSpesifikasiLayanan.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={COLORS[(index + 3) % COLORS.length]} />
                               ))}
                             </Pie>
                             <Tooltip
                               contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '12px', fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-                              formatter={(val: any, name: any) => [`${val} Kejadian`, name]}
+                              formatter={(val: any, name: any) => [`${val} Panggilan`, name]}
                             />
                           </PieChart>
                         </ResponsiveContainer>
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                          <span className="text-2xl sm:text-3xl font-black text-slate-900 leading-none">{totalWilayah}</span>
+                          <span className="text-2xl sm:text-3xl font-black text-slate-900 leading-none">{totalSpesifikasi}</span>
                         </div>
                       </>
                     )}
                   </div>
 
                   {/* Top 4 Breakdown Legend */}
-                  {formattedWilayah.length > 0 && !isDbEmpty && (
+                  {formattedSpesifikasiLayanan.length > 0 && !isDbEmpty && (
                     <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
-                      {formattedWilayah.slice(0, 4).map((item, idx) => {
-                        const pct = totalWilayah > 0 ? Math.round((item.jumlah / totalWilayah) * 100) : 0
+                      {formattedSpesifikasiLayanan.slice(0, 4).map((item, idx) => {
+                        const pct = totalSpesifikasi > 0 ? Math.round((item.jumlah / totalSpesifikasi) * 100) : 0
                         const color = COLORS[(idx + 3) % COLORS.length]
                         return (
                           <div key={idx} className="flex items-center justify-between gap-1.5 p-1.5 rounded-lg bg-slate-50 border border-slate-100">

@@ -57,6 +57,7 @@ export interface PscCallItem {
   longitude?: string | null
   telp?: string | null
   keterangan?: string | null
+  is_krisis?: number
 }
 
 export interface PscCenterItem {

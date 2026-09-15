@@ -73,22 +73,32 @@ export async function GET(req: Request) {
     const totalCount = pscJson.total_data || calls.length
 
     let totalEmergency = 0
+    let totalNonEmergency = 0
+    let totalNonCategory = 0
     let totalTrauma = 0
     let totalAmbulans = 0
     let totalSelesai = 0
 
     const kategoriCounts: Record<string, number> = {}
     const wilayahCounts: Record<string, number> = {}
+    const extensionCounts: Record<string, number> = {}
+    const sumberCounts: Record<string, number> = {}
+    const spesifikasiCounts: Record<string, number> = {}
 
     const markers = calls
       .filter(c => c.latitude && c.longitude && !isNaN(parseFloat(c.latitude)) && !isNaN(parseFloat(c.longitude)))
       .map((c, idx) => {
         const lat = parseFloat(c.latitude!)
         const lng = parseFloat(c.longitude!)
-        const isEmergency = (c.jenis_layanan || '').toLowerCase().includes('emergency')
+        const jenisLower = (c.jenis_layanan || '').toLowerCase()
+        const isEmergency = (jenisLower.includes('emergency') && !jenisLower.includes('non')) || ((c as any).is_krisis === 1 && !jenisLower.includes('non'))
+        const isNonEmergency = jenisLower.includes('non') && jenisLower.includes('emergency')
+        const isNonCategory = (jenisLower.includes('non') && (jenisLower.includes('cat') || jenisLower.includes('kat'))) || (!isEmergency && !isNonEmergency && Boolean(jenisLower))
         const isTrauma = (c.kategori_layanan || '').toLowerCase().includes('trauma')
 
         if (isEmergency) totalEmergency++
+        if (isNonEmergency) totalNonEmergency++
+        if (isNonCategory) totalNonCategory++
         if (isTrauma) totalTrauma++
         if (c.nomor_kendaraan || c.nama_petugas_ambulan) totalAmbulans++
         if ((c.status_penanganan_code || '').toLowerCase().includes('selesai')) totalSelesai++
@@ -99,10 +109,19 @@ export async function GET(req: Request) {
         const wil = c.provinsi || c.kabupaten || 'Nasional'
         wilayahCounts[wil] = (wilayahCounts[wil] || 0) + 1
 
+        const ext = c.extension || (c.id_extension ? `Ext ${c.id_extension}` : (c.nama_psc ? `Ext ${c.nama_psc}` : 'Ext 119'))
+        extensionCounts[ext] = (extensionCounts[ext] || 0) + 1
+
+        const sumber = c.sumber_panggilan || 'Masyarakat (119)'
+        sumberCounts[sumber] = (sumberCounts[sumber] || 0) + 1
+
+        const spesifikasi = c.spesifikasi_layanan || c.kategori_layanan || c.keluhan || 'Gawat Darurat 119'
+        spesifikasiCounts[spesifikasi] = (spesifikasiCounts[spesifikasi] || 0) + 1
+
         return {
           kode_trans: c.ticket_id || c.kode_pelaporan_panggilan || `PSC-${idx}`,
           tgl_kejadian: c.tgl_pelaporan_panggilan || c.tanggal_panggilan || '',
-          jenis_bencana: c.spesifikasi_layanan || c.kategori_layanan || c.keluhan || 'Gawat Darurat 119',
+          jenis_bencana: spesifikasi,
           kategori_bencana: isEmergency ? '1' : '2',
           lat,
           lng,
@@ -114,6 +133,10 @@ export async function GET(req: Request) {
           total_korban: 1,
           icon_file: isEmergency ? 'icon_krisis_red.png' : 'icon_krisis_yellow.png',
           raw_psc: c,
+          extension: ext,
+          sumber_panggilan: sumber,
+          spesifikasi_layanan: spesifikasi,
+          jenis_layanan: c.jenis_layanan || (isEmergency ? 'Emergency' : (isNonEmergency ? 'Non Emergency' : 'Non Category')),
         }
       })
 
@@ -125,19 +148,38 @@ export async function GET(req: Request) {
       .map(([nama, jumlah]) => ({ nama, jumlah }))
       .sort((a, b) => b.jumlah - a.jumlah)
 
+    const sebaran_extension = Object.entries(extensionCounts)
+      .map(([nama, jumlah]) => ({ nama, jumlah }))
+      .sort((a, b) => b.jumlah - a.jumlah)
+
+    const sebaran_sumber = Object.entries(sumberCounts)
+      .map(([nama, jumlah]) => ({ nama, jumlah }))
+      .sort((a, b) => b.jumlah - a.jumlah)
+
+    const sebaran_spesifikasi = Object.entries(spesifikasiCounts)
+      .map(([nama, jumlah]) => ({ nama, jumlah }))
+      .sort((a, b) => b.jumlah - a.jumlah)
+
     const payload = {
       success: true,
       summary: {
         total_bencana: totalCount,
         total_krisis: totalEmergency,
-        total_meninggal: totalTrauma,
-        total_luka: totalEmergency,
+        total_meninggal: totalNonEmergency > 0 ? totalNonEmergency : totalTrauma,
+        total_luka: totalNonCategory > 0 ? totalNonCategory : totalEmergency,
         total_hilang: 0,
         total_pengungsi: totalAmbulans,
         total_terdampak: totalCount,
+        total_emergency: totalEmergency,
+        total_non_emergency: totalNonEmergency,
+        total_non_category: totalNonCategory,
+        total_personil: 450,
       },
       jenis_bencana,
       wilayah,
+      sebaran_extension,
+      sebaran_sumber,
+      sebaran_spesifikasi,
       markers,
     }
 
