@@ -101,6 +101,10 @@ export async function GET(req: Request) {
     let calls: PscCallItem[] = []
     let totalCount = 0
     let totalPages = 1
+    let ambulanceTotalPages = 1
+    let rsTotalPages = 1
+    let personilTotalPages = 1
+    let pscTotalPages = 1
 
     if (callsSettled.status === 'fulfilled' && callsSettled.value.ok) {
       const pscJson = await callsSettled.value.json().catch(() => ({}))
@@ -110,10 +114,12 @@ export async function GET(req: Request) {
     }
 
     // Jika dataset memiliki banyak halaman (skala nasional/provinsi), ambil beberapa halaman representatif sepanjang tahun (Januari s.d September)
-    if (totalPages > 4 && !month) {
+    if (totalPages > 1 && (kode_psc || (totalPages > 4 && !month))) {
       try {
         const step = Math.max(1, Math.floor(totalPages / 6))
-        const samplePageIndices = [step, step * 2, step * 3, step * 4, step * 5, totalPages].filter(p => p > 1 && p <= totalPages)
+        const samplePageIndices = kode_psc
+          ? Array.from({ length: totalPages - 1 }, (_, index) => index + 2)
+          : [step, step * 2, step * 3, step * 4, step * 5, totalPages].filter(p => p > 1 && p <= totalPages)
         const extraCallsPromises = samplePageIndices.map(p => {
           const fd = new FormData()
           fd.append('tahun', tahun)
@@ -141,6 +147,7 @@ export async function GET(req: Request) {
       const pJson = await personilSettled.value.json().catch(() => ({}))
       rawPersonil = pJson.data || []
       totalPersonil = pJson.total_data || rawPersonil.length
+      personilTotalPages = Number(pJson.total_page || Math.ceil(totalPersonil / 100)) || 1
     }
 
     let rawAmbulance: any[] = []
@@ -149,6 +156,7 @@ export async function GET(req: Request) {
       const ambJson = await ambSettled.value.json().catch(() => ({}))
       rawAmbulance = ambJson.data || []
       totalAmbulans = ambJson.total_data || rawAmbulance.length
+      ambulanceTotalPages = Number(ambJson.total_page || Math.ceil(totalAmbulans / 100)) || 1
     }
 
     let rawRs: any[] = []
@@ -157,6 +165,7 @@ export async function GET(req: Request) {
       const rsJson = await rsSettled.value.json().catch(() => ({}))
       rawRs = rsJson.data || []
       totalRs = rsJson.total_data || rawRs.length
+      rsTotalPages = Number(rsJson.total_page || Math.ceil(totalRs / 100)) || 1
     }
 
     let rawPsc: any[] = []
@@ -165,6 +174,75 @@ export async function GET(req: Request) {
       const pscJsonCenters = await pscSettled.value.json().catch(() => ({}))
       rawPsc = pscJsonCenters.data || []
       totalPsc = pscJsonCenters.total_data || rawPsc.length
+      pscTotalPages = Number(pscJsonCenters.total_page || Math.ceil(totalPsc / 100)) || 1
+    }
+
+    // Saat admin/tamu memilih satu Kode PSC, ambil seluruh halaman dari
+    // endpoint pendukung agar data unit tidak berhenti di 100 item pertama.
+    if (kode_psc) {
+      const fetchRemainingPages = async (
+        endpoint: string,
+        pageCount: number,
+        buildForm: (form: FormData, page: number) => void,
+      ): Promise<any[]> => {
+        if (pageCount <= 1) return []
+
+        const pageNumbers = Array.from({ length: pageCount - 1 }, (_, index) => index + 2)
+        const pageResults: any[][] = []
+        const batchSize = 5
+
+        for (let index = 0; index < pageNumbers.length; index += batchSize) {
+          const batch = pageNumbers.slice(index, index + batchSize)
+          const results = await Promise.all(batch.map(async (page) => {
+            const form = new FormData()
+            buildForm(form, page)
+            const response = await fetch(`${PSC_API_BASE_URL}/${endpoint}`, {
+              method: 'POST',
+              headers,
+              body: form,
+              signal: controller.signal,
+            })
+            if (!response.ok) return []
+            const json = await response.json().catch(() => ({}))
+            return Array.isArray(json?.data) ? json.data : []
+          }))
+          pageResults.push(...results)
+        }
+
+        return pageResults.flat()
+      }
+
+      try {
+        const [extraAmbulance, extraRs, extraPersonil, extraPsc] = await Promise.all([
+          fetchRemainingPages('data-ambulan-psc', ambulanceTotalPages, (form, page) => {
+            form.append('kode_psc', kode_psc)
+            form.append('page', String(page))
+            form.append('per_page', '100')
+          }),
+          fetchRemainingPages('data-rumahsakit-sarana', rsTotalPages, (form, page) => {
+            form.append('kode_psc', kode_psc)
+            form.append('page', String(page))
+            form.append('per_page', '100')
+          }),
+          fetchRemainingPages('data-personil-psc', personilTotalPages, (form, page) => {
+            form.append('kode_psc', kode_psc)
+            form.append('page', String(page))
+            form.append('per_page', '100')
+          }),
+          fetchRemainingPages('data-psc', pscTotalPages, (form, page) => {
+            form.append('kode_psc', kode_psc)
+            form.append('page', String(page))
+            form.append('per_page', '100')
+          }),
+        ])
+
+        rawAmbulance.push(...extraAmbulance)
+        rawRs.push(...extraRs)
+        rawPersonil.push(...extraPersonil)
+        rawPsc.push(...extraPsc)
+      } catch (e) {
+        console.error('[bencana-stats] pagination data PSC error:', e)
+      }
     }
 
     // Filter panggilan berdasarkan bulan jika dipilih
