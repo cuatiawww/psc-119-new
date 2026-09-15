@@ -6,7 +6,6 @@ export const runtime = 'nodejs'
 
 const PSC_API_BASE_URL = process.env.PSC_API_BASE_URL || 'https://psc.kemkes.go.id/web_api/v1'
 const PSC_API_TOKEN = process.env.PSC_API_TOKEN || ''
-const MAX_RESPONSE_TIME_MINUTES = 180
 
 let cachedResponse: { timestamp: number; data: any; key: string } | null = null
 const CACHE_TTL_MS = 45000 // 45 detik cache TTL
@@ -174,7 +173,7 @@ export async function GET(req: Request) {
             const callSec = parseInt(callTimeParts[0], 10) * 3600 + parseInt(callTimeParts[1], 10) * 60 + (parseInt(callTimeParts[2], 10) || 0)
             const statusSec = parseInt(statusTimeParts[0], 10) * 3600 + parseInt(statusTimeParts[1], 10) * 60 + (parseInt(statusTimeParts[2], 10) || 0)
             const diffMin = (statusSec - callSec) / 60
-            if (diffMin > 0 && diffMin <= MAX_RESPONSE_TIME_MINUTES) {
+            if (diffMin > 0) {
               callResponseTime = parseFloat(diffMin.toFixed(1))
               responseTimeList.push(diffMin)
             }
@@ -449,7 +448,6 @@ export async function GET(req: Request) {
         total_personil: 450,
         total_layanan_ambulan_hari_ini: finalLayananAmbulanHariIni,
         total_ambulan_sedang_melayani_hari_ini: finalAmbulanSedangMelayani,
-        total_waktu_respons_dalam_batas: responseTimeList.length,
         waktu_respons_rata_rata: waktuResponsNumber,
         waktu_respons_label: `${waktuResponsNumber} Menit`,
       },

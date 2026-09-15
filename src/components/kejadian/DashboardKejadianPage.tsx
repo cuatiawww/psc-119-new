@@ -6,7 +6,6 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
-const MAX_RESPONSE_TIME_MINUTES = 180
 import {
   Activity,
   AlertTriangle,
@@ -131,7 +130,6 @@ type SummaryData = {
   total_personil?: number
   total_layanan_ambulan_hari_ini?: number
   total_ambulan_sedang_melayani_hari_ini?: number
-  total_waktu_respons_dalam_batas?: number
   waktu_respons_rata_rata?: number
   waktu_respons_label?: string
 }
@@ -637,7 +635,7 @@ export default function DashboardKejadianPage() {
             const callSec = parseInt(callTimeParts[0], 10) * 3600 + parseInt(callTimeParts[1], 10) * 60 + (parseInt(callTimeParts[2], 10) || 0)
             const statusSec = parseInt(statusTimeParts[0], 10) * 3600 + parseInt(statusTimeParts[1], 10) * 60 + (parseInt(statusTimeParts[2], 10) || 0)
             const diffMin = (statusSec - callSec) / 60
-            if (diffMin > 0 && diffMin <= MAX_RESPONSE_TIME_MINUTES) {
+            if (diffMin > 0) {
               responseTimes.push(diffMin)
             }
           }
@@ -660,7 +658,6 @@ export default function DashboardKejadianPage() {
       total_non_emergency,
       total_non_category,
       total_personil: data?.summary?.total_personil ?? 450,
-      total_waktu_respons_dalam_batas: responseTimes.length,
       waktu_respons_rata_rata: avgResponse,
       waktu_respons_label: `${avgResponse} Menit`,
     }
@@ -1487,7 +1484,7 @@ export default function DashboardKejadianPage() {
               const callSec = parseInt(callParts[0], 10) * 3600 + parseInt(callParts[1], 10) * 60 + (parseInt(callParts[2], 10) || 0)
               const statusSec = parseInt(statusParts[0], 10) * 3600 + parseInt(statusParts[1], 10) * 60 + (parseInt(statusParts[2], 10) || 0)
               const diffMin = (statusSec - callSec) / 60
-              if (diffMin > 0 && diffMin <= MAX_RESPONSE_TIME_MINUTES) {
+              if (diffMin > 0) {
                 rt = parseFloat(diffMin.toFixed(1))
               }
             }
@@ -1893,8 +1890,8 @@ export default function DashboardKejadianPage() {
         const rs = (m as any).rumahsakit_rujukan || raw?.rumahsakit_rujukan || 'RSUD Terdekat'
         const armada = m.nomor_kendaraan || raw?.nomor_kendaraan || 'F 119 PSC'
         const petugas = m.nama_petugas_ambulan || raw?.nama_petugas_ambulan || 'Tim Dispatcher'
-        const respTime = m.response_time_minutes ?? 6.5
-        const isSpmPass = respTime <= 15
+        const respTime = m.response_time_minutes ?? null
+        const isSpmPass = typeof respTime === 'number' && respTime > 0 && respTime <= 15
 
         return {
           no: idx + 1,
@@ -3027,7 +3024,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
       {/* Summary Cards Grid */}
       <section className="flex w-full overflow-x-auto gap-4 pb-3.5 snap-x snap-mandatory scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 sm:pb-0 sm:overflow-visible">
         {loading
-          ? Array.from({ length: 8 }).map((_, idx) => (
+          ? Array.from({ length: 7 }).map((_, idx) => (
             <div
               key={idx}
               className="flex min-h-[128px] w-[280px] sm:w-full shrink-0 snap-start items-center gap-3 border border-[#bedbda] bg-white px-4 py-3 shadow-[0_6px_18px_rgba(20,120,116,0.06)] rounded-2xl animate-pulse"
@@ -3053,7 +3050,6 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
             { label: 'Non Category', value: (effectiveSummary?.total_non_category !== undefined && effectiveSummary.total_non_category > 0 ? effectiveSummary.total_non_category : effectiveSummary?.total_luka) ?? 0, color: 'text-blue-600', icon: HeartPulse, bg: 'bg-blue-50/80' },
             { label: 'Armada Ambulans', value: effectiveSummary?.total_pengungsi ?? 0, color: 'text-indigo-650', icon: Ambulance, bg: 'bg-indigo-50/80' },
             { label: 'Personil PSC', value: effectiveSummary?.total_personil ?? 450, color: 'text-emerald-700', icon: Users, bg: 'bg-emerald-50/80' },
-            { label: 'Respons <=180 Menit', value: effectiveSummary?.total_waktu_respons_dalam_batas ?? 0, unit: 'Kasus', color: 'text-emerald-700', icon: CheckCircle2, bg: 'bg-emerald-50/80' },
             {
               label: 'Waktu Respons PSC',
               value: effectiveSummary?.waktu_respons_rata_rata ?? 8.4,
@@ -4542,6 +4538,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                             <>
                               <th className="py-3 px-3.5">ID Tiket</th>
                               <th className="py-3 px-3.5">Waktu Laporan</th>
+                              <th className="py-3 px-3.5">Response Time</th>
                               <th className="py-3 px-3.5">Pelapor / Pasien</th>
                               <th className="py-3 px-3.5">Kategori Layanan</th>
                               <th className="py-3 px-3.5">Spesifikasi Kasus Medis</th>
@@ -4555,7 +4552,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                       <tbody className="divide-y divide-slate-100">
                         {paginatedRows.length === 0 ? (
                           <tr>
-                            <td colSpan={9} className="py-12 text-center text-xs text-slate-400 italic">
+                            <td colSpan={activeDetailCard === 'Personil PSC' ? 9 : activeDetailCard === 'Armada Ambulans' || activeDetailCard === 'Waktu Respons PSC' ? 8 : 10} className="py-12 text-center text-xs text-slate-400 italic">
                               Tidak ada data yang sesuai dengan filter pencarian &quot;{modalSearchQuery}&quot;.
                             </td>
                           </tr>
@@ -4664,6 +4661,13 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                                   <span className="font-bold text-slate-800">{r.jam}</span>
                                   <span className="text-slate-400">{r.tanggal}</span>
                                 </div>
+                              </td>
+                              <td className="py-3 px-3.5">
+                                {r.respTime !== null && r.respTime > 0 ? (
+                                  <span className="text-sm font-black text-cyan-700">{r.respTime} <span className="text-[10px] font-bold">Mnt</span></span>
+                                ) : (
+                                  <span className="text-slate-400">-</span>
+                                )}
                               </td>
                               <td className="py-3 px-3.5 font-bold text-slate-800">{r.pelapor}</td>
                               <td className="py-3 px-3.5">
