@@ -9,7 +9,6 @@ import { useAuthStore } from '@/lib/authStore'
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
 import {
   Bell,
-  Brain,
   ChevronDown,
   ChevronRight,
   Download,
@@ -24,7 +23,6 @@ import {
   RefreshCw,
   Clock,
   LayoutGrid,
-  Network,
   CheckCircle2,
   ExternalLink,
   AlertTriangle,
@@ -76,30 +74,6 @@ const sidebarMenu: SidebarMenuGroup[] = [
     items: [
       { label: 'DASHBOARD PSC 119', href: '/', icon: Flame },
       { label: 'UNDUH LAPORAN PSC 119', href: '/unduh-laporan', icon: Download },
-      { label: 'INFOGRAFIS AI (PDF)', href: '/infografis-ai', icon: FileText },
-    ],
-  },
-  {
-    title: 'MONITORING & NLP',
-    items: [
-      { 
-        label: 'CRAWLING MEDIA MONITORING', 
-        href: process.env.NEXT_PUBLIC_MEDIA_MONITORING_URL || '#', 
-        icon: Newspaper,
-        isExternal: true
-      },
-      { 
-        label: 'DATA MODELING NLP', 
-        href: process.env.NEXT_PUBLIC_NLP_URL || '#', 
-        icon: Brain,
-        isExternal: true
-      },
-    ],
-  },
-  {
-    title: 'TENTANG DASHBOARD',
-    items: [
-      { label: 'INTEROPERABILITAS', href: '/interoperabilitas', icon: Network },
     ],
   },
 ]
@@ -220,7 +194,6 @@ export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => ({
     'DASHBOARD PSC 119': true,
     'PANTAUAN': true,
-    'TENTANG DASHBOARD': true,
   }))
 
   const toggleGroup = (title: string) => {
