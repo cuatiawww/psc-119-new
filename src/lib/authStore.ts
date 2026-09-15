@@ -82,8 +82,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     const kabName = (centerData?.kabupaten || '').trim()
     const namaPsc = centerData?.nama_psc || `PSC 119 ${cleanKode}`
 
+    const rawId = Number(centerData?.id)
     const unitUser: User = {
-      id_user: centerData?.id || 9287,
+      id_user: Number.isFinite(rawId) && rawId > 0 ? rawId : 9287,
       username: cleanKode,
       email: `${cleanKode.toLowerCase()}@psc119.kemkes.go.id`,
       nama_lengkap: namaPsc,
