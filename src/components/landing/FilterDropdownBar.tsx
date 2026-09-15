@@ -7,7 +7,7 @@ import { buildRegionsUrl } from '@/lib/utils/api'
 
 type FilterItem = {
   id: string
-  icon: 'globe' | 'pin' | 'building' | 'calendar'
+  icon: 'globe' | 'pin' | 'building' | 'calendar' | 'filter'
   sublabel: string
   defaultValue: string
   options: Array<{ value: string; label: string }>
@@ -19,6 +19,7 @@ export type FilterSummary = {
   provinsi: string
   kabkota: string
   tahun: string
+  idExtension: string
   startDate?: string
   endDate?: string
 }
@@ -27,6 +28,7 @@ type FilterDropdownBarProps = {
   onSummaryChange?: (summary: FilterSummary) => void
   selectedProvinceName?: string | null
   selectedKabupatenName?: string | null
+  extensionOptions?: Array<{ value: string; label: string }>
 }
 
 type RegionOption = {
@@ -40,12 +42,14 @@ const iconStyles: Record<FilterItem['icon'], { bg: string; color: string }> = {
   pin: { bg: 'bg-[#E6F1FB]', color: 'text-[#185FA5]' },
   building: { bg: 'bg-[#EEEDFE]', color: 'text-[#534AB7]' },
   calendar: { bg: 'bg-[#FDF2F8]', color: 'text-[#DB2777]' },
+  filter: { bg: 'bg-[#FFF4E5]', color: 'text-[#B45309]' },
 }
 
 function FilterIcon({ icon, className }: { icon: FilterItem['icon']; className?: string }) {
   if (icon === 'globe') return <Globe className={className} />
   if (icon === 'pin') return <MapPin className={className} />
   if (icon === 'building') return <Building2 className={className} />
+  if (icon === 'filter') return <SlidersHorizontal className={className} />
   return <Calendar className={className} />
 }
 
@@ -78,7 +82,12 @@ const MONTH_NAMES = [
   { value: '12', label: 'Desember' },
 ]
 
-export default function FilterDropdownBar({ onSummaryChange, selectedProvinceName, selectedKabupatenName }: FilterDropdownBarProps = {}) {
+export default function FilterDropdownBar({
+  onSummaryChange,
+  selectedProvinceName,
+  selectedKabupatenName,
+  extensionOptions = [],
+}: FilterDropdownBarProps = {}) {
   const userScope = useAuthStore((state) => state.user?.wilayah_scope)
   const isScoped = hasValidScopedMode(userScope)
 
@@ -137,6 +146,15 @@ export default function FilterDropdownBar({ onSummaryChange, selectedProvinceNam
             : dynamicKabkota,
         },
         {
+          id: 'extension',
+          icon: 'filter',
+          sublabel: 'Extension',
+          defaultValue: 'semua-extension',
+          options: extensionOptions.length > 0
+            ? extensionOptions
+            : [{ value: 'semua-extension', label: 'Semua Extension' }],
+        },
+        {
           id: 'tahun',
           icon: 'calendar',
           sublabel: 'Rentang Waktu',
@@ -192,6 +210,15 @@ export default function FilterDropdownBar({ onSummaryChange, selectedProvinceNam
           options: kabupatenOptions,
         },
         {
+          id: 'extension',
+          icon: 'filter',
+          sublabel: 'Extension',
+          defaultValue: 'semua-extension',
+          options: extensionOptions.length > 0
+            ? extensionOptions
+            : [{ value: 'semua-extension', label: 'Semua Extension' }],
+        },
+        {
           id: 'tahun',
           icon: 'calendar',
           sublabel: 'Rentang Waktu',
@@ -208,7 +235,7 @@ export default function FilterDropdownBar({ onSummaryChange, selectedProvinceNam
         label: opt.label.toUpperCase()
       }))
     }))
-  }, [isScoped, userScope, dynamicProvinces, dynamicKabkota, loadingProvinces, loadingKabkota])
+  }, [isScoped, userScope, dynamicProvinces, dynamicKabkota, loadingProvinces, loadingKabkota, extensionOptions])
 
   const defaultSelected = useMemo(() => {
     if (!isScoped) {
@@ -216,6 +243,7 @@ export default function FilterDropdownBar({ onSummaryChange, selectedProvinceNam
         cakupan: 'nasional',
         provinsi: 'semua-provinsi',
         kabkota: 'semua-kabkota',
+        extension: 'semua-extension',
         tahun: '2026',
       }
     }
@@ -229,6 +257,7 @@ export default function FilterDropdownBar({ onSummaryChange, selectedProvinceNam
       cakupan: cakupanValue,
       provinsi: provinsiValue,
       kabkota: kabupatenValue,
+      extension: 'semua-extension',
       tahun: '2026',
     }
   }, [isScoped, userScope])
@@ -279,6 +308,7 @@ export default function FilterDropdownBar({ onSummaryChange, selectedProvinceNam
                 cakupan: 'kabupaten-kota',
                 provinsi: nextProv,
                 kabkota: foundKab.value,
+                extension: selected.extension || 'semua-extension',
                 tahun: selected.tahun || '2026',
               })
             } else {
@@ -294,6 +324,7 @@ export default function FilterDropdownBar({ onSummaryChange, selectedProvinceNam
               cakupan: 'provinsi',
               provinsi: nextProv,
               kabkota: 'semua-kabkota',
+              extension: selected.extension || 'semua-extension',
               tahun: selected.tahun || '2026',
             })
           }
@@ -303,11 +334,12 @@ export default function FilterDropdownBar({ onSummaryChange, selectedProvinceNam
           cakupan: 'nasional',
           provinsi: 'semua-provinsi',
           kabkota: 'semua-kabkota',
+          extension: selected.extension || 'semua-extension',
           tahun: selected.tahun || '2026',
         })
       }
     }
-  }, [dynamicKabkota, dynamicProvinces, selectedKabupatenName, selectedProvinceName, selected.tahun])
+  }, [dynamicKabkota, dynamicProvinces, selectedKabupatenName, selectedProvinceName, selected.tahun, selected.extension])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -460,6 +492,7 @@ export default function FilterDropdownBar({ onSummaryChange, selectedProvinceNam
       provinsi: provOpt ? provOpt.label : selected.provinsi || 'semua-provinsi',
       kabkota: kabOpt ? kabOpt.label : selected.kabkota || 'semua-kabkota',
       tahun: timeButtonDisplayLabel,
+      idExtension: selected.extension || 'semua-extension',
       startDate: timeCategoryTab === 'custom' ? customStartDate : undefined,
       endDate: timeCategoryTab === 'custom' ? customEndDate : undefined,
     }

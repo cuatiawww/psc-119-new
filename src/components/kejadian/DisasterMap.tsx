@@ -2688,37 +2688,6 @@ export default function DisasterMap({
           Panggilan 119
         </button>
 
-        {ambulances && ambulances.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowAmbulances((v) => !v)}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-              showAmbulances
-                ? 'bg-sky-50 text-sky-700 border border-sky-200 shadow-xs'
-                : 'bg-slate-100 text-slate-400 border border-transparent line-through'
-            }`}
-            title="Tampilkan/Sembunyikan Armada Ambulans PSC"
-          >
-            <span className={`h-2.5 w-2.5 rounded-full ${showAmbulances ? 'bg-sky-600' : 'bg-slate-400'}`} />
-            Ambulans PSC ({ambulances.length})
-          </button>
-        )}
-
-        {hospitals && hospitals.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowHospitals((v) => !v)}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-              showHospitals
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs'
-                : 'bg-slate-100 text-slate-400 border border-transparent line-through'
-            }`}
-            title="Tampilkan/Sembunyikan RS & Faskes Rujukan"
-          >
-            <span className={`h-2.5 w-2.5 rounded-full ${showHospitals ? 'bg-emerald-600' : 'bg-slate-400'}`} />
-            RS Rujukan ({hospitals.length})
-          </button>
-        )}
       </div>
 
       {/* Floating EOC Route details card on the left side of the map (Hanya tampil saat rute aktif/diklik) */}
@@ -2958,6 +2927,51 @@ export default function DisasterMap({
                     />
                   </div>
                 </div>
+
+                {/* Toggle layer armada dan rumah sakit dipusatkan di Pengaturan Peta */}
+                {ambulances && ambulances.length > 0 && (
+                  <div
+                    onClick={() => setShowAmbulances((v) => !v)}
+                    className="mt-2.5 flex cursor-pointer items-center justify-between rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2.5 hover:bg-sky-100/50 transition-all"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Ambulance className="h-4 w-4 text-sky-600" />
+                      <div>
+                        <p className="text-xs font-semibold text-sky-900">Ambulans PSC</p>
+                        <p className="text-[10px] text-sky-700">Tampilkan armada ambulans pada peta ({ambulances.length})</p>
+                      </div>
+                    </div>
+                    <div
+                      className={`relative h-5 w-9 rounded-full transition-colors duration-200 ${showAmbulances ? 'bg-sky-600' : 'bg-slate-300'}`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${showAmbulances ? 'translate-x-4' : 'translate-x-0'}`}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {hospitals && hospitals.length > 0 && (
+                  <div
+                    onClick={() => setShowHospitals((v) => !v)}
+                    className="mt-2.5 flex cursor-pointer items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-2.5 hover:bg-emerald-100/50 transition-all"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Building2 className="h-4 w-4 text-emerald-600" />
+                      <div>
+                        <p className="text-xs font-semibold text-emerald-900">RS Rujukan</p>
+                        <p className="text-[10px] text-emerald-700">Tampilkan rumah sakit pada peta ({hospitals.length})</p>
+                      </div>
+                    </div>
+                    <div
+                      className={`relative h-5 w-9 rounded-full transition-colors duration-200 ${showHospitals ? 'bg-emerald-600' : 'bg-slate-300'}`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${showHospitals ? 'translate-x-4' : 'translate-x-0'}`}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Period range selector */}
                 {setMarkerMonths !== undefined && (

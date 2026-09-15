@@ -423,6 +423,10 @@ export default function DashboardKejadianPage() {
   }, [activeKodePsc])
   const [filterStartDate, setFilterStartDate] = useState<string | undefined>(undefined)
   const [filterEndDate, setFilterEndDate] = useState<string | undefined>(undefined)
+  const [idExtension, setIdExtension] = useState('')
+  const [extensionOptions, setExtensionOptions] = useState<Array<{ value: string; label: string }>>([
+    { value: 'semua-extension', label: 'Semua Extension' },
+  ])
   const [isAiModalOpen, setIsAiModalOpen] = useState(false)
   const [aiModalTab, setAiModalTab] = useState<'report' | 'info'>('report')
   const [activeDetailCard, setActiveDetailCard] = useState<string | null>(null)
@@ -2184,6 +2188,32 @@ export default function DashboardKejadianPage() {
     window.dispatchEvent(new CustomEvent('sipkk-region-changed', { detail: label }))
   }, [getRegionLabel])
 
+  // Daftar pilihan extension dibentuk dari id_extension yang benar-benar ada di data.
+  // Daftar ini dipertahankan saat sedang memfilter agar pilihan extension lain tetap tersedia.
+  useEffect(() => {
+    if (idExtension || !Array.isArray(data?.calls)) return
+
+    const byId = new Map<string, string>()
+    data.calls.forEach((call: any) => {
+      const raw = call?.raw_psc || call
+      const rawId = raw?.id_extension ?? call?.id_extension
+      if (rawId === null || rawId === undefined || String(rawId).trim() === '') return
+
+      const value = String(rawId)
+      const name = String(raw?.extension || call?.extension || '').trim()
+      byId.set(value, name && name !== value ? `Extension ${value} (${name})` : `Extension ${value}`)
+    })
+
+    if (byId.size > 0) {
+      setExtensionOptions([
+        { value: 'semua-extension', label: 'Semua Extension' },
+        ...Array.from(byId.entries())
+          .sort(([a], [b]) => Number(a) - Number(b))
+          .map(([value, label]) => ({ value, label })),
+      ])
+    }
+  }, [data, idExtension])
+
   const getWilayahChartInfo = () => {
     if (kabupaten) {
       return {
@@ -2211,6 +2241,9 @@ export default function DashboardKejadianPage() {
     const prov = (summary.provinsi !== 'SEMUA PROVINSI' && !summary.provinsi.toUpperCase().includes('MEMUAT')) ? summary.provinsi : ''
     const kab = (summary.kabkota !== 'SEMUA KAB/KOTA' && !summary.kabkota.toUpperCase().includes('MEMUAT')) ? summary.kabkota : ''
     const cak = summary.cakupan.toLowerCase()
+    const extension = summary.idExtension && summary.idExtension !== 'semua-extension'
+      ? summary.idExtension
+      : ''
 
     // Parse tahun: ekstrak hanya angka tahun dari string format apapun ("TAHUN 2026", "JULI 2026", "30 HARI TERAKHIR", "2026-01-01 S.D 2026-07-27")
     let yr = '2026'
@@ -2279,6 +2312,7 @@ export default function DashboardKejadianPage() {
     setCakupan(cak)
     setProvince(prov)
     setKabupaten(kab)
+    setIdExtension(extension)
     setTahun(yr)
   }, [])
 
@@ -2298,6 +2332,9 @@ export default function DashboardKejadianPage() {
       }
       if (kabupaten && !isSemuaKab) {
         queryParams.push(`kabupaten=${encodeURIComponent(kabupaten)}`)
+      }
+      if (idExtension) {
+        queryParams.push(`id_extension=${encodeURIComponent(idExtension)}`)
       }
       if (filterStartDate && filterEndDate) {
         queryParams.push(`start_date=${encodeURIComponent(filterStartDate)}`)
@@ -2339,7 +2376,7 @@ export default function DashboardKejadianPage() {
     } finally {
       setLoading(false)
     }
-  }, [token, province, kabupaten, tahun])
+  }, [token, province, kabupaten, tahun, filterStartDate, filterEndDate, idExtension, activeKodePsc])
 
   const handleSyncMv = async () => {
     if (isSyncingMv) return
@@ -2702,6 +2739,10 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
     )
   }
 
+  // Tahan tampilan metrik sampai respons utama benar-benar tersedia.
+  // Ini mencegah angka 0 muncul sesaat saat initial load atau pergantian filter.
+  const isDataLoading = loading || !data?.summary
+
   const getCardValue = (val: number | null | undefined) => {
     if (val === null || val === undefined) return '0'
     return val.toLocaleString('id-ID')
@@ -3030,12 +3071,13 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           onSummaryChange={handleSummaryChange}
           selectedProvinceName={province}
           selectedKabupatenName={kabupaten}
+          extensionOptions={extensionOptions}
         />
       </section>
 
       {/* Summary Cards Grid */}
       <section className="flex w-full overflow-x-auto gap-4 pb-3.5 snap-x snap-mandatory scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 sm:pb-0 sm:overflow-visible">
-        {loading
+        {isDataLoading
           ? Array.from({ length: 7 }).map((_, idx) => (
             <div
               key={idx}
@@ -3176,18 +3218,30 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
             </div>
           </div>
           <div className="mt-4 flex-1 min-h-[440px] w-full">
-            <DisasterMap
-              markers={mapMarkers}
-              ambulances={data?.ambulances || []}
-              hospitals={data?.hospitals || []}
-              selectedRegions={selectedRegions}
-              userScope={activeUserScope}
-              onSelectProvince={(prov) => setProvince(prov)}
-              isGuest={false}
-              markerMonths={markerMonths}
-              setMarkerMonths={setMarkerMonths}
-              onSelectEvent={(event) => setSelectedEvent(event)}
-            />
+            {isDataLoading ? (
+              <div className="h-full min-h-[440px] w-full animate-pulse rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <div className="flex h-full items-center justify-center rounded-xl border border-slate-200 bg-slate-100/80">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="h-10 w-10 rounded-full border-4 border-slate-200 border-t-teal-500 animate-spin" />
+                    <div className="h-3 w-40 rounded bg-slate-200" />
+                    <div className="h-2.5 w-56 rounded bg-slate-200/80" />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <DisasterMap
+                markers={mapMarkers}
+                ambulances={data?.ambulances || []}
+                hospitals={data?.hospitals || []}
+                selectedRegions={selectedRegions}
+                userScope={activeUserScope}
+                onSelectProvince={(prov) => setProvince(prov)}
+                isGuest={false}
+                markerMonths={markerMonths}
+                setMarkerMonths={setMarkerMonths}
+                onSelectEvent={(event) => setSelectedEvent(event)}
+              />
+            )}
           </div>
         </article>
       </section>
@@ -3215,7 +3269,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
             <span className="truncate">Wilayah: {activeRegionBadgeLabel}</span>
           </div>
           <div className="h-[260px] sm:h-[320px] w-full">
-            {loading ? (
+            {isDataLoading ? (
               <div className="h-full w-full flex items-end gap-3 px-4 pb-2 border-b border-l border-slate-200 animate-pulse">
                 <div className="w-full bg-slate-200 rounded-t h-[65%]" />
                 <div className="w-full bg-slate-200 rounded-t h-[45%]" />
@@ -3278,7 +3332,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           </div>
 
           <div className="h-[260px] sm:h-[320px] w-full">
-            {loading ? (
+            {isDataLoading ? (
               <div className="h-full w-full flex items-end gap-3 px-4 pb-2 border-b border-l border-slate-200 animate-pulse">
                 <div className="w-full bg-slate-200 rounded-t h-[55%]" />
                 <div className="w-full bg-slate-200 rounded-t h-[70%]" />
@@ -3470,7 +3524,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
               return (
                 <div>
                   <div className="relative h-[200px] sm:h-[220px] w-full flex items-center justify-center">
-                    {loading ? (
+                    {isDataLoading ? (
                       <div className="h-full w-full flex items-center justify-center animate-pulse">
                         <div className="h-36 w-36 rounded-full border-[18px] border-slate-100 flex items-center justify-center" />
                       </div>
@@ -3618,7 +3672,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
               return (
                 <div>
                   <div className="relative h-[200px] sm:h-[220px] w-full flex items-center justify-center">
-                    {loading ? (
+                    {isDataLoading ? (
                       <div className="h-full w-full flex items-center justify-center animate-pulse">
                         <div className="h-36 w-36 rounded-full border-[18px] border-slate-100 flex items-center justify-center" />
                       </div>
@@ -3766,7 +3820,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
               return (
                 <div>
                   <div className="relative h-[200px] sm:h-[220px] w-full flex items-center justify-center">
-                    {loading ? (
+                    {isDataLoading ? (
                       <div className="h-full w-full flex items-center justify-center animate-pulse">
                         <div className="h-36 w-36 rounded-full border-[18px] border-slate-100 flex items-center justify-center" />
                       </div>

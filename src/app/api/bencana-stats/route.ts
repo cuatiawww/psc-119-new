@@ -18,8 +18,9 @@ export async function GET(req: Request) {
     const kode_psc = searchParams.get('kode_psc') || ''
     const province = searchParams.get('province') || ''
     const kabupaten = searchParams.get('kabupaten') || ''
+    const id_extension = searchParams.get('id_extension') || searchParams.get('extension') || ''
 
-    const cacheKey = `${tahun}-${month}-${province}-${kabupaten}-${kode_psc}`
+    const cacheKey = `${tahun}-${month}-${province}-${kabupaten}-${kode_psc}-${id_extension}`
     if (cachedResponse && cachedResponse.key === cacheKey && Date.now() - cachedResponse.timestamp < CACHE_TTL_MS) {
       return NextResponse.json(cachedResponse.data)
     }
@@ -33,6 +34,7 @@ export async function GET(req: Request) {
     if (kode_psc) fdCalls.append('kode_psc', kode_psc)
     if (province) fdCalls.append('kd_prop', province)
     if (kabupaten) fdCalls.append('kd_kab', kabupaten)
+    if (id_extension) fdCalls.append('id_extension', id_extension)
     fdCalls.append('page', '1')
     fdCalls.append('per_page', '100')
 
@@ -120,6 +122,7 @@ export async function GET(req: Request) {
           if (kode_psc) fd.append('kode_psc', kode_psc)
           if (province) fd.append('kd_prop', province)
           if (kabupaten) fd.append('kd_kab', kabupaten)
+          if (id_extension) fd.append('id_extension', id_extension)
           fd.append('page', String(p))
           fd.append('per_page', '100')
           return fetch(`${PSC_API_BASE_URL}/data-pelaporan-panggilan`, { method: 'POST', headers, body: fd }).then(r => r.json()).catch(() => ({}))
@@ -182,6 +185,13 @@ export async function GET(req: Request) {
           return false
         })
       }
+    }
+
+    // Pastikan filter tetap berlaku walaupun API sumber tidak menerapkan
+    // parameter id_extension pada request-nya.
+    if (id_extension) {
+      calls = calls.filter((c) => String(c.id_extension ?? '').trim() === id_extension)
+      totalCount = calls.length
     }
 
     let sampleEmergency = 0
