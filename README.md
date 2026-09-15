@@ -6,7 +6,6 @@ Dashboard & AI Intelligence Template berbasis Next.js, React, TypeScript, dan Ta
 - **Dashboard Spasial**: Visualisasi peta pemantauan spasial kejadian bencana & krisis kesehatan (auto layout full-width).
 - **Template AI Intelligence**:
   - Sintesis laporan eksekutif via Google Gemini AI (`/api/generate-dashboard-report-ai`).
-  - Modul Infografis AI (`/infografis-ai`, `/api/generate-infografis`).
   - Mode Pantauan EOC (Command Center Video Wall / TV).
 - **Arsitektur Siap Integrasi**: Siap dihubungkan ke endpoint API backend baru melalui konfigurasi environment.
 
@@ -28,4 +27,4 @@ Dashboard & AI Intelligence Template berbasis Next.js, React, TypeScript, dan Ta
    ```bash
    npm run dev
    ```
-   Buka [http://localhost:3000](http://localhost:3000) pada peramban Anda.
+   Buka [http://localhost:3000/dashboard](http://localhost:3000/dashboard) pada peramban Anda.
