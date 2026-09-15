@@ -6,6 +6,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
+const MAX_RESPONSE_TIME_MINUTES = 180
 import {
   Activity,
   AlertTriangle,
@@ -130,6 +131,7 @@ type SummaryData = {
   total_personil?: number
   total_layanan_ambulan_hari_ini?: number
   total_ambulan_sedang_melayani_hari_ini?: number
+  total_waktu_respons_dalam_batas?: number
   waktu_respons_rata_rata?: number
   waktu_respons_label?: string
 }
@@ -635,7 +637,7 @@ export default function DashboardKejadianPage() {
             const callSec = parseInt(callTimeParts[0], 10) * 3600 + parseInt(callTimeParts[1], 10) * 60 + (parseInt(callTimeParts[2], 10) || 0)
             const statusSec = parseInt(statusTimeParts[0], 10) * 3600 + parseInt(statusTimeParts[1], 10) * 60 + (parseInt(statusTimeParts[2], 10) || 0)
             const diffMin = (statusSec - callSec) / 60
-            if (diffMin > 0 && diffMin <= 60) {
+            if (diffMin > 0 && diffMin <= MAX_RESPONSE_TIME_MINUTES) {
               responseTimes.push(diffMin)
             }
           }
@@ -658,6 +660,7 @@ export default function DashboardKejadianPage() {
       total_non_emergency,
       total_non_category,
       total_personil: data?.summary?.total_personil ?? 450,
+      total_waktu_respons_dalam_batas: responseTimes.length,
       waktu_respons_rata_rata: avgResponse,
       waktu_respons_label: `${avgResponse} Menit`,
     }
@@ -1484,7 +1487,7 @@ export default function DashboardKejadianPage() {
               const callSec = parseInt(callParts[0], 10) * 3600 + parseInt(callParts[1], 10) * 60 + (parseInt(callParts[2], 10) || 0)
               const statusSec = parseInt(statusParts[0], 10) * 3600 + parseInt(statusParts[1], 10) * 60 + (parseInt(statusParts[2], 10) || 0)
               const diffMin = (statusSec - callSec) / 60
-              if (diffMin > 0 && diffMin <= 60) {
+              if (diffMin > 0 && diffMin <= MAX_RESPONSE_TIME_MINUTES) {
                 rt = parseFloat(diffMin.toFixed(1))
               }
             }
@@ -3024,7 +3027,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
       {/* Summary Cards Grid */}
       <section className="flex w-full overflow-x-auto gap-4 pb-3.5 snap-x snap-mandatory scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 sm:pb-0 sm:overflow-visible">
         {loading
-          ? Array.from({ length: 7 }).map((_, idx) => (
+          ? Array.from({ length: 8 }).map((_, idx) => (
             <div
               key={idx}
               className="flex min-h-[128px] w-[280px] sm:w-full shrink-0 snap-start items-center gap-3 border border-[#bedbda] bg-white px-4 py-3 shadow-[0_6px_18px_rgba(20,120,116,0.06)] rounded-2xl animate-pulse"
@@ -3050,6 +3053,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
             { label: 'Non Category', value: (effectiveSummary?.total_non_category !== undefined && effectiveSummary.total_non_category > 0 ? effectiveSummary.total_non_category : effectiveSummary?.total_luka) ?? 0, color: 'text-blue-600', icon: HeartPulse, bg: 'bg-blue-50/80' },
             { label: 'Armada Ambulans', value: effectiveSummary?.total_pengungsi ?? 0, color: 'text-indigo-650', icon: Ambulance, bg: 'bg-indigo-50/80' },
             { label: 'Personil PSC', value: effectiveSummary?.total_personil ?? 450, color: 'text-emerald-700', icon: Users, bg: 'bg-emerald-50/80' },
+            { label: 'Respons <=180 Menit', value: effectiveSummary?.total_waktu_respons_dalam_batas ?? 0, unit: 'Kasus', color: 'text-emerald-700', icon: CheckCircle2, bg: 'bg-emerald-50/80' },
             {
               label: 'Waktu Respons PSC',
               value: effectiveSummary?.waktu_respons_rata_rata ?? 8.4,
