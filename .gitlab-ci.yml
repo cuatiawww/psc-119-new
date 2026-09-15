@@ -1,0 +1,22 @@
+stages:
+  - deploy
+
+deploy-live:
+  stage: deploy
+  tags:
+    - deploy
+  only:
+    - main
+  variables:
+    GIT_STRATEGY: fetch
+    GIT_CLEAN_FLAGS: -ffdx
+    GIT_DEPTH: 0
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - 'export PSC_API_BASE_URL=${PSC_API_BASE_URL}'
+    - 'export PSC_API_TOKEN=${PSC_API_TOKEN}'
+    - umask 077
+    - 'printf "PSC_API_BASE_URL=%s\nPSC_API_TOKEN=%s\n" "$PSC_API_BASE_URL" "$PSC_API_TOKEN" > "$CI_PROJECT_DIR/.env"'
+    - docker compose -f docker-compose.yml build
+    - docker compose -f docker-compose.yml down || true
+    - docker compose -f docker-compose.yml up -d

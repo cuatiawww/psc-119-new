@@ -31,8 +31,6 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-docker-compose.yml
-
 # env files (can opt-in for committing if needed)
 .env
 .env*
@@ -47,10 +45,6 @@ docker-compose.yml
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# docker
-docker-compose.yml
-# Dockerfile
 
 # NTT collector runtime data
 /data/ntt/*.csv
