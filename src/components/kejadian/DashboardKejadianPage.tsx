@@ -128,6 +128,9 @@ type SummaryData = {
   total_non_emergency?: number
   total_non_category?: number
   total_personil?: number
+  total_ambulan?: number
+  total_rs?: number
+  total_psc?: number
   total_layanan_ambulan_hari_ini?: number
   total_ambulan_sedang_melayani_hari_ini?: number
   waktu_respons_rata_rata?: number
@@ -644,7 +647,7 @@ export default function DashboardKejadianPage() {
     })
     const avgResponse = responseTimes.length > 0
       ? parseFloat((responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(1))
-      : (data?.summary?.waktu_respons_rata_rata ?? 8.4)
+      : (data?.summary?.waktu_respons_rata_rata ?? 0)
 
     return {
       total_bencana,
@@ -657,7 +660,8 @@ export default function DashboardKejadianPage() {
       total_emergency,
       total_non_emergency,
       total_non_category,
-      total_personil: data?.summary?.total_personil ?? 450,
+      total_personil: data?.summary?.total_personil ?? (data as any)?.totalPersonnel ?? 0,
+      total_ambulan: data?.summary?.total_ambulan ?? (data as any)?.totalAmbulance ?? 0,
       waktu_respons_rata_rata: avgResponse,
       waktu_respons_label: `${avgResponse} Menit`,
     }
@@ -1274,8 +1278,8 @@ export default function DashboardKejadianPage() {
       currVal = curr.nonCategoryCount ?? 0
       prevVal = prev.nonCategoryCount ?? 0
     } else if (labelLower.includes('personil') || labelLower.includes('pusat')) {
-      currVal = 450
-      prevVal = 450
+      currVal = effectiveSummary?.total_personil ?? (data as any)?.totalPersonnel ?? 0
+      prevVal = effectiveSummary?.total_personil ?? (data as any)?.totalPersonnel ?? 0
     } else {
       currVal = curr.bencanaKorban
       prevVal = prev.bencanaKorban
@@ -1502,7 +1506,7 @@ export default function DashboardKejadianPage() {
     })
 
     const total = list.length
-    const fallbackAvg = effectiveSummary?.waktu_respons_rata_rata ?? 8.4
+    const fallbackAvg = effectiveSummary?.waktu_respons_rata_rata ?? 0
     const avg = total > 0 ? parseFloat((list.reduce((acc, curr) => acc + curr.minutes, 0) / total).toFixed(1)) : fallbackAvg
 
     const fast = list.filter((x) => x.minutes < 5).length // < 5 mnt
@@ -1525,50 +1529,46 @@ export default function DashboardKejadianPage() {
       emergencyAvg: parseFloat(emAvg),
       nonEmergencyAvg: parseFloat(nonEmAvg),
       brackets: [
-        { label: '< 5 Menit (Sangat Cepat)', count: total > 0 ? fast : 18, pct: total > 0 ? Math.round((fast / total) * 100) : 36, color: '#059669', badgeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-        { label: '5 - 10 Menit (Standar Cepat)', count: total > 0 ? ideal : 24, pct: total > 0 ? Math.round((ideal / total) * 100) : 48, color: '#0284c7', badgeBg: 'bg-sky-50 text-sky-700 border-sky-200' },
-        { label: '10 - 15 Menit (Batas Standar SPM)', count: total > 0 ? moderate : 6, pct: total > 0 ? Math.round((moderate / total) * 100) : 12, color: '#d97706', badgeBg: 'bg-amber-50 text-amber-700 border-amber-200' },
-        { label: '> 15 Menit (Melebihi SPM)', count: total > 0 ? overSpm : 2, pct: total > 0 ? Math.round((overSpm / total) * 100) : 4, color: '#e11d48', badgeBg: 'bg-rose-50 text-rose-700 border-rose-200' },
+        { label: '< 5 Menit (Sangat Cepat)', count: total > 0 ? fast : 0, pct: total > 0 ? Math.round((fast / total) * 100) : 0, color: '#059669', badgeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+        { label: '5 - 10 Menit (Standar Cepat)', count: total > 0 ? ideal : 0, pct: total > 0 ? Math.round((ideal / total) * 100) : 0, color: '#0284c7', badgeBg: 'bg-sky-50 text-sky-700 border-sky-200' },
+        { label: '10 - 15 Menit (Batas Standar SPM)', count: total > 0 ? moderate : 0, pct: total > 0 ? Math.round((moderate / total) * 100) : 0, color: '#d97706', badgeBg: 'bg-amber-50 text-amber-700 border-amber-200' },
+        { label: '> 15 Menit (Melebihi SPM)', count: total > 0 ? overSpm : 0, pct: total > 0 ? Math.round((overSpm / total) * 100) : 0, color: '#e11d48', badgeBg: 'bg-rose-50 text-rose-700 border-rose-200' },
       ],
     }
   }, [effectiveMarkers, effectiveSummary])
 
-  const mockPersonnelList = useMemo(() => [
-    { no: 1, id: 'PSC-DOC-01', nama: 'dr. Rian Pratama, Sp.Em', profesi: 'Dokter Spesialis Emergency / Triase', sertifikasi: 'ACLS, ATLS, BTCLS', unit: 'PSC 119 Posko Induk', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Siaga 24 Jam', telp: '0812-8921-1191' },
-    { no: 2, id: 'PSC-NUR-02', nama: 'Ns. Siti Nurhaliza, S.Kep', profesi: 'Perawat Gawat Darurat Koordinator', sertifikasi: 'BTCLS, ENPC, Triase START', unit: 'PSC 119 Posko Induk', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Siaga Aktif', telp: '0813-1122-3344' },
-    { no: 3, id: 'PSC-NUR-03', nama: 'Ns. Ahmad Fauzi, S.Kep', profesi: 'Perawat Reaksi Cepat Ambulans', sertifikasi: 'BTCLS, PHTLS', unit: 'Posko Wilayah Cibinong', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Dalam Tugas Lapangan', telp: '0812-3344-5566' },
-    { no: 4, id: 'PSC-MED-04', nama: 'Budi Santoso, A.Md.Kep', profesi: 'Paramedis Evakuasi Medis', sertifikasi: 'BTCLS, BLS Gadar', unit: 'Posko Wilayah Ciawi', shift: 'Shift Siang (15:00 - 22:00)', status: 'Dalam Tugas Lapangan', telp: '0812-9988-7711' },
-    { no: 5, id: 'PSC-DRV-05', nama: 'Bambang Hendrawan', profesi: 'Pengemudi Ambulans Gadar Advance', sertifikasi: 'EVOC, BLS Lapangan', unit: 'PSC 119 Posko Induk', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Siaga Pangkalan', telp: '0857-4455-6677' },
-    { no: 6, id: 'PSC-DOC-06', nama: 'dr. Maya Indah, M.Biomed', profesi: 'Dokter Konsulen Tele-Emergency', sertifikasi: 'ACLS, SPGDT Kemenkes', unit: 'PSC 119 Posko Induk', shift: 'Siaga On-Call', status: 'Siaga Konsultasi', telp: '0811-9876-5432' },
-    { no: 7, id: 'PSC-DSP-07', nama: 'Ns. Dede Kurniawan, S.Kep', profesi: 'Perawat Dispatcher Call Taker 119', sertifikasi: 'SPGDT 119 Dispatcher, BLS', unit: 'PSC 119 Posko Induk', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Bertugas di Meja Call', telp: '0813-7788-9900' },
-    { no: 8, id: 'PSC-DRV-08', nama: 'Agus Setiawan', profesi: 'Pengemudi Ambulans Gadar', sertifikasi: 'EVOC, BLS Lapangan', unit: 'Posko Wilayah Ciawi', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Dalam Tugas Lapangan', telp: '0858-1234-5678' },
-    { no: 9, id: 'PSC-NUR-09', nama: 'Ns. Tri Wahyuni, A.Md.Kep', profesi: 'Perawat Gawat Darurat', sertifikasi: 'BTCLS, Triase Gadar', unit: 'Posko Wilayah Leuwiliang', shift: 'Shift Siang (15:00 - 22:00)', status: 'Siaga Posko', telp: '0812-6677-8899' },
-    { no: 10, id: 'PSC-MED-10', nama: 'Hendra Gunawan, S.Tr.Kes', profesi: 'Teknisi Medis Darurat / Paramedis', sertifikasi: 'BLS, BTCLS', unit: 'Posko Wilayah Cileungsi', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Siaga Posko', telp: '0813-4455-6688' },
-    { no: 11, id: 'PSC-NUR-11', nama: 'Ns. Rizky Maulana, S.Kep', profesi: 'Perawat First Responder Sepeda Motor', sertifikasi: 'BTCLS, Safe Riding Medis', unit: 'Posko Wilayah Cibinong', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Siaga Reaksi Cepat', telp: '0812-9900-1122' },
-    { no: 12, id: 'PSC-DSP-12', nama: 'Dewi Anggraini, S.Kep', profesi: 'Operator Dispatcher Triase Medis', sertifikasi: 'SPGDT 119 Call Handling', unit: 'PSC 119 Posko Induk', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Bertugas di Meja Call', telp: '0815-6677-2233' },
-    { no: 13, id: 'PSC-DRV-13', nama: 'Joko Prasetyo', profesi: 'Driver Ambulans Transport Medis', sertifikasi: 'EVOC, BLS Standar', unit: 'Posko Wilayah Leuwiliang', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Siaga Posko', telp: '0812-5544-3322' },
-    { no: 14, id: 'PSC-DOC-14', nama: 'dr. Farhan Alatas', profesi: 'Dokter Jaga Reaksi Cepat', sertifikasi: 'ACLS, ATLS, EIC', unit: 'Posko Wilayah Ciawi', shift: 'Siaga On-Call', status: 'Standby Dispatch', telp: '0811-2233-4455' },
-    { no: 15, id: 'PSC-NUR-15', nama: 'Ns. Anisa Rahmawati, S.Kep', profesi: 'Perawat Gadar Maternal & Neonatal', sertifikasi: 'BTCLS, PALS, Midwifery Gadar', unit: 'PSC 119 Posko Induk', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Siaga 24 Jam', telp: '0813-8899-0011' },
-  ], [])
+  // Data personil resmi dari endpoint API Kemenkes (/data-personil-psc)
+  const realPersonnelList = useMemo(() => {
+    const rawPersonnel: any[] = (data as any)?.personnel || []
+    return rawPersonnel.map((p, idx) => ({
+      no: idx + 1,
+      id: `PSN-${p.id_user || idx + 1}`,
+      nama: p.detail_lengkap || p.nama || `Petugas PSC #${idx + 1}`,
+      profesi: p.jabatan || 'Tenaga Medis Reaksi Cepat',
+      sertifikasi: p.relawan_jkel ? `Kualifikasi: ${p.relawan_jkel}` : 'BTCLS / SPGDT Kemenkes',
+      unit: p.kode_psc || 'PSC 119 Operasional',
+      shift: p.join_date ? `Bergabung: ${p.join_date.split(' ')[0]}` : 'Siaga 24 Jam',
+      status: p.status === 1 ? 'Siaga Aktif' : 'Non-Aktif',
+      telp: p.relawan_no_telp || p.email || '0811-119-PSC',
+    }))
+  }, [data])
 
-  const mockAmbulanceList = useMemo(() => [
-    { no: 1, kode: 'AMB-PSC-01', nopol: 'F 119 PSC', tipe: 'Ambulans Advance Life Support (ALS)', pangkalan: 'PSC 119 Posko Induk', driver: 'Bambang Hendrawan', medis: 'dr. Rian P. & Ns. Siti N.', status: 'Sedang Penugasan ke TKP', fasilitas: 'Defibrillator, Ventilator Transport, Monitor EKG, Syringe Pump', lokasi: 'Kec. Cibinong' },
-    { no: 2, kode: 'AMB-PSC-02', nopol: 'F 8821 WB', tipe: 'Ambulans Basic Life Support (BLS)', pangkalan: 'Posko Wilayah Cibinong', driver: 'Agus Setiawan', medis: 'Ns. Ahmad Fauzi', status: 'Menuju RS Rujukan', fasilitas: 'Oksigen Medis, Spine Board, Bag Valve Mask, Emergency Kit', lokasi: 'RSUD Cibinong' },
-    { no: 3, kode: 'AMB-PSC-03', nopol: 'F 8931 AB', tipe: 'Ambulans Advance Life Support (ALS)', pangkalan: 'Posko Wilayah Ciawi', driver: 'Joko Prasetyo', medis: 'Budi Santoso, A.Md.Kep', status: 'Sedang Penugasan ke TKP', fasilitas: 'Defibrillator, Monitor Vital, Suction Unit, Oksigen', lokasi: 'Kec. Ciawi' },
-    { no: 4, kode: 'AMB-PSC-04', nopol: 'F 8740 CD', tipe: 'Ambulans Basic Transport Medis', pangkalan: 'Posko Wilayah Leuwiliang', driver: 'Yusuf Maulana', medis: 'Ns. Tri Wahyuni', status: 'Siaga di Pangkalan', fasilitas: 'Stretcher Lipat, Tas P3K Lengkap, Tabung Oksigen Portable', lokasi: 'Posko Leuwiliang' },
-    { no: 5, kode: 'AMB-PSC-05', nopol: 'F 8119 XX', tipe: 'Motor Reaksi Cepat / First Responder', pangkalan: 'Posko Wilayah Cibinong', driver: 'Ns. Rizky M.', medis: 'First Responder Solo', status: 'Siaga di Pangkalan', fasilitas: 'Tas Paramedis Kit, Defibrillator Portable (AED), Oksigen Portable', lokasi: 'Posko Cibinong' },
-    { no: 6, kode: 'AMB-PSC-06', nopol: 'B 9119 KES', tipe: 'Ambulans Advance Life Support (ALS)', pangkalan: 'PSC 119 Posko Induk', driver: 'Dedi S.', medis: 'Ns. Anisa R.', status: 'Siaga di Pangkalan', fasilitas: 'Ventilator Transport, Defibrillator, Incubator Transport', lokasi: 'PSC Induk' },
-    { no: 7, kode: 'AMB-PSC-07', nopol: 'F 8652 EF', tipe: 'Ambulans Basic Life Support (BLS)', pangkalan: 'Posko Wilayah Cileungsi', driver: 'Wahyu H.', medis: 'Hendra Gunawan', status: 'Siaga di Pangkalan', fasilitas: 'Oksigen Medis, Spine Board, Suction Unit', lokasi: 'Posko Cileungsi' },
-    { no: 8, kode: 'AMB-PSC-08', nopol: 'F 8331 GH', tipe: 'Ambulans Khusus Dekontaminasi', pangkalan: 'PSC 119 Posko Induk', driver: 'Rahmat T.', medis: 'Tim Hazmat Medis', status: 'Sterilisasi & Siaga', fasilitas: 'HEPA Filter, APD Level 3, Oksigen Isolasi', lokasi: 'PSC Induk' },
-    { no: 9, kode: 'AMB-PSC-09', nopol: 'F 8442 JK', tipe: 'Ambulans Basic Transport Medis', pangkalan: 'Posko Wilayah Parung', driver: 'Irfan Hakim', medis: 'Ns. Doni S.', status: 'Siaga di Pangkalan', fasilitas: 'Stretcher Lipat, Emergency Kit, Oksigen 1m3', lokasi: 'Posko Parung' },
-    { no: 10, kode: 'AMB-PSC-10', nopol: 'F 8201 LM', tipe: 'Ambulans Advance Life Support (ALS)', pangkalan: 'Posko Wilayah Jonggol', driver: 'Suhendra', medis: 'Ns. Mita P.', status: 'Siaga di Pangkalan', fasilitas: 'Defibrillator, Monitor Vital, Suction Unit', lokasi: 'Posko Jonggol' },
-    { no: 11, kode: 'AMB-PSC-11', nopol: 'F 8511 NO', tipe: 'Motor Reaksi Cepat / First Responder', pangkalan: 'Posko Wilayah Ciawi', driver: 'Ns. Hendra K.', medis: 'First Responder Solo', status: 'Siaga di Pangkalan', fasilitas: 'AED Portable, Emergency First Aid Kit', lokasi: 'Posko Ciawi' },
-    { no: 12, kode: 'AMB-PSC-12', nopol: 'F 8622 PQ', tipe: 'Ambulans Jenazah & Forensik', pangkalan: 'PSC 119 Posko Induk', driver: 'Slamet R.', medis: 'Petugas Forensik Lapangan', status: 'Siaga di Pangkalan', fasilitas: 'Keranda Stainless, Kantung Jenazah, Desinfektan', lokasi: 'PSC Induk' },
-    { no: 13, kode: 'AMB-PSC-13', nopol: 'B 1190 KES', tipe: 'Ambulans Basic Life Support (BLS)', pangkalan: 'Posko Wilayah Citeureup', driver: 'Darmanto', medis: 'Ns. Lia A.', status: 'Siaga di Pangkalan', fasilitas: 'Oksigen Medis, Spine Board, Emergency Kit', lokasi: 'Posko Citeureup' },
-    { no: 14, kode: 'AMB-PSC-14', nopol: 'F 8733 RS', tipe: 'Ambulans Advance Life Support (ALS)', pangkalan: 'Posko Wilayah Gunung Putri', driver: 'Aris Munandar', medis: 'Ns. Dani K.', status: 'Siaga di Pangkalan', fasilitas: 'Ventilator Transport, Defibrillator, Syringe Pump', lokasi: 'Posko Gn. Putri' },
-    { no: 15, kode: 'AMB-PSC-15', nopol: 'F 8844 TU', tipe: 'Ambulans Basic Transport Medis', pangkalan: 'Posko Wilayah Babakan Madang', driver: 'Heri K.', medis: 'Ns. Eka W.', status: 'Siaga di Pangkalan', fasilitas: 'Stretcher Lipat, Oksigen Medis, P3K', lokasi: 'Posko Babakan M.' },
-    { no: 16, kode: 'AMB-PSC-16', nopol: 'F 8955 VW', tipe: 'Ambulans Advance Life Support (ALS)', pangkalan: 'PSC 119 Posko Induk', driver: 'Surya D.', medis: 'dr. Farhan & Ns. Anisa', status: 'Siaga Cadangan', fasilitas: 'Lengkap Standar Kemenkes RI Tipe A', lokasi: 'PSC Induk' },
-  ], [])
+  // Data armada ambulans resmi dari endpoint API Kemenkes (/data-ambulan-psc)
+  const realAmbulanceList = useMemo(() => {
+    const rawAmb: any[] = (data as any)?.ambulances || []
+    return rawAmb.map((a, idx) => ({
+      no: idx + 1,
+      kode: a.kode_ambulan || `AMB-${idx + 1}`,
+      nopol: a.no_kendaraan || 'Plat Dinas Kemenkes',
+      tipe: a.assestment_gawat_darurat ? 'Ambulans Advance Gadar (ALS)' : 'Ambulans Transport Medis (BLS)',
+      pangkalan: a.nama_psc || a.kode_psc || 'PSC 119 Posko Induk',
+      driver: 'Kru Sopir & Paramedis PSC',
+      medis: 'Tim Evakuasi Lapangan 119',
+      status: a.status_aktif === '1' || a.status_aktif === 1 ? 'Siaga Operasional' : 'Sedang Penugasan',
+      fasilitas: a.assestment_gawat_darurat ? 'Defibrillator, Ventilator Transport, Oksigen Medis' : 'Oksigen Medis, Spine Board, Emergency Kit',
+      lokasi: a.kode_psc || 'Pangkalan Siaga',
+    }))
+  }, [data])
 
   const modalChartData = useMemo(() => {
     if (!activeDetailCard) return null
@@ -1593,21 +1593,21 @@ export default function DashboardKejadianPage() {
       })
 
       if (markers.length === 0) {
-        emergencyCount = 14
-        nonEmergencyCount = 2
-        nonCategoryCount = 14
+        emergencyCount = effectiveSummary?.total_emergency || effectiveSummary?.total_krisis || 0
+        nonEmergencyCount = effectiveSummary?.total_non_emergency || effectiveSummary?.total_meninggal || 0
+        nonCategoryCount = effectiveSummary?.total_non_category || effectiveSummary?.total_luka || 0
       }
 
       const categoryPie = [
         { name: 'Kasus Emergency', value: emergencyCount, color: '#ef4444' },
         { name: 'Non Emergency', value: nonEmergencyCount, color: '#f59e0b' },
         { name: 'Non Category / Info', value: nonCategoryCount, color: '#3b82f6' },
-      ]
+      ].filter((x) => x.value > 0)
 
       const sourceMap: Record<string, number> = {}
       markers.forEach((m) => {
-        const src = m.sumber_panggilan || m.raw_psc?.sumber_panggilan || 'Call 119 Bebas Pulsa'
-        sourceMap[src] = (sourceMap[src] || 0) + 1
+        const src = m.sumber_panggilan || m.raw_psc?.sumber_panggilan
+        if (src) sourceMap[src] = (sourceMap[src] || 0) + 1
       })
       let sourceBar = Object.entries(sourceMap).map(([name, value], i) => ({
         name,
@@ -1615,13 +1615,13 @@ export default function DashboardKejadianPage() {
         value,
         color: COLORS[i % COLORS.length],
       }))
-      if (sourceBar.length === 0) {
-        sourceBar = [
-          { name: '119 Bebas Pulsa', fullName: '119 Bebas Pulsa', value: 10, color: '#0d9488' },
-          { name: 'Aplikasi Mobile', fullName: 'Aplikasi PSC 119 Mobile', value: 3, color: '#0284c7' },
-          { name: 'Rujukan Faskes', fullName: 'Rujukan Faskes / RS', value: 2, color: '#6366f1' },
-          { name: 'Call Center Pemda', fullName: 'Call Center Pemda 112', value: 1, color: '#f59e0b' },
-        ]
+      if (sourceBar.length === 0 && Array.isArray((data as any)?.sebaran_sumber)) {
+        sourceBar = ((data as any).sebaran_sumber || []).slice(0, 6).map((s: any, i: number) => ({
+          name: s.nama,
+          fullName: s.nama,
+          value: s.jumlah,
+          color: COLORS[i % COLORS.length],
+        }))
       }
 
       return {
@@ -1638,28 +1638,26 @@ export default function DashboardKejadianPage() {
     if (card === 'Kasus Emergency') {
       const specMap: Record<string, number> = {}
       markers.forEach((m) => {
-        const spec = m.spesifikasi_layanan || m.jenis_bencana || m.raw_psc?.spesifikasi_layanan || 'Trauma KLL'
-        specMap[spec] = (specMap[spec] || 0) + 1
+        const spec = m.spesifikasi_layanan || m.jenis_bencana || m.raw_psc?.spesifikasi_layanan
+        if (spec) specMap[spec] = (specMap[spec] || 0) + 1
       })
       let specData = Object.entries(specMap).map(([name, value], i) => ({
         name,
         value,
         color: COLORS[i % COLORS.length],
       }))
-      if (specData.length === 0) {
-        specData = [
-          { name: 'Kecelakaan Lalu Lintas (KLL)', value: 6, color: '#ef4444' },
-          { name: 'Kegawatdaruratan Kardiovaskular', value: 3, color: '#dc2626' },
-          { name: 'Gangguan Nafas / Asfiksia', value: 2, color: '#ea580c' },
-          { name: 'Cedera / Trauma Fisik', value: 2, color: '#d97706' },
-          { name: 'Penurunan Kesadaran / Koma', value: 1, color: '#7c3aed' },
-        ]
+      if (specData.length === 0 && Array.isArray((data as any)?.sebaran_spesifikasi)) {
+        specData = ((data as any).sebaran_spesifikasi || []).slice(0, 5).map((s: any, i: number) => ({
+          name: s.nama,
+          value: s.jumlah,
+          color: COLORS[i % COLORS.length],
+        }))
       }
 
       const rsMap: Record<string, number> = {}
       markers.forEach((m) => {
-        const rs = (m as any).rumahsakit_rujukan || m.raw_psc?.rumahsakit_rujukan || 'RSUD Terdekat'
-        rsMap[rs] = (rsMap[rs] || 0) + 1
+        const rs = (m as any).rumahsakit_rujukan || m.raw_psc?.rumahsakit_rujukan
+        if (rs && rs !== 'N/A' && rs !== '-') rsMap[rs] = (rsMap[rs] || 0) + 1
       })
       let rsData = Object.entries(rsMap).slice(0, 5).map(([name, value], i) => ({
         name: name.length > 20 ? `${name.slice(0, 18)}...` : name,
@@ -1667,13 +1665,13 @@ export default function DashboardKejadianPage() {
         value,
         color: COLORS[i % COLORS.length],
       }))
-      if (rsData.length === 0) {
-        rsData = [
-          { name: 'RSUD Cibinong', fullName: 'RSUD Cibinong', value: 5, color: '#0d9488' },
-          { name: 'RSUD Ciawi', fullName: 'RSUD Ciawi', value: 4, color: '#0284c7' },
-          { name: 'RSUD Leuwiliang', fullName: 'RSUD Leuwiliang', value: 3, color: '#6366f1' },
-          { name: 'RS Siloam Bogor', fullName: 'RS Siloam Bogor', value: 2, color: '#d97706' },
-        ]
+      if (rsData.length === 0 && Array.isArray((data as any)?.hospitals)) {
+        rsData = ((data as any).hospitals || []).slice(0, 5).map((h: any, i: number) => ({
+          name: (h.nama || '').length > 20 ? `${(h.nama || '').slice(0, 18)}...` : (h.nama || 'RS Rujukan'),
+          fullName: h.nama || 'RS Rujukan',
+          value: 1,
+          color: COLORS[i % COLORS.length],
+        }))
       }
 
       return {
@@ -1690,8 +1688,8 @@ export default function DashboardKejadianPage() {
     if (card === 'Non Emergency') {
       const specMap: Record<string, number> = {}
       markers.forEach((m) => {
-        const spec = m.spesifikasi_layanan || m.jenis_bencana || m.raw_psc?.spesifikasi_layanan || 'Tele-Konsultasi Medis'
-        specMap[spec] = (specMap[spec] || 0) + 1
+        const spec = m.spesifikasi_layanan || m.jenis_bencana || m.raw_psc?.spesifikasi_layanan
+        if (spec) specMap[spec] = (specMap[spec] || 0) + 1
       })
       let specData = Object.entries(specMap).map(([name, value], i) => ({
         name,
@@ -1699,48 +1697,81 @@ export default function DashboardKejadianPage() {
         value,
         color: COLORS[i % COLORS.length],
       }))
-      if (specData.length === 0) {
-        specData = [
-          { name: 'Tele-Konsultasi Medis', fullName: 'Tele-Konsultasi Medis', value: 1, color: '#0d9488' },
-          { name: 'Transport Terencana', fullName: 'Transport Terencana', value: 1, color: '#0284c7' },
+      if (specData.length === 0 && Array.isArray((data as any)?.sebaran_spesifikasi)) {
+        specData = ((data as any).sebaran_spesifikasi || []).slice(0, 5).map((s: any, i: number) => ({
+          name: s.nama,
+          fullName: s.nama,
+          value: s.jumlah,
+          color: COLORS[i % COLORS.length],
+        }))
+      }
+
+      const statusMap: Record<string, number> = {}
+      markers.forEach((m) => {
+        const st = m.status_penanganan_code || (m.raw_psc as any)?.status_penanganan_code || 'Selesai'
+        statusMap[st] = (statusMap[st] || 0) + 1
+      })
+      let serviceType = Object.entries(statusMap).map(([name, value], i) => ({
+        name: `Status ${name}`,
+        value,
+        color: COLORS[i % COLORS.length],
+      }))
+      if (serviceType.length === 0) {
+        serviceType = [
+          { name: 'Status Selesai', value: effectiveSummary?.total_non_emergency || 1, color: '#0d9488' }
         ]
       }
 
-      const serviceType = [
-        { name: 'Tele-Konsultasi Dokter', value: Math.max(1, Math.round((markers.length || 2) * 0.5)), color: '#0d9488' },
-        { name: 'Transport Terencana Faskes', value: Math.max(1, Math.round((markers.length || 2) * 0.3)), color: '#0284c7' },
-        { name: 'Informasi Jadwal Poliklinik', value: 1, color: '#d97706' },
-      ]
-
       return {
         type: 'non_emergency',
-        chart1Title: 'Proporsi Layanan Non-Emergency Terdaftar',
+        chart1Title: 'Proporsi Status Layanan Non-Emergency',
         chart1Type: 'donut' as const,
         chart1Data: serviceType,
-        chart2Title: 'Klasifikasi Kebutuhan Pasien Non-Emergency',
+        chart2Title: 'Klasifikasi Kebutuhan Layanan Non-Emergency',
         chart2Type: 'bar' as const,
         chart2Data: specData,
       }
     }
 
     if (card === 'Non Category') {
-      const typeData = [
-        { name: 'Panggilan Informasi Faskes', value: Math.max(5, Math.round((markers.length || 14) * 0.4)), color: '#3b82f6' },
-        { name: 'Tes Sambungan Saluran / Radio', value: Math.max(4, Math.round((markers.length || 14) * 0.3)), color: '#64748b' },
-        { name: 'Panggilan Terputus (Drop)', value: Math.max(3, Math.round((markers.length || 14) * 0.2)), color: '#f59e0b' },
-        { name: 'Panggilan Batal / Salah Sambung', value: Math.max(2, Math.round((markers.length || 14) * 0.1)), color: '#94a3b8' },
-      ]
+      const extMap: Record<string, number> = {}
+      markers.forEach((m) => {
+        const ext = m.extension || (m.raw_psc as any)?.extension
+        if (ext) extMap[ext] = (extMap[ext] || 0) + 1
+      })
+      let extensionData = Object.entries(extMap).slice(0, 5).map(([name, value], i) => ({
+        name,
+        fullName: name,
+        value,
+        color: COLORS[i % COLORS.length],
+      }))
+      if (extensionData.length === 0 && Array.isArray((data as any)?.sebaran_extension)) {
+        extensionData = ((data as any).sebaran_extension || []).slice(0, 5).map((e: any, i: number) => ({
+          name: e.nama,
+          fullName: e.nama,
+          value: e.jumlah,
+          color: COLORS[i % COLORS.length],
+        }))
+      }
 
-      const extensionData = [
-        { name: 'Ext 101 (Operator Utama)', fullName: 'Ext 101 (Operator Utama)', value: 6, color: '#0284c7' },
-        { name: 'Ext 102 (Dispatcher)', fullName: 'Ext 102 (Dispatcher)', value: 4, color: '#0d9488' },
-        { name: 'Ext 103 (Konsultasi)', fullName: 'Ext 103 (Konsultasi)', value: 3, color: '#6366f1' },
-        { name: 'Ext Lainnya', fullName: 'Ext Lainnya', value: 1, color: '#94a3b8' },
-      ]
+      const pscMap: Record<string, number> = {}
+      markers.forEach((m) => {
+        const p = m.nama_psc || 'PSC 119'
+        pscMap[p] = (pscMap[p] || 0) + 1
+      })
+      let typeData = Object.entries(pscMap).slice(0, 5).map(([name, value], i) => ({
+        name: name.length > 20 ? `${name.slice(0, 18)}...` : name,
+        fullName: name,
+        value,
+        color: COLORS[(i + 2) % COLORS.length],
+      }))
+      if (typeData.length === 0) {
+        typeData = [{ name: 'Non Category / Info', fullName: 'Non Category / Info', value: effectiveSummary?.total_non_category || 1, color: '#3b82f6' }]
+      }
 
       return {
         type: 'non_category',
-        chart1Title: 'Proporsi Klasifikasi Panggilan Non-Category',
+        chart1Title: 'Proporsi Panggilan Non-Category Berdasarkan Unit PSC',
         chart1Type: 'pie' as const,
         chart1Data: typeData,
         chart2Title: 'Distribusi Extension Saluran Masuk',
@@ -1750,55 +1781,68 @@ export default function DashboardKejadianPage() {
     }
 
     if (card === 'Armada Ambulans') {
-      const statusData = [
-        { name: 'Sedang Penugasan ke TKP', value: 6, color: '#ef4444' },
-        { name: 'Menuju Rumah Sakit Rujukan', value: 4, color: '#f59e0b' },
-        { name: 'Siaga di Posko Pangkalan', value: 5, color: '#10b981' },
-        { name: 'Sterilisasi & Maintenance', value: 1, color: '#64748b' },
-      ]
+      const statusMap: Record<string, number> = {}
+      const typeMap: Record<string, number> = {}
 
-      const typeData = [
-        { name: 'Advance Life Support (ALS)', fullName: 'Ambulans Advance Life Support (ALS)', value: 7, color: '#dc2626' },
-        { name: 'Basic Life Support (BLS)', fullName: 'Ambulans Basic Life Support (BLS)', value: 6, color: '#0284c7' },
-        { name: 'Motor Reaksi Cepat', fullName: 'Motor Reaksi Cepat / First Responder', value: 3, color: '#0d9488' },
-      ]
+      realAmbulanceList.forEach((a) => {
+        statusMap[a.status] = (statusMap[a.status] || 0) + 1
+        typeMap[a.tipe] = (typeMap[a.tipe] || 0) + 1
+      })
+
+      const statusData = Object.entries(statusMap).map(([name, value], i) => ({
+        name,
+        value,
+        color: COLORS[i % COLORS.length],
+      }))
+
+      const typeData = Object.entries(typeMap).map(([name, value], i) => ({
+        name: name.length > 22 ? `${name.slice(0, 20)}...` : name,
+        fullName: name,
+        value,
+        color: COLORS[(i + 3) % COLORS.length],
+      }))
 
       return {
         type: 'armada_ambulans',
         chart1Title: 'Status Kesiapan & Operasional Armada Ambulans',
         chart1Type: 'donut' as const,
-        chart1Data: statusData,
+        chart1Data: statusData.length > 0 ? statusData : [{ name: 'Siaga Operasional', value: (data as any)?.totalAmbulance || 1, color: '#10b981' }],
         chart2Title: 'Distribusi Tipe Spesifikasi Unit Kendaraan',
         chart2Type: 'bar' as const,
-        chart2Data: typeData,
+        chart2Data: typeData.length > 0 ? typeData : [{ name: 'Ambulans Kemenkes', fullName: 'Ambulans Kemenkes', value: (data as any)?.totalAmbulance || 1, color: '#0284c7' }],
       }
     }
 
     if (card === 'Personil PSC') {
-      const roleData = [
-        { name: 'Perawat Gadar (BTCLS)', value: 190, color: '#0d9488' },
-        { name: 'Paramedis Lapangan', value: 115, color: '#0284c7' },
-        { name: 'Dokter Konsulen / Triase', value: 65, color: '#6366f1' },
-        { name: 'Driver Ambulans Khusus', value: 50, color: '#f59e0b' },
-        { name: 'Dispatcher Call Taker 119', value: 30, color: '#10b981' },
-      ]
+      const roleMap: Record<string, number> = {}
+      const unitMap: Record<string, number> = {}
 
-      const certData = [
-        { name: 'BTCLS / BLS', fullName: 'Basic Trauma Cardiac Life Support (BTCLS)', value: 205, color: '#0d9488' },
-        { name: 'ACLS Jantung', fullName: 'Advanced Cardiac Life Support (ACLS)', value: 75, color: '#ef4444' },
-        { name: 'ATLS Trauma', fullName: 'Advanced Trauma Life Support (ATLS)', value: 60, color: '#ea580c' },
-        { name: 'EVOC Driving', fullName: 'Emergency Vehicle Operator Course (EVOC)', value: 50, color: '#f59e0b' },
-        { name: 'SPGDT 119', fullName: 'Sertifikasi Dispatcher Terpadu Kemenkes', value: 45, color: '#0284c7' },
-      ]
+      realPersonnelList.forEach((p) => {
+        roleMap[p.profesi] = (roleMap[p.profesi] || 0) + 1
+        unitMap[p.unit] = (unitMap[p.unit] || 0) + 1
+      })
+
+      const roleData = Object.entries(roleMap).slice(0, 5).map(([name, value], i) => ({
+        name,
+        value,
+        color: COLORS[i % COLORS.length],
+      }))
+
+      const certData = Object.entries(unitMap).slice(0, 5).map(([name, value], i) => ({
+        name: name.length > 20 ? `${name.slice(0, 18)}...` : name,
+        fullName: name,
+        value,
+        color: COLORS[(i + 2) % COLORS.length],
+      }))
 
       return {
         type: 'personil_psc',
-        chart1Title: 'Komposisi Profesi Tim Reaksi Cepat PSC 119',
+        chart1Title: 'Komposisi Jabatan & Profesi Personil PSC 119',
         chart1Type: 'donut' as const,
-        chart1Data: roleData,
-        chart2Title: 'Distribusi Sertifikasi Kompetensi Gawat Darurat',
+        chart1Data: roleData.length > 0 ? roleData : [{ name: 'Tenaga Reaksi Cepat', value: (data as any)?.totalPersonnel || 1, color: '#0d9488' }],
+        chart2Title: 'Distribusi Penempatan Posko Unit PSC',
         chart2Type: 'bar' as const,
-        chart2Data: certData,
+        chart2Data: certData.length > 0 ? certData : [{ name: 'Unit PSC Operasional', fullName: 'Unit PSC Operasional', value: (data as any)?.totalPersonnel || 1, color: '#0284c7' }],
       }
     }
 
@@ -1828,7 +1872,7 @@ export default function DashboardKejadianPage() {
     }
 
     return null
-  }, [activeDetailCard, filteredDetailMarkers, responseTimeAnalytics])
+  }, [activeDetailCard, filteredDetailMarkers, responseTimeAnalytics, realPersonnelList, realAmbulanceList, data, effectiveSummary])
 
   const chart1Total = useMemo(() => {
     if (!modalChartData?.chart1Data) return 0
@@ -1841,18 +1885,21 @@ export default function DashboardKejadianPage() {
     const markers = filteredDetailMarkers || []
 
     if (card === 'Personil PSC') {
-      return mockPersonnelList
+      return realPersonnelList
     }
 
     if (card === 'Armada Ambulans') {
-      const fromMarkers = markers
+      if (realAmbulanceList.length > 0) {
+        return realAmbulanceList
+      }
+      return markers
         .filter((m) => {
           const raw = m.raw_psc || (m as any)
           return Boolean(raw?.nomor_kendaraan || raw?.nama_petugas_ambulan || m.nomor_kendaraan || m.nama_petugas_ambulan)
         })
         .map((m, idx) => {
           const raw = m.raw_psc || (m as any)
-          const nopol = m.nomor_kendaraan || raw?.nomor_kendaraan || `F 119-${idx + 1} PSC`
+          const nopol = m.nomor_kendaraan || raw?.nomor_kendaraan || `Plat Dinas PSC`
           const medis = m.nama_petugas_ambulan || raw?.nama_petugas_ambulan || 'Tim Paramedis PSC 119'
           const loc = m.kabupaten || (m as any).alamat || m.nama_desa || 'Wilayah Pemantauan'
           return {
@@ -1868,29 +1915,40 @@ export default function DashboardKejadianPage() {
             lokasi: loc,
           }
         })
-      return fromMarkers.length > 0 ? fromMarkers : mockAmbulanceList
     }
 
     if (markers.length > 0) {
       return markers.map((m, idx) => {
         const raw = m.raw_psc || (m as any)
         const ticket = m.ticket_id || m.kode_trans || `TKT-119-2026-${String(idx + 1).padStart(3, '0')}`
-        const tglStr = (m as any).tanggal_panggilan || m.tgl_kejadian || '15 Sep 2026'
-        const jamStr = raw?.jam_pelaporan_panggilan || (m.tgl_kejadian && m.tgl_kejadian.includes(':') ? m.tgl_kejadian.split(' ')[1] : '09:30 WIB')
+        const tglStr = (m as any).tanggal_panggilan || m.tgl_kejadian || ''
+        const jamStr = raw?.jam_pelaporan_panggilan || (m.tgl_kejadian && m.tgl_kejadian.includes(':') ? m.tgl_kejadian.split(' ')[1] : '')
         const pelapor = (m as any).nama_pelapor || raw?.nama_pelapor || raw?.korban || 'Masyarakat'
         const rawJenis = (m.jenis_layanan || raw?.jenis_layanan || '').toLowerCase()
         const isEm = (rawJenis.includes('emergency') && !rawJenis.includes('non')) || m.is_krisis === 1
         const isNonEm = rawJenis.includes('non') && rawJenis.includes('emergency')
         const kategori = isEm ? 'Emergency' : isNonEm ? 'Non Emergency' : 'Non Category'
-        const spesifikasi = m.spesifikasi_layanan || m.jenis_bencana || raw?.spesifikasi_layanan || (isEm ? 'Trauma Kecelakaan Lalu Lintas' : 'Konsultasi Kesehatan')
-        const sumber = m.sumber_panggilan || raw?.sumber_panggilan || '119 Bebas Pulsa'
+        const spesifikasi = m.spesifikasi_layanan || m.jenis_bencana || raw?.spesifikasi_layanan || ''
+        const sumber = m.sumber_panggilan || raw?.sumber_panggilan || '119'
         const ext = m.extension || raw?.extension || 'Ext 119'
         const status = (m as any).status_penanganan || raw?.status_penanganan || (m.status_penanganan_code === 'Selesai' ? 'Selesai' : 'Diproses')
-        const alamat = (m as any).alamat || m.nama_desa || m.kabupaten || 'Kab. Bogor'
-        const rs = (m as any).rumahsakit_rujukan || raw?.rumahsakit_rujukan || 'RSUD Terdekat'
-        const armada = m.nomor_kendaraan || raw?.nomor_kendaraan || 'F 119 PSC'
-        const petugas = m.nama_petugas_ambulan || raw?.nama_petugas_ambulan || 'Tim Dispatcher'
-        const respTime = m.response_time_minutes ?? null
+        const alamat = (m as any).alamat || m.nama_desa || m.kabupaten || '-'
+        const rs = (m as any).rumahsakit_rujukan || raw?.rumahsakit_rujukan || '-'
+        const armada = m.nomor_kendaraan || raw?.nomor_kendaraan || '-'
+        const petugas = m.nama_petugas_ambulan || raw?.nama_petugas_ambulan || '-'
+        let respTime = m.response_time_minutes ?? raw?.response_time_minutes ?? null
+        if (respTime === null && raw?.jam_pelaporan_panggilan && raw?.tgl_status_penanganan) {
+          try {
+            const callParts = raw.jam_pelaporan_panggilan.split(':')
+            const statusParts = raw.tgl_status_penanganan.split(' ')[1]?.split(':')
+            if (callParts.length >= 2 && statusParts && statusParts.length >= 2) {
+              const callSec = parseInt(callParts[0], 10) * 3600 + parseInt(callParts[1], 10) * 60 + (parseInt(callParts[2], 10) || 0)
+              const statusSec = parseInt(statusParts[0], 10) * 3600 + parseInt(statusParts[1], 10) * 60 + (parseInt(statusParts[2], 10) || 0)
+              const diffMin = (statusSec - callSec) / 60
+              if (diffMin > 0) respTime = parseFloat(diffMin.toFixed(1))
+            }
+          } catch (e) {}
+        }
         const isSpmPass = typeof respTime === 'number' && respTime > 0 && respTime <= 15
 
         return {
@@ -1914,50 +1972,8 @@ export default function DashboardKejadianPage() {
       })
     }
 
-    const fallbackCount = card === 'Kasus Emergency' ? 14 : card === 'Non Emergency' ? 2 : card === 'Non Category' ? 14 : 16
-    const sampleSpecs = [
-      'Kecelakaan Lalu Lintas (KLL) Ganda',
-      'Kegawatdaruratan Jantung / Nyeri Dada',
-      'Gangguan Pernapasan Akut / Asfiksia',
-      'Cedera Fisik / Fraktur Terbuka',
-      'Penurunan Kesadaran / Koma',
-      'Luka Bakar Derajat II',
-      'Maternal & Pendarahan Kebidanan',
-      'Kejang Demam / Ensefalopati',
-      'Trauma Tumpul Abdomen',
-      'Cedera Kepala Sedang (CKS)',
-    ]
-    const sampleRS = ['RSUD Cibinong', 'RSUD Ciawi', 'RSUD Leuwiliang', 'RS Siloam Bogor', 'RS Hermina Mekarmukti', 'RS Sentra Medika']
-    const sampleKabs = ['Kec. Cibinong', 'Kec. Ciawi', 'Kec. Babakan Madang', 'Kec. Leuwiliang', 'Kec. Citeureup', 'Kec. Parung']
-
-    return Array.from({ length: fallbackCount }, (_, i) => {
-      const isEm = card === 'Kasus Emergency' || (card === 'Total Panggilan 119' && i < 14)
-      const isNonEm = card === 'Non Emergency' || (card === 'Total Panggilan 119' && i >= 14 && i < 16)
-      const kategori = isEm ? 'Emergency' : isNonEm ? 'Non Emergency' : 'Non Category'
-      const spesifikasi = isEm ? sampleSpecs[i % sampleSpecs.length] : isNonEm ? 'Tele-Konsultasi Dokter & Rujukan' : 'Panggilan Permintaan Informasi Faskes'
-      const respTime = parseFloat((4.5 + (i * 0.7) % 8.5).toFixed(1))
-      const ticket = `TKT-119-2026-${String(i + 1).padStart(3, '0')}`
-
-      return {
-        no: i + 1,
-        ticket,
-        tanggal: '15 Sep 2026',
-        jam: `0${8 + (i % 8)}:${(10 + i * 7) % 60 < 10 ? '0' : ''}${(10 + i * 7) % 60} WIB`,
-        pelapor: `Warga Pelapor #${i + 1}`,
-        kategori,
-        spesifikasi,
-        sumber: i % 3 === 0 ? '119 Bebas Pulsa' : i % 3 === 1 ? 'Aplikasi PSC Mobile' : 'Call Center Pemda',
-        ext: `Ext 10${(i % 3) + 1}`,
-        status: i % 5 === 0 ? 'Sedang Diproses' : 'Selesai',
-        alamat: `${sampleKabs[i % sampleKabs.length]}, Kab. Bogor`,
-        rs: sampleRS[i % sampleRS.length],
-        armada: `F 119-${(i % 5) + 1} PSC`,
-        petugas: `Tim Paramedis Posko ${(i % 3) + 1}`,
-        respTime,
-        isSpmPass: respTime <= 15,
-      }
-    })
-  }, [activeDetailCard, filteredDetailMarkers, mockPersonnelList, mockAmbulanceList])
+    return []
+  }, [activeDetailCard, filteredDetailMarkers, realPersonnelList, realAmbulanceList])
 
   const searchedMatrixRows = useMemo(() => {
     if (!modalSearchQuery.trim()) return matrixDataRows
@@ -3048,11 +3064,11 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
             { label: 'Kasus Emergency', value: (effectiveSummary?.total_emergency !== undefined && effectiveSummary.total_emergency > 0 ? effectiveSummary.total_emergency : effectiveSummary?.total_krisis) ?? 0, color: 'text-red-600', icon: AlertTriangle, bg: 'bg-red-50/80' },
             { label: 'Non Emergency', value: (effectiveSummary?.total_non_emergency !== undefined && effectiveSummary.total_non_emergency > 0 ? effectiveSummary.total_non_emergency : effectiveSummary?.total_meninggal) ?? 0, color: 'text-amber-600', icon: ShieldAlert, bg: 'bg-amber-50/80' },
             { label: 'Non Category', value: (effectiveSummary?.total_non_category !== undefined && effectiveSummary.total_non_category > 0 ? effectiveSummary.total_non_category : effectiveSummary?.total_luka) ?? 0, color: 'text-blue-600', icon: HeartPulse, bg: 'bg-blue-50/80' },
-            { label: 'Armada Ambulans', value: effectiveSummary?.total_pengungsi ?? 0, color: 'text-indigo-650', icon: Ambulance, bg: 'bg-indigo-50/80' },
-            { label: 'Personil PSC', value: effectiveSummary?.total_personil ?? 450, color: 'text-emerald-700', icon: Users, bg: 'bg-emerald-50/80' },
+            { label: 'Armada Ambulans', value: effectiveSummary?.total_ambulan ?? (data as any)?.totalAmbulance ?? realAmbulanceList.length ?? 0, color: 'text-indigo-650', icon: Ambulance, bg: 'bg-indigo-50/80' },
+            { label: 'Personil PSC', value: effectiveSummary?.total_personil ?? (data as any)?.totalPersonnel ?? realPersonnelList.length ?? 0, color: 'text-emerald-700', icon: Users, bg: 'bg-emerald-50/80' },
             {
               label: 'Waktu Respons PSC',
-              value: effectiveSummary?.waktu_respons_rata_rata ?? 8.4,
+              value: effectiveSummary?.waktu_respons_rata_rata ?? 0,
               unit: 'Mnt',
               color: 'text-cyan-700',
               icon: Clock,
@@ -3496,25 +3512,6 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                       </>
                     )}
                   </div>
-
-                  {/* Scrollable Compact Breakdown Legend (Equal Height) */}
-                  {formattedExtension.length > 0 && !isDbEmpty && (
-                    <div className="mt-3 pt-2.5 border-t border-slate-100 max-h-[140px] overflow-y-auto pr-1 scrollbar-thin grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
-                      {formattedExtension.map((item, idx) => {
-                        const pct = totalCount > 0 ? Math.round((item.jumlah / totalCount) * 100) : 0
-                        const color = COLORS[idx % COLORS.length]
-                        return (
-                          <div key={idx} className="flex items-center justify-between gap-1.5 p-1.5 rounded-lg bg-slate-50 border border-slate-100">
-                            <span className="flex items-center gap-1.5 truncate text-slate-700 font-bold" title={item.nama}>
-                              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                              <span className="truncate">{item.nama}</span>
-                            </span>
-                            <span className="text-slate-900 font-black shrink-0">{item.jumlah} <span className="text-[10px] text-slate-500 font-semibold">({pct}%)</span></span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
                 </div>
               )
             })()}
@@ -3663,25 +3660,6 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                       </>
                     )}
                   </div>
-
-                  {/* Scrollable Compact Breakdown Legend (Equal Height) */}
-                  {formattedSumberPanggilan.length > 0 && !isDbEmpty && (
-                    <div className="mt-3 pt-2.5 border-t border-slate-100 max-h-[140px] overflow-y-auto pr-1 scrollbar-thin grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
-                      {formattedSumberPanggilan.map((item, idx) => {
-                        const pct = totalSumber > 0 ? Math.round((item.jumlah / totalSumber) * 100) : 0
-                        const color = CATEGORY_COLORS[idx % CATEGORY_COLORS.length]
-                        return (
-                          <div key={idx} className="flex items-center justify-between gap-1 p-1.5 rounded-lg bg-slate-50 border border-slate-100">
-                            <span className="flex items-center gap-1.5 truncate text-slate-700 font-bold" title={item.nama}>
-                              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                              <span className="truncate">{item.nama}</span>
-                            </span>
-                            <span className="text-slate-900 font-black shrink-0">{item.jumlah} <span className="text-[10px] text-slate-500 font-semibold">({pct}%)</span></span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
                 </div>
               )
             })()}
@@ -3830,25 +3808,6 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                       </>
                     )}
                   </div>
-
-                  {/* Scrollable Compact Breakdown Legend (Equal Height) */}
-                  {formattedSpesifikasiLayanan.length > 0 && !isDbEmpty && (
-                    <div className="mt-3 pt-2.5 border-t border-slate-100 max-h-[140px] overflow-y-auto pr-1 scrollbar-thin grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
-                      {formattedSpesifikasiLayanan.map((item, idx) => {
-                        const pct = totalSpesifikasi > 0 ? Math.round((item.jumlah / totalSpesifikasi) * 100) : 0
-                        const color = COLORS[(idx + 3) % COLORS.length]
-                        return (
-                          <div key={idx} className="flex items-center justify-between gap-1.5 p-1.5 rounded-lg bg-slate-50 border border-slate-100">
-                            <span className="flex items-center gap-1.5 truncate text-slate-700 font-bold" title={item.nama}>
-                              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                              <span className="truncate">{item.nama}</span>
-                            </span>
-                            <span className="text-slate-900 font-black shrink-0">{item.jumlah} <span className="text-[10px] text-slate-500 font-semibold">({pct}%)</span></span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
                 </div>
               )
             })()}
@@ -4027,7 +3986,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
               </p>
             </div>
             <div className="text-4xl sm:text-5xl font-black tracking-tight drop-shadow-sm ml-4">
-              {data?.summary?.total_layanan_ambulan_hari_ini ?? 53}
+              {data?.summary?.total_layanan_ambulan_hari_ini ?? 0}
             </div>
           </div>
 
@@ -4041,7 +4000,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
               </p>
             </div>
             <div className="text-4xl sm:text-5xl font-black tracking-tight drop-shadow-sm ml-4">
-              {data?.summary?.total_ambulan_sedang_melayani_hari_ini ?? 1}
+              {data?.summary?.total_ambulan_sedang_melayani_hari_ini ?? 0}
             </div>
           </div>
         </div>
@@ -4429,10 +4388,10 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                     }`}
                   >
                     {activeDetailCard === 'Personil PSC'
-                      ? (effectiveSummary?.total_personil ?? 450)
+                      ? (effectiveSummary?.total_personil || (data as any)?.totalPersonnel || realPersonnelList.length || 0)
                       : activeDetailCard === 'Armada Ambulans'
-                      ? Math.max(mockAmbulanceList.length, effectiveSummary?.total_pengungsi ?? 16)
-                      : filteredDetailMarkers.length || (activeDetailCard === 'Kasus Emergency' ? 14 : activeDetailCard === 'Non Emergency' ? 2 : 16)}
+                      ? (effectiveSummary?.total_ambulan || (data as any)?.totalAmbulance || realAmbulanceList.length || 0)
+                      : filteredDetailMarkers.length}
                   </span>
                 </button>
 

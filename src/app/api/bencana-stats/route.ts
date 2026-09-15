@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import type { PscCallItem, PscAmbulanceItem, PscHospitalItem, PscCallRecord } from '@/types/psc'
+import type { PscCallItem, PscAmbulanceItem, PscHospitalItem, PscCallRecord, PscPersonnelItem } from '@/types/psc'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     const headers: Record<string, string> = {}
     if (PSC_API_TOKEN) headers['TTOKEN'] = PSC_API_TOKEN
 
-    // 1. Form data untuk panggilan
+    // 1. Form data untuk panggilan (Halaman 1)
     const fdCalls = new FormData()
     fdCalls.append('tahun', tahun)
     if (kode_psc) fdCalls.append('kode_psc', kode_psc)
@@ -46,13 +46,25 @@ export async function GET(req: Request) {
     const fdRs = new FormData()
     if (kode_psc) fdRs.append('kode_psc', kode_psc)
     fdRs.append('page', '1')
-    fdRs.append('per_page', '50')
+    fdRs.append('per_page', '100')
+
+    // 4. Form data untuk personil operasional PSC 119
+    const fdPersonil = new FormData()
+    if (kode_psc) fdPersonil.append('kode_psc', kode_psc)
+    fdPersonil.append('page', '1')
+    fdPersonil.append('per_page', '100')
+
+    // 5. Form data untuk pusat unit PSC terdaftar
+    const fdPsc = new FormData()
+    if (kode_psc) fdPsc.append('kode_psc', kode_psc)
+    fdPsc.append('page', '1')
+    fdPsc.append('per_page', '100')
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 12000)
+    const timeoutId = setTimeout(() => controller.abort(), 15000)
 
-    // Ambil data panggilan, ambulan, dan rumah sakit rujukan secara paralel
-    const [callsSettled, ambSettled, rsSettled] = await Promise.allSettled([
+    // Ambil data panggilan, ambulan, rumah sakit, personil, dan unit PSC secara paralel
+    const [callsSettled, ambSettled, rsSettled, personilSettled, pscSettled] = await Promise.allSettled([
       fetch(`${PSC_API_BASE_URL}/data-pelaporan-panggilan`, {
         method: 'POST',
         headers,
@@ -71,28 +83,88 @@ export async function GET(req: Request) {
         body: fdRs,
         signal: controller.signal,
       }),
+      fetch(`${PSC_API_BASE_URL}/data-personil-psc`, {
+        method: 'POST',
+        headers,
+        body: fdPersonil,
+        signal: controller.signal,
+      }),
+      fetch(`${PSC_API_BASE_URL}/data-psc`, {
+        method: 'POST',
+        headers,
+        body: fdPsc,
+        signal: controller.signal,
+      }),
     ])
     clearTimeout(timeoutId)
 
     let calls: PscCallItem[] = []
     let totalCount = 0
+    let totalPages = 1
 
     if (callsSettled.status === 'fulfilled' && callsSettled.value.ok) {
       const pscJson = await callsSettled.value.json().catch(() => ({}))
       calls = pscJson.data || []
       totalCount = pscJson.total_data || calls.length
+      totalPages = pscJson.total_page || Math.ceil(totalCount / 100)
+    }
+
+    // Jika dataset memiliki banyak halaman (skala nasional/provinsi), ambil beberapa halaman representatif sepanjang tahun (Januari s.d September)
+    if (totalPages > 4 && !month) {
+      try {
+        const step = Math.max(1, Math.floor(totalPages / 6))
+        const samplePageIndices = [step, step * 2, step * 3, step * 4, step * 5, totalPages].filter(p => p > 1 && p <= totalPages)
+        const extraCallsPromises = samplePageIndices.map(p => {
+          const fd = new FormData()
+          fd.append('tahun', tahun)
+          if (kode_psc) fd.append('kode_psc', kode_psc)
+          if (province) fd.append('kd_prop', province)
+          if (kabupaten) fd.append('kd_kab', kabupaten)
+          fd.append('page', String(p))
+          fd.append('per_page', '100')
+          return fetch(`${PSC_API_BASE_URL}/data-pelaporan-panggilan`, { method: 'POST', headers, body: fd }).then(r => r.json()).catch(() => ({}))
+        })
+        const extraRes = await Promise.all(extraCallsPromises)
+        for (const er of extraRes) {
+          if (er && er.data && Array.isArray(er.data)) {
+            calls.push(...er.data)
+          }
+        }
+      } catch (e) {
+        console.error('[bencana-stats] extra pages sample error:', e)
+      }
+    }
+
+    let rawPersonil: any[] = []
+    let totalPersonil = 0
+    if (personilSettled.status === 'fulfilled' && personilSettled.value.ok) {
+      const pJson = await personilSettled.value.json().catch(() => ({}))
+      rawPersonil = pJson.data || []
+      totalPersonil = pJson.total_data || rawPersonil.length
     }
 
     let rawAmbulance: any[] = []
+    let totalAmbulans = 0
     if (ambSettled.status === 'fulfilled' && ambSettled.value.ok) {
       const ambJson = await ambSettled.value.json().catch(() => ({}))
       rawAmbulance = ambJson.data || []
+      totalAmbulans = ambJson.total_data || rawAmbulance.length
     }
 
     let rawRs: any[] = []
+    let totalRs = 0
     if (rsSettled.status === 'fulfilled' && rsSettled.value.ok) {
       const rsJson = await rsSettled.value.json().catch(() => ({}))
       rawRs = rsJson.data || []
+      totalRs = rsJson.total_data || rawRs.length
+    }
+
+    let rawPsc: any[] = []
+    let totalPsc = 0
+    if (pscSettled.status === 'fulfilled' && pscSettled.value.ok) {
+      const pscJsonCenters = await pscSettled.value.json().catch(() => ({}))
+      rawPsc = pscJsonCenters.data || []
+      totalPsc = pscJsonCenters.total_data || rawPsc.length
     }
 
     // Filter panggilan berdasarkan bulan jika dipilih
@@ -112,11 +184,11 @@ export async function GET(req: Request) {
       }
     }
 
-    let totalEmergency = 0
-    let totalNonEmergency = 0
-    let totalNonCategory = 0
-    let totalTrauma = 0
-    let totalAmbulans = 0
+    let sampleEmergency = 0
+    let sampleNonEmergency = 0
+    let sampleNonCategory = 0
+    let sampleTrauma = 0
+    let totalAmbulansCalls = 0
     let totalSelesai = 0
 
     // Hitung ambulans hari ini & sedang melayani hari ini (sesuai tanggal panggilan terbaru)
@@ -142,13 +214,13 @@ export async function GET(req: Request) {
       const isNonCategory = (jenisLower.includes('non') && (jenisLower.includes('cat') || jenisLower.includes('kat'))) || (!isEmergency && !isNonEmergency && Boolean(jenisLower))
       const isTrauma = (c.kategori_layanan || '').toLowerCase().includes('trauma')
 
-      if (isEmergency) totalEmergency++
-      if (isNonEmergency) totalNonEmergency++
-      if (isNonCategory) totalNonCategory++
-      if (isTrauma) totalTrauma++
+      if (isEmergency) sampleEmergency++
+      if (isNonEmergency) sampleNonEmergency++
+      if (isNonCategory) sampleNonCategory++
+      if (isTrauma) sampleTrauma++
 
       const hasAmbulance = Boolean(c.nomor_kendaraan || c.nama_petugas_ambulan || c.id_ambulan || (c.layanan_ambulance && c.layanan_ambulance.trim() !== ''))
-      if (hasAmbulance) totalAmbulans++
+      if (hasAmbulance) totalAmbulansCalls++
 
       const statusLower = (c.status_penanganan_code || c.status_penanganan || '').toLowerCase()
       const isCompleted = statusLower.includes('selesai')
@@ -422,32 +494,43 @@ export async function GET(req: Request) {
       .map(([nama, jumlah]) => ({ nama, jumlah }))
       .sort((a, b) => b.jumlah - a.jumlah)
 
-    // Hitung rata-rata waktu respons panggilan PSC
+    // Hitung kalkulasi dinamis totalEmergency, totalNonEmergency, totalNonCategory berdasarkan proporsi panggilan nyata
+    const sampleTotal = calls.length || 1
+    const totalEmergency = totalCount > calls.length
+      ? Math.round(totalCount * (sampleEmergency / sampleTotal))
+      : sampleEmergency
+    const totalNonEmergency = totalCount > calls.length
+      ? Math.round(totalCount * (sampleNonEmergency / sampleTotal))
+      : sampleNonEmergency
+    const totalNonCategory = totalCount > calls.length
+      ? Math.max(0, totalCount - totalEmergency - totalNonEmergency)
+      : sampleNonCategory
+
+    // Hitung rata-rata waktu respons panggilan PSC dari log riil
     const avgResponseMin = responseTimeList.length > 0
       ? (responseTimeList.reduce((a, b) => a + b, 0) / responseTimeList.length).toFixed(1)
-      : '8.4'
+      : '0.0'
     const waktuResponsNumber = parseFloat(avgResponseMin)
-
-    // Nilai default jika hitungan nol (sinkronisasi fallback visual)
-    const finalLayananAmbulanHariIni = totalLayananAmbulanHariIni > 0 ? totalLayananAmbulanHariIni : (totalAmbulans > 0 ? totalAmbulans : 53)
-    const finalAmbulanSedangMelayani = totalAmbulanSedangMelayaniHariIni > 0 ? totalAmbulanSedangMelayaniHariIni : 1
 
     const payload = {
       success: true,
       summary: {
         total_bencana: totalCount,
         total_krisis: totalEmergency,
-        total_meninggal: totalNonEmergency > 0 ? totalNonEmergency : totalTrauma,
-        total_luka: totalNonCategory > 0 ? totalNonCategory : totalEmergency,
+        total_meninggal: totalNonEmergency,
+        total_luka: totalNonCategory,
         total_hilang: 0,
         total_pengungsi: totalAmbulans,
         total_terdampak: totalCount,
         total_emergency: totalEmergency,
         total_non_emergency: totalNonEmergency,
         total_non_category: totalNonCategory,
-        total_personil: 450,
-        total_layanan_ambulan_hari_ini: finalLayananAmbulanHariIni,
-        total_ambulan_sedang_melayani_hari_ini: finalAmbulanSedangMelayani,
+        total_personil: totalPersonil,
+        total_ambulan: totalAmbulans,
+        total_rs: totalRs,
+        total_psc: totalPsc,
+        total_layanan_ambulan_hari_ini: totalLayananAmbulanHariIni,
+        total_ambulan_sedang_melayani_hari_ini: totalAmbulanSedangMelayaniHariIni,
         waktu_respons_rata_rata: waktuResponsNumber,
         waktu_respons_label: `${waktuResponsNumber} Menit`,
       },
@@ -459,8 +542,14 @@ export async function GET(req: Request) {
       sebaran_icd,
       markers,
       calls: formattedCalls,
+      personnel: rawPersonil,
       ambulances,
       hospitals,
+      centers: rawPsc,
+      totalPersonnel: totalPersonil,
+      totalAmbulance: totalAmbulans,
+      totalHospital: totalRs,
+      totalPsc,
     }
 
     cachedResponse = { timestamp: Date.now(), data: payload, key: cacheKey }

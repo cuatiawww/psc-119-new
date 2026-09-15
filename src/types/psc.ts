@@ -129,6 +129,23 @@ export interface PscFilterParams {
   search?: string
 }
 
+export interface PscPersonnelItem {
+  id_user: number
+  kode_psc?: string | null
+  detail_lengkap: string
+  jabatan: string
+  status?: number
+  relawan_jkel?: string
+  relawan_tanggal_lahir?: string
+  relawan_id_prov?: number
+  relawan_id_kab?: number
+  relawan_no_telp?: string
+  email?: string
+  join_date?: string
+  kabupaten?: string
+  provinsi?: string
+}
+
 export interface PscAmbulanceItem {
   id_ambulan: number | string
   kode_ambulan?: string
