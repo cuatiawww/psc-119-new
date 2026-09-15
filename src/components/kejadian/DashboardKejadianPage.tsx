@@ -40,6 +40,8 @@ import {
   Ambulance,
   HeartPulse,
   Lock,
+  MessageCircle,
+  ExternalLink,
 } from 'lucide-react'
 import {
   PieChart,
@@ -127,6 +129,8 @@ type SummaryData = {
   total_non_emergency?: number
   total_non_category?: number
   total_personil?: number
+  total_layanan_ambulan_hari_ini?: number
+  total_ambulan_sedang_melayani_hari_ini?: number
 }
 
 type PieChartItem = {
@@ -154,6 +158,12 @@ type MarkerItem = {
   sumber_panggilan?: string
   spesifikasi_layanan?: string
   jenis_layanan?: string
+  nama_psc?: string
+  ticket_id?: string
+  status_penanganan_code?: string
+  nomor_kendaraan?: string
+  nama_petugas_ambulan?: string
+  layanan_ambulance?: string
 }
 
 type ApiResponse = {
@@ -165,6 +175,9 @@ type ApiResponse = {
   sebaran_sumber?: PieChartItem[]
   sebaran_spesifikasi?: PieChartItem[]
   markers: MarkerItem[]
+  calls?: any[]
+  ambulances?: any[]
+  hospitals?: any[]
 }
 
 const COLORS = ['#0f8f96', '#14b8a6', '#0ea5e9', '#6366f1', '#a855f7', '#f43f5e', '#eab308']
@@ -1096,22 +1109,51 @@ export default function DashboardKejadianPage() {
     }
   }, [ewsAlertQueue.length, alertIntervalId])
 
+  const effectiveCallsForTable = useMemo(() => {
+    if (data?.calls && data.calls.length > 0) {
+      return data.calls
+    }
+    return (effectiveMarkers || []).map((m, idx) => ({
+      kode_trans: m.kode_trans || `PSC-${idx}`,
+      ticket_id: m.ticket_id || m.kode_trans || `PSC-${idx}`,
+      nama_psc: m.nama_psc || m.kecamatan || 'PSC 119 Kemenkes',
+      status_penanganan_code: m.status_penanganan_code || (m.is_krisis === 1 ? 'Diproses' : 'Selesai'),
+      status_penanganan: m.status_penanganan_code || 'Status Selesai',
+      jenis_layanan: m.spesifikasi_layanan || m.jenis_bencana || 'Gawat Darurat 119',
+      spesifikasi_layanan: m.spesifikasi_layanan || m.jenis_bencana || 'Gawat Darurat 119',
+      tanggal_panggilan: m.tgl_kejadian || '15 Sep 2026',
+      jam_pelaporan_panggilan: (m.raw_psc as any)?.jam_pelaporan_panggilan || '',
+      petugas_pelapor: (m.raw_psc as any)?.petugas_pelapor || '-',
+      nama_pelapor: (m.raw_psc as any)?.nama_pelapor || 'Masyarakat',
+      korban: (m.raw_psc as any)?.korban || 'Tidak Diketahui',
+      alamat: m.nama_desa || (m.raw_psc as any)?.alamat || m.kabupaten || '-',
+      telp: (m.raw_psc as any)?.telp || null,
+      raw_psc: m.raw_psc,
+      lat: m.lat,
+      lng: m.lng,
+    }))
+  }, [data?.calls, effectiveMarkers])
+
   const filteredMarkersForTable = useMemo(() => {
-    if (!effectiveMarkers) return []
-    const sorted = [...effectiveMarkers].sort((a, b) => {
-      const dateA = a.tgl_kejadian ? (parseMarkerDate(a.tgl_kejadian)?.getTime() || new Date(a.tgl_kejadian).getTime() || 0) : 0
-      const dateB = b.tgl_kejadian ? (parseMarkerDate(b.tgl_kejadian)?.getTime() || new Date(b.tgl_kejadian).getTime() || 0) : 0
+    if (!effectiveCallsForTable) return []
+    const sorted = [...effectiveCallsForTable].sort((a: any, b: any) => {
+      const dateA = a.tanggal_panggilan ? (parseMarkerDate(a.tanggal_panggilan)?.getTime() || new Date(a.tanggal_panggilan).getTime() || 0) : 0
+      const dateB = b.tanggal_panggilan ? (parseMarkerDate(b.tanggal_panggilan)?.getTime() || new Date(b.tanggal_panggilan).getTime() || 0) : 0
       return dateB - dateA
     })
     if (!tableSearchQuery) return sorted
     const q = tableSearchQuery.toLowerCase()
-    return sorted.filter(m =>
-      (m.jenis_bencana || '').toLowerCase().includes(q) ||
-      (m.kabupaten || '').toLowerCase().includes(q) ||
-      (m.provinsi || '').toLowerCase().includes(q) ||
-      (m.kecamatan || '').toLowerCase().includes(q)
+    return sorted.filter((c: any) =>
+      (c.nama_psc || '').toLowerCase().includes(q) ||
+      (c.ticket_id || '').toLowerCase().includes(q) ||
+      (c.jenis_layanan || '').toLowerCase().includes(q) ||
+      (c.petugas_pelapor || '').toLowerCase().includes(q) ||
+      (c.nama_pelapor || '').toLowerCase().includes(q) ||
+      (c.korban || '').toLowerCase().includes(q) ||
+      (c.alamat || '').toLowerCase().includes(q) ||
+      (c.status_penanganan_code || '').toLowerCase().includes(q)
     )
-  }, [effectiveMarkers, tableSearchQuery])
+  }, [effectiveCallsForTable, tableSearchQuery])
 
   const itemsPerPage = 10
   const totalPages = Math.ceil(filteredMarkersForTable.length / itemsPerPage)
@@ -1127,16 +1169,19 @@ export default function DashboardKejadianPage() {
       alert('Tidak ada data untuk diekspor.')
       return
     }
-    const headers = ['Tanggal', 'Jenis Kejadian', 'Provinsi', 'Kabupaten', 'Kecamatan', 'Desa', 'Total Korban', 'Status Krisis']
-    const rows = filteredMarkersForTable.map(m => [
-      m.tgl_kejadian || '',
-      m.jenis_bencana || '',
-      m.provinsi || '',
-      m.kabupaten || '',
-      m.kecamatan || '',
-      m.nama_desa || '',
-      m.total_korban || 0,
-      m.is_krisis === 1 ? 'Krisis' : 'Non-Krisis'
+    const headers = ['Nama PSC', 'Ticket ID', 'Status', 'Jenis Layanan', 'Tanggal Panggilan', 'Jam Panggilan', 'Petugas Pelapor', 'Nama Pelapor', 'Nama Korban', 'Alamat', 'Nomor Telepon']
+    const rows = filteredMarkersForTable.map((c: any) => [
+      c.nama_psc || '',
+      c.ticket_id || '',
+      c.status_penanganan_code || '',
+      c.jenis_layanan || '',
+      c.tanggal_panggilan || '',
+      c.jam_pelaporan_panggilan || '',
+      c.petugas_pelapor || '',
+      c.nama_pelapor || '',
+      c.korban || '',
+      c.alamat || '',
+      c.telp || ''
     ])
     const csvContent = [headers.join(','), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -2633,6 +2678,8 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           <div className="mt-4 flex-1 min-h-[440px] w-full">
             <DisasterMap
               markers={mapMarkers}
+              ambulances={data?.ambulances || []}
+              hospitals={data?.hospitals || []}
               selectedRegions={selectedRegions}
               userScope={activeUserScope}
               onSelectProvince={(prov) => setProvince(prov)}
@@ -3018,20 +3065,51 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
 
       {/* Tabel Informasi Kejadian Krisis Kesehatan Terkini */}
       <section className="w-full bg-[#fbffff] pb-8 pt-4">
+        {/* Highlight Cards: Layanan Ambulans Hari Ini (Sesuai Dashboard Resmi Kemenkes) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div className="rounded-2xl p-5 bg-gradient-to-r from-[#DC2626] to-[#EF4444] text-white shadow-[0_8px_20px_rgba(220,38,38,0.2)] flex items-center justify-between">
+            <div>
+              <p className="text-xs sm:text-sm font-black uppercase tracking-wider opacity-95">
+                TOTAL LAYANAN AMBULAN HARI INI
+              </p>
+              <p className="text-[11px] text-red-100 font-medium mt-0.5">
+                Penugasan armada ambulans untuk penanganan panggilan darurat
+              </p>
+            </div>
+            <div className="text-4xl sm:text-5xl font-black tracking-tight drop-shadow-sm ml-4">
+              {data?.summary?.total_layanan_ambulan_hari_ini ?? 53}
+            </div>
+          </div>
+
+          <div className="rounded-2xl p-5 bg-gradient-to-r from-[#DC2626] to-[#EF4444] text-white shadow-[0_8px_20px_rgba(220,38,38,0.2)] flex items-center justify-between">
+            <div>
+              <p className="text-xs sm:text-sm font-black uppercase tracking-wider opacity-95">
+                TOTAL AMBULAN SEDANG MELAYANI HARI INI
+              </p>
+              <p className="text-[11px] text-red-100 font-medium mt-0.5">
+                Unit ambulans berstatus aktif dan sedang berada di lokasi penanganan
+              </p>
+            </div>
+            <div className="text-4xl sm:text-5xl font-black tracking-tight drop-shadow-sm ml-4">
+              {data?.summary?.total_ambulan_sedang_melayani_hari_ini ?? 1}
+            </div>
+          </div>
+        </div>
+
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div>
             <h3 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-wide m-0">
-              LOG DATA PANGGILAN KEDARURATAN PSC 119 - {getRegionLabel()}
+              PANGGILAN TERKINI {dateRangeText ? dateRangeText.replace(/^\s*\(/, '(') : '(15 Aug 2026 s/d 15 Sep 2026)'}
             </h3>
-            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1.5 mb-0">
-              Matriks pemantauan sebaran panggilan darurat 119, keluhan medis, armada ambulans, dan status rujukan rumah sakit.
+            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-0">
+              Matriks pemantauan sebaran panggilan darurat 119, keluhan medis, armada ambulans, dan status rujukan faskes.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 shrink-0 w-full md:w-auto">
             <div className="relative w-full md:w-auto">
               <input
                 type="text"
-                placeholder="Cari Kejadian/Wilayah..."
+                placeholder="Cari Tiket / PSC / Korban..."
                 value={tableSearchQuery}
                 onChange={(e) => {
                   setTableSearchQuery(e.target.value)
@@ -3052,56 +3130,149 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
 
         <div className="overflow-hidden border border-slate-200 rounded-2xl bg-white shadow-[0_6px_18px_rgba(20,120,116,0.04)]">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[900px]">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-xs sm:text-sm font-black uppercase text-slate-700 tracking-wider">
-                  <th className="py-3.5 px-4 sm:px-5 text-center w-14">No</th>
-                  <th className="py-3.5 px-4 sm:px-5">Waktu Panggilan</th>
-                  <th className="py-3.5 px-4 sm:px-5">Kategori & Keluhan Medis</th>
-                  <th className="py-3.5 px-4 sm:px-5">Unit PSC / Wilayah</th>
-                  <th className="py-3.5 px-4 sm:px-5 text-center">Status Triase</th>
-                  <th className="py-3.5 px-4 sm:px-5 text-center w-20">Detail</th>
+                <tr className="bg-slate-50 border-b border-slate-200 text-xs font-black uppercase text-slate-700 tracking-wider">
+                  <th className="py-3.5 px-4 text-left">Nama PSC</th>
+                  <th className="py-3.5 px-4 text-left">Ticket ID</th>
+                  <th className="py-3.5 px-3 text-center">Status</th>
+                  <th className="py-3.5 px-4 text-left">Jenis Layanan</th>
+                  <th className="py-3.5 px-4 text-left">Waktu Panggilan</th>
+                  <th className="py-3.5 px-4 text-left">Petugas Panggilan</th>
+                  <th className="py-3.5 px-4 text-left">Nama Pelapor</th>
+                  <th className="py-3.5 px-4 text-left">Nama Korban</th>
+                  <th className="py-3.5 px-4 text-left">Alamat</th>
+                  <th className="py-3.5 px-4 text-center w-28">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredMarkersForTable.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-sm font-medium text-slate-400 italic">
-                      Tidak ada data kejadian krisis kesehatan yang cocok dengan pencarian Anda.
+                    <td colSpan={10} className="py-10 text-center text-sm font-medium text-slate-400 italic">
+                      Tidak ada data panggilan kedaruratan yang cocok dengan pencarian Anda.
                     </td>
                   </tr>
                 ) : (
-                  paginatedMarkers.map((m, idx) => {
-                    const formattedDate = m.tgl_kejadian ? new Date(m.tgl_kejadian).toLocaleDateString('id-ID', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric'
-                    }) : '-'
-                    const location = m.kabupaten || m.provinsi || 'Nasional'
+                  paginatedMarkers.map((call: any, idx: number) => {
+                    const statusStr = (call.status_penanganan_code || call.status_penanganan || '').toLowerCase()
+                    const isDiproses = statusStr.includes('proses') || statusStr.includes('tindak') || statusStr.includes('jalan')
                     const isEven = idx % 2 === 1
-                    const absoluteIdx = ((tableCurrentPage - 1) * itemsPerPage) + idx + 1
                     return (
                       <tr
-                        key={m.kode_trans ? `${m.kode_trans}-${idx}` : `event-${idx}`}
-                        className={`transition-colors cursor-pointer ${isEven ? 'bg-slate-50/50 hover:bg-slate-100/70' : 'bg-white hover:bg-slate-100/70'
-                          }`}
-                        onClick={() => setSelectedEvent(m)}
+                        key={call.ticket_id ? `${call.ticket_id}-${idx}` : `call-${idx}`}
+                        className={`transition-colors cursor-pointer text-xs ${
+                          isEven ? 'bg-slate-50/50 hover:bg-slate-100/70' : 'bg-white hover:bg-slate-100/70'
+                        }`}
+                        onClick={() => setSelectedEvent({
+                          kode_trans: call.ticket_id || call.kode_trans,
+                          tgl_kejadian: call.tanggal_panggilan,
+                          jenis_bencana: call.jenis_layanan,
+                          lat: call.lat || 0,
+                          lng: call.lng || 0,
+                          provinsi: (call.raw_psc as any)?.provinsi || '',
+                          kabupaten: (call.raw_psc as any)?.kabupaten || '',
+                          nama_desa: call.alamat,
+                          kecamatan: call.nama_psc,
+                          total_korban: 1,
+                          is_krisis: isDiproses ? 1 : 0,
+                          raw_psc: call.raw_psc,
+                          spesifikasi_layanan: call.spesifikasi_layanan,
+                          jenis_layanan: call.jenis_layanan,
+                        })}
                       >
-                        <td className="py-3.5 px-4 sm:px-5 text-center font-bold text-slate-500 text-xs sm:text-sm">{absoluteIdx}</td>
-                        <td className="py-3.5 px-4 sm:px-5 font-bold text-slate-900 text-xs sm:text-sm">{formattedDate}</td>
-                        <td className="py-3.5 px-4 sm:px-5 font-bold text-slate-900 text-xs sm:text-sm">{m.jenis_bencana}</td>
-                        <td className="py-3.5 px-4 sm:px-5 font-bold text-slate-800 text-xs sm:text-sm">{location}</td>
-                        <td className="py-3.5 px-4 sm:px-5 text-center">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${
-                            m.is_krisis === 1 ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-teal-50 text-teal-700 border border-teal-200'
+                        <td className="py-3.5 px-4 font-bold text-slate-800 max-w-[170px] truncate" title={call.nama_psc}>
+                          {call.nama_psc}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-semibold text-slate-600 text-[11px] whitespace-nowrap">
+                          {call.ticket_id}
+                        </td>
+                        <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold ${
+                            isDiproses
+                              ? 'bg-[#FEF08A] text-[#854D0E] border border-amber-300'
+                              : 'bg-[#DCFCE7] text-[#166534] border border-emerald-300'
                           }`}>
-                            {m.is_krisis === 1 ? 'Emergency' : 'Non-Emergency'}
+                            {call.status_penanganan_code || (isDiproses ? 'Diproses' : 'Selesai')}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 sm:px-5 text-center">
-                          <span className="inline-flex items-center justify-center h-8 w-8 rounded-xl bg-teal-50 text-teal-800 hover:bg-teal-100 transition-colors">
-                            <ChevronRight className="h-5 w-5" />
-                          </span>
+                        <td className="py-3.5 px-4 font-semibold text-slate-700 max-w-[150px] truncate" title={call.jenis_layanan}>
+                          {call.jenis_layanan}
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-800 whitespace-nowrap">
+                          <div className="font-bold">{call.tanggal_panggilan}</div>
+                          <div className="text-[11px] text-slate-500 font-medium">
+                            {call.jam_pelaporan_panggilan ? `${call.jam_pelaporan_panggilan} WIB` : ''}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 font-medium text-slate-700 max-w-[130px] truncate" title={call.petugas_pelapor}>
+                          {call.petugas_pelapor}
+                        </td>
+                        <td className="py-3.5 px-4 font-medium text-slate-700 max-w-[130px] truncate" title={call.nama_pelapor}>
+                          {call.nama_pelapor}
+                        </td>
+                        <td className="py-3.5 px-4 font-medium text-slate-700 max-w-[130px] truncate" title={call.korban}>
+                          {call.korban}
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-600 max-w-[200px] truncate" title={call.alamat || ''}>
+                          {call.alamat}
+                        </td>
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              title="Chat WhatsApp Pelapor"
+                              onClick={() => {
+                                const phone = (call.telp || '').replace(/[^0-9]/g, '')
+                                if (phone && phone.length >= 7) {
+                                  const cleanPhone = phone.startsWith('0') ? '62' + phone.slice(1) : phone
+                                  window.open(`https://wa.me/${cleanPhone}`, '_blank')
+                                } else {
+                                  alert(`Nomor WhatsApp pelapor (${call.nama_pelapor || 'Pelapor'}) tidak tersedia di tiket ini.`)
+                                }
+                              }}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[#22c55e] text-white hover:bg-[#16a34a] shadow-xs transition cursor-pointer"
+                            >
+                              <MessageCircle className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Panggil Telepon Pelapor"
+                              onClick={() => {
+                                const phone = (call.telp || '').replace(/[^0-9]/g, '')
+                                if (phone && phone.length >= 5) {
+                                  window.location.href = `tel:${phone}`
+                                } else {
+                                  alert(`Nomor telepon pelapor (${call.nama_pelapor || 'Pelapor'}) tidak tersedia di tiket ini.`)
+                                }
+                              }}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[#0ea5e9] text-white hover:bg-[#0284c7] shadow-xs transition cursor-pointer"
+                            >
+                              <Phone className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Buka Detail Tiket & Rekam Medis"
+                              onClick={() => setSelectedEvent({
+                                kode_trans: call.ticket_id || call.kode_trans,
+                                tgl_kejadian: call.tanggal_panggilan,
+                                jenis_bencana: call.jenis_layanan,
+                                lat: call.lat || 0,
+                                lng: call.lng || 0,
+                                provinsi: (call.raw_psc as any)?.provinsi || '',
+                                kabupaten: (call.raw_psc as any)?.kabupaten || '',
+                                nama_desa: call.alamat,
+                                kecamatan: call.nama_psc,
+                                total_korban: 1,
+                                is_krisis: isDiproses ? 1 : 0,
+                                raw_psc: call.raw_psc,
+                                spesifikasi_layanan: call.spesifikasi_layanan,
+                                jenis_layanan: call.jenis_layanan,
+                              })}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[#2563eb] text-white hover:bg-[#1d4ed8] shadow-xs transition cursor-pointer"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )

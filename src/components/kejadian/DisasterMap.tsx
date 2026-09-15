@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { formatDisasterName } from '@/lib/utils/disasterUtils'
-import { Loader2, Settings, X, MapPin, Eye, EyeOff, Globe, Layers, Info, Clock, AlertTriangle, Compass, Activity, RotateCcw, Wind, Building2, Tent } from 'lucide-react'
+import { Loader2, Settings, X, MapPin, Eye, EyeOff, Globe, Layers, Info, Clock, AlertTriangle, Compass, Activity, RotateCcw, Wind, Building2, Tent, Ambulance } from 'lucide-react'
 import { useAuthStore } from '@/lib/authStore'
 
 
@@ -202,6 +202,8 @@ interface MarkerData {
 
 interface DisasterMapProps {
   markers: MarkerData[]
+  ambulances?: any[]
+  hospitals?: any[]
   selectedRegions?: any[]
   userScope?: any
   onSelectProvince?: (prov: string) => void
@@ -447,6 +449,8 @@ function categorizeFaskes(f: any): 'rs' | 'puskesmas' | 'klinik' | 'pustu' {
 
 export default function DisasterMap({
   markers,
+  ambulances = [],
+  hospitals = [],
   selectedRegions = [],
   userScope,
   onSelectProvince,
@@ -476,6 +480,10 @@ export default function DisasterMap({
   const [showTckLayer, setShowTckLayer] = useState(false) // Toggle layer TCK Kemkes (default: non-aktif)
   const [showPosko, setShowPosko] = useState(false) // Toggle layer Posko Pengungsian (default: non-aktif)
   const [showSeismicLayer, setShowSeismicLayer] = useState(true) // Toggle layer Titik Gempa USGS/BMKG
+  const [showAmbulances, setShowAmbulances] = useState(true) // Toggle layer Ambulans PSC
+  const [showHospitals, setShowHospitals] = useState(true) // Toggle layer RS Rujukan
+  const [ambulancePopup, setAmbulancePopup] = useState<any | null>(null)
+  const [hospitalPopup, setHospitalPopup] = useState<any | null>(null)
 
   // Infer normalized disaster category ONLY when disasterType is explicitly provided (Detail Page)
   const disasterCategory = useMemo(() => {
@@ -515,6 +523,8 @@ export default function DisasterMap({
 
   // EOC Routing Refs
   const eocLayerRef = useRef<VectorLayer<VectorSource<any>> | null>(null)
+  const ambulanceLayerRef = useRef<VectorLayer<VectorSource<any>> | null>(null)
+  const hospitalLayerRef = useRef<VectorLayer<VectorSource<any>> | null>(null)
 
   // Stable callback refs (avoid stale closures inside OL event handlers)
   const onSelectProvinceRef = useRef(onSelectProvince)
@@ -1080,9 +1090,17 @@ export default function DisasterMap({
     const markerLayer = new VectorLayer({ source: new VectorSource(), zIndex: 10 })
     markerLayerRef.current = markerLayer
 
+    // Hospital layer
+    const hospitalLayer = new VectorLayer({ source: new VectorSource(), zIndex: 11 })
+    hospitalLayerRef.current = hospitalLayer
+
     // EOC routing & faskes layer
     const eocLayer = new VectorLayer({ source: new VectorSource(), zIndex: 12 })
     eocLayerRef.current = eocLayer
+
+    // Ambulance unit layer
+    const ambulanceLayer = new VectorLayer({ source: new VectorSource(), zIndex: 14 })
+    ambulanceLayerRef.current = ambulanceLayer
 
     const firstM = markers && markers[0]
     const hasInitialCoord = firstM && Number(firstM.lng) !== 0 && Number(firstM.lat) !== 0
@@ -1104,7 +1122,9 @@ export default function DisasterMap({
         bnpbKarhutlaLayer,
         provinceLayer,
         kabupatenLayer,
+        hospitalLayer,
         markerLayer,
+        ambulanceLayer,
         eocLayer
       ],
       controls: defaultControls({ attribution: false }),
@@ -1239,6 +1259,54 @@ export default function DisasterMap({
         }
 
         setEocPopup(null)
+        setAmbulancePopup(null)
+        setHospitalPopup(null)
+        setActivePopup(null)
+        return
+      }
+
+      // Check ambulance pin
+      const ambulanceFeature = map.forEachFeatureAtPixel(
+        evt.pixel,
+        (f) => f,
+        { layerFilter: (l) => l === ambulanceLayerRef.current }
+      )
+      if (ambulanceFeature) {
+        const data = ambulanceFeature.get('ambulanceData')
+        const container = mapContainerRef.current
+        if (container && mapRef.current) {
+          const rect = container.getBoundingClientRect()
+          const mapRect = mapRef.current.getBoundingClientRect()
+          const x = evt.pixel[0] + (mapRect.left - rect.left)
+          const y = evt.pixel[1] + (mapRect.top - rect.top)
+          setAmbulancePopup({ data, x, y })
+        }
+        setMarkerPopup(null)
+        setHospitalPopup(null)
+        setEocPopup(null)
+        setActivePopup(null)
+        return
+      }
+
+      // Check hospital pin
+      const hospitalFeature = map.forEachFeatureAtPixel(
+        evt.pixel,
+        (f) => f,
+        { layerFilter: (l) => l === hospitalLayerRef.current }
+      )
+      if (hospitalFeature) {
+        const data = hospitalFeature.get('hospitalData')
+        const container = mapContainerRef.current
+        if (container && mapRef.current) {
+          const rect = container.getBoundingClientRect()
+          const mapRect = mapRef.current.getBoundingClientRect()
+          const x = evt.pixel[0] + (mapRect.left - rect.left)
+          const y = evt.pixel[1] + (mapRect.top - rect.top)
+          setHospitalPopup({ data, x, y })
+        }
+        setMarkerPopup(null)
+        setAmbulancePopup(null)
+        setEocPopup(null)
         setActivePopup(null)
         return
       }
@@ -1249,11 +1317,15 @@ export default function DisasterMap({
       if (!polyFeature) {
         setActivePopup(null)
         setMarkerPopup(null)
+        setAmbulancePopup(null)
+        setHospitalPopup(null)
         setEocPopup(null)
         return
       }
 
       setMarkerPopup(null)
+      setAmbulancePopup(null)
+      setHospitalPopup(null)
       setEocPopup(null)
 
       const currentScope = userScopeRef.current
@@ -2125,6 +2197,88 @@ export default function DisasterMap({
 
   }, [filteredMarkers, showMarkers, showBmkg, bmkgGempas, showEwsPulse, createPulseOverlay])
 
+  // ── Sync Ambulance Unit Layer ──
+  useEffect(() => {
+    const layer = ambulanceLayerRef.current
+    if (!layer) return
+    const source = layer.getSource()
+    if (!source) return
+    source.clear()
+
+    if (!showAmbulances || !Array.isArray(ambulances) || ambulances.length === 0) {
+      layer.setVisible(false)
+      return
+    }
+
+    layer.setVisible(true)
+
+    const ambulanceStyle = (isServing: boolean) =>
+      new Style({
+        image: new Icon({
+          src: isServing
+            ? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36"><circle cx="18" cy="18" r="16" fill="%23f59e0b" stroke="%23ffffff" stroke-width="2.5"/><path d="M10 19h16v5a1 1 0 0 1-1 1h-1.5a2.5 2.5 0 0 1-5 0h-3a2.5 2.5 0 0 1-5 0H10v-6zm0-1l2-5h9l3 5H10z" fill="%23ffffff"/><circle cx="13.5" cy="25" r="1.5" fill="%23f59e0b"/><circle cx="21.5" cy="25" r="1.5" fill="%23f59e0b"/><rect x="16" y="15" width="2" height="6" fill="%23dc2626"/><rect x="14" y="17" width="6" height="2" fill="%23dc2626"/></svg>'
+            : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36"><circle cx="18" cy="18" r="16" fill="%230284c7" stroke="%23ffffff" stroke-width="2.5"/><path d="M10 19h16v5a1 1 0 0 1-1 1h-1.5a2.5 2.5 0 0 1-5 0h-3a2.5 2.5 0 0 1-5 0H10v-6zm0-1l2-5h9l3 5H10z" fill="%23ffffff"/><circle cx="13.5" cy="25" r="1.5" fill="%230284c7"/><circle cx="21.5" cy="25" r="1.5" fill="%230284c7"/><rect x="16" y="15" width="2" height="6" fill="%23dc2626"/><rect x="14" y="17" width="6" height="2" fill="%23dc2626"/></svg>',
+          scale: 0.9,
+        }),
+      })
+
+    const features: Feature<any>[] = []
+    ambulances.forEach((a: any) => {
+      const lat = a.lat !== undefined ? Number(a.lat) : parseFloat(a.latitude)
+      const lng = a.lng !== undefined ? Number(a.lng) : parseFloat(a.longitude)
+      if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) > 0) {
+        const isServing = String(a.status_aktif || '').toLowerCase().includes('tugas') || String(a.status_aktif || '').toLowerCase().includes('layan')
+        const feat = new Feature({
+          geometry: new Point(fromLonLat([lng, lat])),
+          ambulanceData: a,
+        })
+        feat.setStyle(ambulanceStyle(isServing))
+        features.push(feat)
+      }
+    })
+
+    source.addFeatures(features)
+  }, [ambulances, showAmbulances])
+
+  // ── Sync Hospital & Referral Sarana Layer ──
+  useEffect(() => {
+    const layer = hospitalLayerRef.current
+    if (!layer) return
+    const source = layer.getSource()
+    if (!source) return
+    source.clear()
+
+    if (!showHospitals || !Array.isArray(hospitals) || hospitals.length === 0) {
+      layer.setVisible(false)
+      return
+    }
+
+    layer.setVisible(true)
+
+    const hospitalStyle = new Style({
+      image: new Icon({
+        src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 34" width="34" height="34"><circle cx="17" cy="17" r="15" fill="%23059669" stroke="%23ffffff" stroke-width="2.5"/><rect x="14.5" y="8" width="5" height="18" rx="1.5" fill="%23ffffff"/><rect x="8" y="14.5" width="18" height="5" rx="1.5" fill="%23ffffff"/></svg>',
+        scale: 0.85,
+      }),
+    })
+
+    const features: Feature<any>[] = []
+    hospitals.forEach((h: any) => {
+      const lat = h.lat !== undefined ? Number(h.lat) : parseFloat(h.latitude)
+      const lng = h.lng !== undefined ? Number(h.lng) : parseFloat(h.longitude)
+      if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) > 0) {
+        const feat = new Feature({
+          geometry: new Point(fromLonLat([lng, lat])),
+          hospitalData: h,
+        })
+        feat.setStyle(hospitalStyle)
+        features.push(feat)
+      }
+    })
+
+    source.addFeatures(features)
+  }, [hospitals, showHospitals])
+
   // ── Sync EOC Routing & Faskes Layer ──
   useEffect(() => {
     const eocLayer = eocLayerRef.current
@@ -2707,6 +2861,55 @@ export default function DisasterMap({
       ref={mapContainerRef}
       className="relative h-full w-full overflow-hidden rounded-2xl border border-slate-200 bg-[#f1fcfc]"
     >
+      {/* Floating Layer Switcher for PSC Map */}
+      <div className="absolute top-3.5 left-3.5 z-20 flex flex-wrap items-center gap-1.5 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-md text-xs font-bold">
+        <button
+          type="button"
+          onClick={() => setShowMarkers((v) => !v)}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+            showMarkers
+              ? 'bg-red-50 text-red-700 border border-red-200 shadow-xs'
+              : 'bg-slate-100 text-slate-400 border border-transparent line-through'
+          }`}
+          title="Tampilkan/Sembunyikan Titik Panggilan 119"
+        >
+          <span className={`h-2.5 w-2.5 rounded-full ${showMarkers ? 'bg-red-600 animate-pulse' : 'bg-slate-400'}`} />
+          Panggilan 119
+        </button>
+
+        {ambulances && ambulances.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAmbulances((v) => !v)}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+              showAmbulances
+                ? 'bg-sky-50 text-sky-700 border border-sky-200 shadow-xs'
+                : 'bg-slate-100 text-slate-400 border border-transparent line-through'
+            }`}
+            title="Tampilkan/Sembunyikan Armada Ambulans PSC"
+          >
+            <span className={`h-2.5 w-2.5 rounded-full ${showAmbulances ? 'bg-sky-600' : 'bg-slate-400'}`} />
+            Ambulans PSC ({ambulances.length})
+          </button>
+        )}
+
+        {hospitals && hospitals.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowHospitals((v) => !v)}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+              showHospitals
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs'
+                : 'bg-slate-100 text-slate-400 border border-transparent line-through'
+            }`}
+            title="Tampilkan/Sembunyikan RS & Faskes Rujukan"
+          >
+            <span className={`h-2.5 w-2.5 rounded-full ${showHospitals ? 'bg-emerald-600' : 'bg-slate-400'}`} />
+            RS Rujukan ({hospitals.length})
+          </button>
+        )}
+      </div>
+
       {/* Floating EOC Route details card on the left side of the map (Hanya tampil saat rute aktif/diklik) */}
       {isFloodEocMode && showEocRoute && selectedRouteTarget && (
         <div className="absolute top-4 left-4 z-20 w-80 max-h-[85%] overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-xl backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-left-4">
@@ -3901,6 +4104,112 @@ export default function DisasterMap({
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Ambulance Unit Popup ── */}
+      {ambulancePopup && (
+        <div
+          className="absolute z-20 w-[280px] rounded-2xl border border-sky-200 bg-white/95 backdrop-blur-md shadow-[0_12px_40px_rgba(2,132,199,0.18)] p-3 text-xs animate-in fade-in zoom-in-95 duration-200"
+          style={{
+            left: Math.min(ambulancePopup.x + 10, (mapContainerRef.current?.offsetWidth || 800) - 295),
+            top: Math.max(ambulancePopup.y - 10, 8),
+          }}
+        >
+          <div className="flex items-start justify-between border-b border-slate-100 pb-2 mb-2">
+            <div className="flex items-center gap-1.5">
+              <span className="p-1 rounded-lg bg-sky-100 text-sky-700">
+                <Ambulance className="h-4 w-4" />
+              </span>
+              <div>
+                <h4 className="font-extrabold text-slate-900 leading-tight">
+                  {ambulancePopup.data.no_kendaraan || 'Ambulans 119'}
+                </h4>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  {ambulancePopup.data.kode_ambulan || 'Unit Ambulans'}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => setAmbulancePopup(null)}
+              className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="space-y-1.5 text-[11px] text-slate-600">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Unit PSC:</span>
+              <span className="font-bold text-slate-800">{ambulancePopup.data.nama_psc || 'PSC 119'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Status Operasional:</span>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">
+                {ambulancePopup.data.status_aktif === '1' || ambulancePopup.data.status_aktif === 1 ? 'Siaga / Aktif' : String(ambulancePopup.data.status_aktif || 'Aktif')}
+              </span>
+            </div>
+            {ambulancePopup.data.vendor_gps && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">Pelacak GPS:</span>
+                <span className="font-semibold text-sky-700">{ambulancePopup.data.vendor_gps}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Hospital & Referral Facility Popup ── */}
+      {hospitalPopup && (
+        <div
+          className="absolute z-20 w-[280px] rounded-2xl border border-emerald-200 bg-white/95 backdrop-blur-md shadow-[0_12px_40px_rgba(5,150,105,0.18)] p-3 text-xs animate-in fade-in zoom-in-95 duration-200"
+          style={{
+            left: Math.min(hospitalPopup.x + 10, (mapContainerRef.current?.offsetWidth || 800) - 295),
+            top: Math.max(hospitalPopup.y - 10, 8),
+          }}
+        >
+          <div className="flex items-start justify-between border-b border-slate-100 pb-2 mb-2">
+            <div className="flex items-center gap-1.5">
+              <span className="p-1 rounded-lg bg-emerald-100 text-emerald-700">
+                <Building2 className="h-4 w-4" />
+              </span>
+              <div>
+                <h4 className="font-extrabold text-slate-900 leading-tight">
+                  {hospitalPopup.data.nama}
+                </h4>
+                <span className="text-[10px] text-emerald-700 font-semibold">
+                  {hospitalPopup.data.nama_subjenis || 'Faskes Rujukan'}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => setHospitalPopup(null)}
+              className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 transition cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="space-y-1.5 text-[11px] text-slate-600">
+            <div className="text-slate-700 leading-snug">
+              {hospitalPopup.data.alamat || 'Alamat faskes tercatat di database PSC'}
+            </div>
+            {hospitalPopup.data.telp && (
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-slate-500">Telepon:</span>
+                <a
+                  href={`tel:${hospitalPopup.data.telp}`}
+                  className="font-bold text-teal-700 hover:underline"
+                >
+                  {hospitalPopup.data.telp}
+                </a>
+              </div>
+            )}
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-slate-500">Status Rujukan:</span>
+              <span className="font-bold text-emerald-700">
+                {hospitalPopup.data.rujukan === 'Ya' ? 'Faskes Rujukan Terdaftar' : 'Tersedia'}
+              </span>
+            </div>
+          </div>
         </div>
       )}
 

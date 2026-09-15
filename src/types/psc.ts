@@ -128,3 +128,71 @@ export interface PscFilterParams {
   per_page?: number
   search?: string
 }
+
+export interface PscAmbulanceItem {
+  id_ambulan: number | string
+  kode_ambulan?: string
+  no_kendaraan?: string
+  nama_psc?: string
+  kode_psc?: string
+  status_aktif?: string | number
+  vendor_gps?: string
+  latitude?: string | null
+  longitude?: string | null
+  lat?: number
+  lng?: number
+  tahun?: string
+  webservice_api?: string
+  assestment_gawat_darurat?: string
+}
+
+export interface PscHospitalItem {
+  id: number | string
+  kode_satusehat?: string
+  kode_sarana?: string
+  nama: string
+  telp?: string
+  email?: string
+  website?: string
+  alamat?: string
+  kode_prop?: string
+  nama_prop?: string
+  kode_kab?: string
+  nama_kab?: string
+  kode_subjenis?: string
+  nama_subjenis?: string
+  status_aktif?: string | number
+  rujukan?: string
+  latitude?: string | null
+  longitude?: string | null
+  lat?: number
+  lng?: number
+}
+
+export interface PscCallRecord {
+  kode_trans: string
+  ticket_id: string
+  kode_psc: string
+  nama_psc: string
+  status_penanganan_code: string
+  status_penanganan: string
+  jenis_layanan: string
+  kategori_layanan?: string
+  spesifikasi_layanan?: string
+  tanggal_panggilan: string
+  jam_pelaporan_panggilan: string
+  petugas_pelapor?: string | null
+  nama_pelapor?: string | null
+  korban?: string | null
+  alamat?: string | null
+  nama_lokasi?: string | null
+  telp?: string | null
+  nomor_kendaraan?: string | null
+  nama_petugas_ambulan?: string | null
+  layanan_ambulance?: string | null
+  rumahsakit_rujukan?: string | null
+  lat?: number | null
+  lng?: number | null
+  raw_psc?: any
+}
+
