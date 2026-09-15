@@ -3093,11 +3093,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                     di wilayah {activeRegionConcatenatedLabel}
                   </p>
                   <div className="mt-2 text-[11px] text-[#383838] sm:text-[12px] flex flex-wrap items-center gap-x-1 gap-y-0.5 min-h-[20px]">
-                    {card.isTime ? (
-                      <span className="inline-flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full text-[10px] border border-emerald-200">
-                        <CheckCircle2 className="h-3 w-3 text-emerald-600" /> SPM &lt; 15 Menit
-                      </span>
-                    ) : (
+                    {!card.isTime && (
                       <>
                         {trend.prevMonthName && (
                           <>
@@ -3942,9 +3938,6 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                   <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5 text-cyan-600" />
                     Analisis Waktu Respons Penanganan
-                  </span>
-                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                    SPM &lt; 15 Menit
                   </span>
                 </div>
 
