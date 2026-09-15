@@ -1514,8 +1514,6 @@ export default function DashboardKejadianPage() {
     const moderate = list.filter((x) => x.minutes >= 10 && x.minutes <= 15).length // 10-15 mnt
     const overSpm = list.filter((x) => x.minutes > 15).length // > 15 mnt
 
-    const spmPassedPct = total > 0 ? Math.round(((total - overSpm) / total) * 100) : 94
-
     const emList = list.filter((x) => x.category === 'Emergency')
     const emAvg = emList.length > 0 ? (emList.reduce((acc, curr) => acc + curr.minutes, 0) / emList.length).toFixed(1) : (avg * 0.8).toFixed(1)
 
@@ -1525,14 +1523,13 @@ export default function DashboardKejadianPage() {
     return {
       avgMinutes: avg,
       totalLogged: total,
-      spmPassedPercentage: spmPassedPct,
       emergencyAvg: parseFloat(emAvg),
       nonEmergencyAvg: parseFloat(nonEmAvg),
       brackets: [
         { label: '< 5 Menit (Sangat Cepat)', count: total > 0 ? fast : 0, pct: total > 0 ? Math.round((fast / total) * 100) : 0, color: '#059669', badgeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
         { label: '5 - 10 Menit (Standar Cepat)', count: total > 0 ? ideal : 0, pct: total > 0 ? Math.round((ideal / total) * 100) : 0, color: '#0284c7', badgeBg: 'bg-sky-50 text-sky-700 border-sky-200' },
-        { label: '10 - 15 Menit (Batas Standar SPM)', count: total > 0 ? moderate : 0, pct: total > 0 ? Math.round((moderate / total) * 100) : 0, color: '#d97706', badgeBg: 'bg-amber-50 text-amber-700 border-amber-200' },
-        { label: '> 15 Menit (Melebihi SPM)', count: total > 0 ? overSpm : 0, pct: total > 0 ? Math.round((overSpm / total) * 100) : 0, color: '#e11d48', badgeBg: 'bg-rose-50 text-rose-700 border-rose-200' },
+        { label: '10 - 15 Menit', count: total > 0 ? moderate : 0, pct: total > 0 ? Math.round((moderate / total) * 100) : 0, color: '#d97706', badgeBg: 'bg-amber-50 text-amber-700 border-amber-200' },
+        { label: '> 15 Menit', count: total > 0 ? overSpm : 0, pct: total > 0 ? Math.round((overSpm / total) * 100) : 0, color: '#e11d48', badgeBg: 'bg-rose-50 text-rose-700 border-rose-200' },
       ],
     }
   }, [effectiveMarkers, effectiveSummary])
@@ -1847,9 +1844,8 @@ export default function DashboardKejadianPage() {
     }
 
     if (card === 'Waktu Respons PSC') {
-      const spmData = [
-        { name: 'Memenuhi Target SPM (<15 Mnt)', value: responseTimeAnalytics.spmPassedPercentage, color: '#10b981' },
-        { name: 'Melebihi Toleransi SPM (>=15 Mnt)', value: Math.max(0, 100 - responseTimeAnalytics.spmPassedPercentage), color: '#ef4444' },
+      const averageResponseData = [
+        { name: 'Rata-Rata Waktu Respons', value: responseTimeAnalytics.avgMinutes, color: '#06b6d4' },
       ]
 
       const bracketBar = responseTimeAnalytics.brackets.map((b) => ({
@@ -1862,9 +1858,9 @@ export default function DashboardKejadianPage() {
 
       return {
         type: 'waktu_respons',
-        chart1Title: 'Tingkat Kepatuhan Standar Pelayanan Minimal (SPM)',
+        chart1Title: 'Rata-Rata Waktu Respons',
         chart1Type: 'donut' as const,
-        chart1Data: spmData,
+        chart1Data: averageResponseData,
         chart2Title: 'Distribusi Frekuensi Durasi Waktu Tanggap Lapangan',
         chart2Type: 'bar' as const,
         chart2Data: bracketBar,
@@ -3901,27 +3897,15 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                 </div>
 
                 {/* Response Time Summary Highlight Cards */}
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 gap-2.5">
                   <div className="p-3 rounded-xl bg-gradient-to-br from-cyan-50 to-sky-50 border border-cyan-100 flex flex-col justify-between">
                     <span className="text-[11px] font-bold text-cyan-900 uppercase">Rata-Rata Waktu Tanggap</span>
                     <div className="mt-1 flex items-baseline gap-1">
                       <span className="text-2xl sm:text-3xl font-black text-cyan-700">{responseTimeAnalytics.avgMinutes}</span>
                       <span className="text-xs font-bold text-cyan-800">Menit</span>
                     </div>
-                    <span className="mt-1 text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                      <CheckCircle2 className="h-3 w-3" /> Target SPM Tercapai
-                    </span>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 flex flex-col justify-between">
-                    <span className="text-[11px] font-bold text-emerald-900 uppercase">Kepatuhan Standar SPM</span>
-                    <div className="mt-1 flex items-baseline gap-1">
-                      <span className="text-2xl sm:text-3xl font-black text-emerald-700">{responseTimeAnalytics.spmPassedPercentage}%</span>
-                    </div>
-                    <span className="mt-1 text-[10px] text-slate-500 font-medium">
-                      Panggilan tanggap &lt; 15 mnt
-                    </span>
-                  </div>
                 </div>
 
                 {/* Sub-metrics: Emergency vs Non-Emergency */}
@@ -3959,13 +3943,6 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                   </div>
                 </div>
 
-                {/* Educational info badge */}
-                <div className="p-2.5 rounded-xl bg-cyan-50/70 border border-cyan-200/60 flex items-start gap-2 text-[11px] text-cyan-900 mt-1">
-                  <Info className="h-4 w-4 text-cyan-700 shrink-0 mt-0.5" />
-                  <p className="m-0 leading-relaxed font-medium">
-                    Standar Pelayanan Minimal (SPM) Kemenkes RI: Target waktu tanggap kegawatdaruratan pra-faskes PSC 119 adalah &lt; 15 menit sejak panggilan terverifikasi.
-                  </p>
-                </div>
               </div>
             </div>
           )}
@@ -3975,6 +3952,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
       {/* Tabel Informasi Kejadian Krisis Kesehatan Terkini */}
       <section className="w-full bg-[#fbffff] pb-8 pt-4">
         {/* Highlight Cards: Layanan Ambulans Hari Ini (Sesuai Dashboard Resmi Kemenkes) */}
+        {false && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
           <div className="rounded-2xl p-5 bg-gradient-to-r from-[#DC2626] to-[#EF4444] text-white shadow-[0_8px_20px_rgba(220,38,38,0.2)] flex items-center justify-between">
             <div>
@@ -4004,6 +3982,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
             </div>
           </div>
         </div>
+        )}
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div>
@@ -4481,7 +4460,6 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                               <th className="py-3 px-3.5">ID Tiket Panggilan</th>
                               <th className="py-3 px-3.5">Waktu Laporan & Jam</th>
                               <th className="py-3 px-3.5">Response Time</th>
-                              <th className="py-3 px-3.5">Kepatuhan SPM Kemenkes</th>
                               <th className="py-3 px-3.5">Kasus & Keluhan</th>
                               <th className="py-3 px-3.5">Lokasi TKP</th>
                               <th className="py-3 px-3.5">Faskes / RS Rujukan</th>
@@ -4581,16 +4559,6 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                               <td className="py-3 px-3.5">
                                 <span className={`text-sm font-black ${r.isSpmPass ? 'text-emerald-700' : 'text-red-600'}`}>
                                   {r.respTime} <span className="text-[10px] font-bold">Mnt</span>
-                                </span>
-                              </td>
-                              <td className="py-3 px-3.5">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black uppercase ${
-                                  r.isSpmPass
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
-                                }`}>
-                                  {r.isSpmPass ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-                                  {r.isSpmPass ? 'Memenuhi SPM (<15 Mnt)' : 'Melebihi SPM (>15 Mnt)'}
                                 </span>
                               </td>
                               <td className="py-3 px-3.5">
