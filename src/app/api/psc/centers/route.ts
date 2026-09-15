@@ -30,6 +30,8 @@ export async function GET(req: Request) {
     if (kode_psc) {
       formData.append('kode_psc', kode_psc)
     }
+    formData.append('page', '1')
+    formData.append('per_page', '100')
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 12000)
@@ -40,13 +42,48 @@ export async function GET(req: Request) {
       body: formData,
       signal: controller.signal,
     })
-    clearTimeout(timeoutId)
 
     if (response.ok) {
       const result = await response.json()
+
+      // Master PSC biasanya berisi ratusan unit dan endpoint memakai pagination.
+      // Untuk daftar filter nasional, gabungkan seluruh halaman agar search tidak
+      // berhenti pada 100 unit pertama.
+      if (!kode_psc && Array.isArray(result?.data)) {
+        const totalData = Number(result.total_data ?? result.total ?? result.data.length)
+        const totalPages = Number(result.total_page ?? result.total_pages ?? Math.ceil(totalData / 100)) || 1
+        const allCenters = [...result.data]
+        const pageNumbers = Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) => index + 2)
+
+        for (let index = 0; index < pageNumbers.length; index += 5) {
+          const batch = pageNumbers.slice(index, index + 5)
+          const pageResults = await Promise.all(batch.map(async (page) => {
+            const pageForm = new FormData()
+            pageForm.append('page', String(page))
+            pageForm.append('per_page', '100')
+            const pageResponse = await fetch(`${PSC_API_BASE_URL}/data-psc`, {
+              method: 'POST',
+              headers,
+              body: pageForm,
+              signal: controller.signal,
+            })
+            if (!pageResponse.ok) return []
+            const pagePayload = await pageResponse.json().catch(() => ({}))
+            return Array.isArray(pagePayload?.data) ? pagePayload.data : []
+          }))
+          pageResults.forEach((items) => allCenters.push(...items))
+        }
+
+        result.data = allCenters
+        result.total_data = totalData || allCenters.length
+      }
+
+      clearTimeout(timeoutId)
       centersCacheMap.set(cacheKey, { timestamp: Date.now(), data: result })
       return NextResponse.json(result)
     }
+
+    clearTimeout(timeoutId)
 
     return NextResponse.json({
       status: false,
