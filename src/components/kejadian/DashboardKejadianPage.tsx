@@ -385,6 +385,7 @@ export default function DashboardKejadianPage() {
     }
     return ''
   })
+  const [selectedAdminKodePsc, setSelectedAdminKodePsc] = useState('')
   const [activePscCenter, setActivePscCenter] = useState<any | null>(null)
 
   // Otomatisasi kunci wilayah berdasarkan unit kode_psc
@@ -2017,14 +2018,17 @@ export default function DashboardKejadianPage() {
   // When should the reset button show?
   const showResetButton = useMemo(() => {
     if (selectedRegions.length > 0) return true
+    if (selectedAdminKodePsc || idExtension) return true
     if (tahun !== '2026') return true
     if (isKabLocked) return false
     if (isProvLocked) return kabupaten !== ''
     return province !== ''
-  }, [selectedRegions.length, isKabLocked, isProvLocked, province, kabupaten, tahun])
+  }, [selectedRegions.length, isKabLocked, isProvLocked, province, kabupaten, tahun, selectedAdminKodePsc, idExtension])
 
   const handleResetFilter = () => {
     setSelectedRegions([])
+    setSelectedAdminKodePsc('')
+    setIdExtension('')
     setFilterStartDate(undefined)
     setFilterEndDate(undefined)
     if (isKabLocked && user?.wilayah_scope?.kabupaten?.label) {
@@ -2244,6 +2248,9 @@ export default function DashboardKejadianPage() {
     const extension = summary.idExtension && summary.idExtension !== 'semua-extension'
       ? summary.idExtension
       : ''
+    const kodePsc = summary.kodePsc && summary.kodePsc !== 'semua-psc'
+      ? summary.kodePsc
+      : ''
 
     // Parse tahun: ekstrak hanya angka tahun dari string format apapun ("TAHUN 2026", "JULI 2026", "30 HARI TERAKHIR", "2026-01-01 S.D 2026-07-27")
     let yr = '2026'
@@ -2313,6 +2320,7 @@ export default function DashboardKejadianPage() {
     setProvince(prov)
     setKabupaten(kab)
     setIdExtension(extension)
+    setSelectedAdminKodePsc(kodePsc)
     setTahun(yr)
   }, [])
 
@@ -2343,7 +2351,7 @@ export default function DashboardKejadianPage() {
         queryParams.push(`year=${encodeURIComponent(tahun)}`)
       }
 
-      const currentKodePsc = activeKodePsc || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('kode_psc')?.trim() || '' : '')
+      const currentKodePsc = activeKodePsc || selectedAdminKodePsc || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('kode_psc')?.trim() || '' : '')
       if (currentKodePsc) {
         queryParams.push(`kode_psc=${encodeURIComponent(currentKodePsc)}`)
       }
@@ -2376,7 +2384,7 @@ export default function DashboardKejadianPage() {
     } finally {
       setLoading(false)
     }
-  }, [token, province, kabupaten, tahun, filterStartDate, filterEndDate, idExtension, activeKodePsc])
+  }, [token, province, kabupaten, tahun, filterStartDate, filterEndDate, idExtension, activeKodePsc, selectedAdminKodePsc])
 
   const handleSyncMv = async () => {
     if (isSyncingMv) return
@@ -3071,6 +3079,8 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           onSummaryChange={handleSummaryChange}
           selectedProvinceName={province}
           selectedKabupatenName={kabupaten}
+          selectedKodePsc={selectedAdminKodePsc}
+          selectedExtension={idExtension}
           extensionOptions={extensionOptions}
         />
       </section>

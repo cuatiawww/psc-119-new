@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Globe, MapPin, Building2, ChevronDown, Calendar, CheckCircle2, Check, Clock, CalendarDays, SlidersHorizontal, Lock } from 'lucide-react'
+import { Globe, MapPin, Building2, ChevronDown, Calendar, CheckCircle2, Check, Clock, CalendarDays, SlidersHorizontal, Lock, Search } from 'lucide-react'
 import { useAuthStore, type WilayahScope } from '@/lib/authStore'
 import { buildRegionsUrl } from '@/lib/utils/api'
 
 type FilterItem = {
   id: string
-  icon: 'globe' | 'pin' | 'building' | 'calendar' | 'filter'
+  icon: 'globe' | 'pin' | 'building' | 'calendar' | 'filter' | 'search'
   sublabel: string
   defaultValue: string
   options: Array<{ value: string; label: string }>
@@ -20,6 +20,7 @@ export type FilterSummary = {
   kabkota: string
   tahun: string
   idExtension: string
+  kodePsc: string
   startDate?: string
   endDate?: string
 }
@@ -28,6 +29,8 @@ type FilterDropdownBarProps = {
   onSummaryChange?: (summary: FilterSummary) => void
   selectedProvinceName?: string | null
   selectedKabupatenName?: string | null
+  selectedKodePsc?: string | null
+  selectedExtension?: string | null
   extensionOptions?: Array<{ value: string; label: string }>
 }
 
@@ -43,6 +46,7 @@ const iconStyles: Record<FilterItem['icon'], { bg: string; color: string }> = {
   building: { bg: 'bg-[#EEEDFE]', color: 'text-[#534AB7]' },
   calendar: { bg: 'bg-[#FDF2F8]', color: 'text-[#DB2777]' },
   filter: { bg: 'bg-[#FFF4E5]', color: 'text-[#B45309]' },
+  search: { bg: 'bg-[#E8F3FF]', color: 'text-[#2563EB]' },
 }
 
 function FilterIcon({ icon, className }: { icon: FilterItem['icon']; className?: string }) {
@@ -50,6 +54,7 @@ function FilterIcon({ icon, className }: { icon: FilterItem['icon']; className?:
   if (icon === 'pin') return <MapPin className={className} />
   if (icon === 'building') return <Building2 className={className} />
   if (icon === 'filter') return <SlidersHorizontal className={className} />
+  if (icon === 'search') return <Search className={className} />
   return <Calendar className={className} />
 }
 
@@ -86,10 +91,14 @@ export default function FilterDropdownBar({
   onSummaryChange,
   selectedProvinceName,
   selectedKabupatenName,
+  selectedKodePsc,
+  selectedExtension,
   extensionOptions = [],
 }: FilterDropdownBarProps = {}) {
   const userScope = useAuthStore((state) => state.user?.wilayah_scope)
+  const user = useAuthStore((state) => state.user)
   const isScoped = hasValidScopedMode(userScope)
+  const isAdmin = user?.level_user_id === 1 || user?.level_name?.toLowerCase().includes('admin') || false
 
   const [dynamicProvinces, setDynamicProvinces] = useState<Array<{ value: string; label: string }>>([
     { value: 'semua-provinsi', label: 'Semua Provinsi' },
@@ -100,6 +109,11 @@ export default function FilterDropdownBar({
 
   const [loadingProvinces, setLoadingProvinces] = useState(true)
   const [loadingKabkota, setLoadingKabkota] = useState(false)
+  const [loadingPsc, setLoadingPsc] = useState(false)
+  const [dynamicPsc, setDynamicPsc] = useState<Array<{ value: string; label: string }>>([
+    { value: 'semua-psc', label: 'Semua Kode PSC' },
+  ])
+  const [pscSearch, setPscSearch] = useState('')
 
   // Time Filter Detailed States (2-Column Tabbed Layout)
   const [timeCategoryTab, setTimeCategoryTab] = useState<'tahun' | 'bulan' | 'hari' | 'custom'>('tahun')
@@ -228,6 +242,18 @@ export default function FilterDropdownBar({
       ]
     }
 
+    if (isAdmin) {
+      result.splice(Math.max(result.length - 1, 0), 0, {
+        id: 'kode_psc',
+        icon: 'search',
+        sublabel: 'Kode PSC',
+        defaultValue: 'semua-psc',
+        options: loadingPsc
+          ? [{ value: 'semua-psc', label: 'Memuat...' }]
+          : dynamicPsc,
+      })
+    }
+
     return result.map(item => ({
       ...item,
       options: item.options.map(opt => ({
@@ -235,7 +261,7 @@ export default function FilterDropdownBar({
         label: opt.label.toUpperCase()
       }))
     }))
-  }, [isScoped, userScope, dynamicProvinces, dynamicKabkota, loadingProvinces, loadingKabkota, extensionOptions])
+  }, [isScoped, userScope, dynamicProvinces, dynamicKabkota, loadingProvinces, loadingKabkota, extensionOptions, isAdmin, loadingPsc, dynamicPsc])
 
   const defaultSelected = useMemo(() => {
     if (!isScoped) {
@@ -244,6 +270,7 @@ export default function FilterDropdownBar({
         provinsi: 'semua-provinsi',
         kabkota: 'semua-kabkota',
         extension: 'semua-extension',
+        kode_psc: 'semua-psc',
         tahun: '2026',
       }
     }
@@ -258,6 +285,7 @@ export default function FilterDropdownBar({
       provinsi: provinsiValue,
       kabkota: kabupatenValue,
       extension: 'semua-extension',
+      kode_psc: 'semua-psc',
       tahun: '2026',
     }
   }, [isScoped, userScope])
@@ -275,6 +303,15 @@ export default function FilterDropdownBar({
     setSelected(parsed)
     setOpenId(null)
   }, [defaultSelectedStr])
+
+  // Sinkronkan filter yang dikendalikan parent, terutama saat tombol Reset ditekan.
+  useEffect(() => {
+    setSelected((prev) => ({
+      ...prev,
+      kode_psc: selectedKodePsc || 'semua-psc',
+      extension: selectedExtension || 'semua-extension',
+    }))
+  }, [selectedKodePsc, selectedExtension])
 
   // Synchronize external selectedProvinceName & selectedKabupatenName changes
   useEffect(() => {
@@ -309,6 +346,7 @@ export default function FilterDropdownBar({
                 provinsi: nextProv,
                 kabkota: foundKab.value,
                 extension: selected.extension || 'semua-extension',
+                kode_psc: selected.kode_psc || 'semua-psc',
                 tahun: selected.tahun || '2026',
               })
             } else {
@@ -325,6 +363,7 @@ export default function FilterDropdownBar({
               provinsi: nextProv,
               kabkota: 'semua-kabkota',
               extension: selected.extension || 'semua-extension',
+              kode_psc: selected.kode_psc || 'semua-psc',
               tahun: selected.tahun || '2026',
             })
           }
@@ -335,6 +374,7 @@ export default function FilterDropdownBar({
           provinsi: 'semua-provinsi',
           kabkota: 'semua-kabkota',
           extension: selected.extension || 'semua-extension',
+          kode_psc: selected.kode_psc || 'semua-psc',
           tahun: selected.tahun || '2026',
         })
       }
@@ -433,6 +473,44 @@ export default function FilterDropdownBar({
     fetchKabkota()
   }, [selectedProvince, isScoped])
 
+  // Admin dapat memilih unit PSC dari master center yang tersedia.
+  useEffect(() => {
+    if (!isAdmin) return
+
+    const fetchPscCenters = async () => {
+      setLoadingPsc(true)
+      try {
+        const res = await fetch('/api/psc/centers', { cache: 'no-store' })
+        const payload = await res.json().catch(() => null)
+        if (!res.ok || !Array.isArray(payload?.data)) {
+          throw new Error(`Unexpected response while loading PSC centers: ${res.status}`)
+        }
+
+        const byCode = new Map<string, string>()
+        payload.data.forEach((item: RegionOption & { kode_psc?: string; nama_psc?: string }) => {
+          const code = String(item.kode_psc || item.code || item.id || '').trim()
+          if (!code) return
+          const name = String(item.nama_psc || item.name || '').trim()
+          byCode.set(code, name && name.toUpperCase() !== code.toUpperCase() ? `${code} — ${name}` : code)
+        })
+
+        setDynamicPsc([
+          { value: 'semua-psc', label: 'Semua Kode PSC' },
+          ...Array.from(byCode.entries())
+            .sort(([a], [b]) => a.localeCompare(b, 'id', { numeric: true }))
+            .map(([value, label]) => ({ value, label })),
+        ])
+      } catch (err) {
+        console.error('Gagal mengambil daftar kode PSC', err)
+        setDynamicPsc([{ value: 'semua-psc', label: 'Semua Kode PSC' }])
+      } finally {
+        setLoadingPsc(false)
+      }
+    }
+
+    fetchPscCenters()
+  }, [isAdmin])
+
   // Fetch available years from backend API
   useEffect(() => {
     const fetchYears = async () => {
@@ -493,6 +571,7 @@ export default function FilterDropdownBar({
       kabkota: kabOpt ? kabOpt.label : selected.kabkota || 'semua-kabkota',
       tahun: timeButtonDisplayLabel,
       idExtension: selected.extension || 'semua-extension',
+      kodePsc: selected.kode_psc || 'semua-psc',
       startDate: timeCategoryTab === 'custom' ? customStartDate : undefined,
       endDate: timeCategoryTab === 'custom' ? customEndDate : undefined,
     }
@@ -605,7 +684,26 @@ export default function FilterDropdownBar({
                     ${idx % 2 !== 0 ? 'right-0' : 'left-0'}
                   `}
                 >
-                  {filter.options.map((opt) => {
+                  {filter.id === 'kode_psc' && (
+                    <div className="sticky top-0 z-10 bg-white p-1 pb-2">
+                      <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2">
+                        <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                        <input
+                          type="search"
+                          value={pscSearch}
+                          onChange={(event) => setPscSearch(event.target.value)}
+                          placeholder="Cari kode atau nama PSC..."
+                          className="min-w-0 flex-1 bg-transparent text-[11px] font-medium text-slate-700 outline-none placeholder:text-slate-400"
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {(filter.id === 'kode_psc'
+                    ? filter.options.filter((opt) => opt.label.toLowerCase().includes(pscSearch.toLowerCase().trim()))
+                    : filter.options
+                  ).map((opt) => {
                     const isSelected = opt.value === selected[filter.id]
                     return (
                       <button
@@ -643,6 +741,7 @@ export default function FilterDropdownBar({
                             }
                             return next
                           })
+                          setPscSearch('')
                           setOpenId(null)
                         }}
                         className={`
@@ -664,6 +763,9 @@ export default function FilterDropdownBar({
                       </button>
                     )
                   })}
+                  {filter.id === 'kode_psc' && filter.options.filter((opt) => opt.label.toLowerCase().includes(pscSearch.toLowerCase().trim())).length === 0 && (
+                    <p className="px-3 py-4 text-center text-[11px] text-slate-400">Kode atau nama PSC tidak ditemukan.</p>
+                  )}
                 </div>
               )}
 
