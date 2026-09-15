@@ -3641,7 +3641,7 @@ export default function DisasterMap({
               {/* ── BMKG & TCK Layers Section ── */}
               <div className="mb-6 border-b border-slate-100 pb-5 space-y-2.5">
                 <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-3">
-                  SUMBER DAYA & EWS TERPADU
+                  SUMBER DATA & LAYANAN TERPADU
                 </p>
 
                 {/* Toggle Real USGS/BMKG Seismic Epicenters */}
