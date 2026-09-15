@@ -99,6 +99,7 @@ export default function FilterDropdownBar({
   const user = useAuthStore((state) => state.user)
   const isScoped = hasValidScopedMode(userScope)
   const isAdmin = user?.level_user_id === 1 || user?.level_name?.toLowerCase().includes('admin') || false
+  const canSelectPsc = !isScoped && (!user || isAdmin)
 
   const [dynamicProvinces, setDynamicProvinces] = useState<Array<{ value: string; label: string }>>([
     { value: 'semua-provinsi', label: 'Semua Provinsi' },
@@ -242,7 +243,7 @@ export default function FilterDropdownBar({
       ]
     }
 
-    if (isAdmin) {
+    if (canSelectPsc) {
       result.splice(Math.max(result.length - 1, 0), 0, {
         id: 'kode_psc',
         icon: 'search',
@@ -261,7 +262,7 @@ export default function FilterDropdownBar({
         label: opt.label.toUpperCase()
       }))
     }))
-  }, [isScoped, userScope, dynamicProvinces, dynamicKabkota, loadingProvinces, loadingKabkota, extensionOptions, isAdmin, loadingPsc, dynamicPsc])
+  }, [isScoped, userScope, dynamicProvinces, dynamicKabkota, loadingProvinces, loadingKabkota, extensionOptions, canSelectPsc, loadingPsc, dynamicPsc])
 
   const defaultSelected = useMemo(() => {
     if (!isScoped) {
@@ -473,9 +474,9 @@ export default function FilterDropdownBar({
     fetchKabkota()
   }, [selectedProvince, isScoped])
 
-  // Admin dapat memilih unit PSC dari master center yang tersedia.
+  // Admin nasional dan tamu dapat memilih unit PSC dari master center yang tersedia.
   useEffect(() => {
-    if (!isAdmin) return
+    if (!canSelectPsc) return
 
     const fetchPscCenters = async () => {
       setLoadingPsc(true)
@@ -509,7 +510,7 @@ export default function FilterDropdownBar({
     }
 
     fetchPscCenters()
-  }, [isAdmin])
+  }, [canSelectPsc])
 
   // Fetch available years from backend API
   useEffect(() => {
