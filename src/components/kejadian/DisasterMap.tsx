@@ -342,15 +342,15 @@ const choroplethColor = (count: number, opacity: number = 0.92) => {
 }
 
 /** Style choropleth OL untuk tingkat kejadian dengan label angka per wilayah (seperti D:\project\puskes) */
-const choroplethStyle = (count: number, hasWarning: boolean = false, labelText?: string) => {
+const choroplethStyle = (count: number, labelText?: string) => {
   const baseColor = choroplethColor(count, 0.92)
 
   return new Style({
     fill: new Fill({ color: baseColor }),
     stroke: new Stroke({
-      color: hasWarning ? '#dc2626' : count === 0 ? 'rgba(148, 163, 184, 0.5)' : '#ffffff',
-      width: hasWarning ? 2.5 : count === 0 ? 0.8 : 1.5,
-      lineDash: hasWarning ? [5, 5] : count > 50 ? [8, 4] : undefined,
+      color: count === 0 ? 'rgba(148, 163, 184, 0.5)' : '#ffffff',
+      width: count === 0 ? 0.8 : 1.5,
+      lineDash: count > 50 ? [8, 4] : undefined,
     }),
     text: count > 0 ? new OlText({
       text: labelText || String(count),
@@ -714,8 +714,6 @@ export default function DisasterMap({
   // ── BMKG Layer states ──
   const [showBmkg, setShowBmkg] = useState(false)
   const [bmkgGempas, setBmkgGempas] = useState<any[]>([])
-  const [activeBmkgAlert, setActiveBmkgAlert] = useState<any | null>(null)
-  const [showEwsPulse, setShowEwsPulse] = useState(true)
 
   // Callback to create a pulsing overlay dynamically
   const createPulseOverlay = useCallback((lng: number, lat: number, type: 'danger' | 'warning' | 'gempa') => {
@@ -797,7 +795,6 @@ export default function DisasterMap({
     type: 'provinsi' | 'kabupaten'
     name: string
     featureExtent?: any
-    warnings?: any[]
     stats: {
       totalEvents: number
       totalEmergency?: number
@@ -820,49 +817,6 @@ export default function DisasterMap({
       lokasiList?: any[]
     }
   } | null>(null)
-
-  // ── API Indonesia early warnings state ──
-  const [activeWarnings, setActiveWarnings] = useState<any[]>([])
-
-  const warningsByProvince = useMemo(() => {
-    const m = new Map<string, any[]>()
-    if (!Array.isArray(activeWarnings)) return m
-    activeWarnings.forEach((w) => {
-      const provKey = cleanKey(w.province)
-      if (provKey) {
-        const list = m.get(provKey) || []
-        list.push(w)
-        m.set(provKey, list)
-      }
-    })
-    return m
-  }, [activeWarnings])
-
-  // Fetch API Indonesia warnings on mount
-  useEffect(() => {
-    let active = true
-    async function fetchWarnings() {
-      try {
-        const res = await fetch('/api/peringatan-dini')
-        if (res.ok) {
-          const json = await res.json()
-          if (json.success && Array.isArray(json.data)) {
-            if (active) {
-              setActiveWarnings(json.data)
-            }
-          }
-        }
-      } catch (e) {
-        console.error('[EWS Map] Failed to fetch Peringatan Dini:', e)
-      }
-    }
-    void fetchWarnings()
-    const interval = setInterval(fetchWarnings, 300000)
-    return () => {
-      active = false
-      clearInterval(interval)
-    }
-  }, [])
 
   // ── Sync refs ──
   useEffect(() => {
@@ -1382,7 +1336,6 @@ export default function DisasterMap({
           type: 'provinsi',
           name: provName,
           featureExtent: extent,
-          warnings: warningsByProvince.get(provCleaned) || [],
           stats: {
             totalEvents: provMarkers.length,
             totalEmergency,
@@ -1659,9 +1612,7 @@ export default function DisasterMap({
       }
 
       // National choropleth style
-      const provWarnings = warningsByProvince.get(provKey)
-      const hasWarning = !!(provWarnings && provWarnings.length > 0)
-      return choroplethStyle(count, hasWarning, count > 0 ? String(count) : undefined)
+      return choroplethStyle(count, count > 0 ? String(count) : undefined)
     })
 
     kabupatenLayer.setStyle((feature: any) => {
@@ -1727,7 +1678,7 @@ export default function DisasterMap({
 
     provinceLayer.changed()
     kabupatenLayer.changed()
-  }, [userScope, provinceCounts, kabupatenCounts, warningsByProvince, selectedRegions, selectedProvKeys, selectedKabKeys])
+  }, [userScope, provinceCounts, kabupatenCounts, selectedRegions, selectedProvKeys, selectedKabKeys])
 
   useEffect(() => {
     updateChoroplethStyles()
@@ -1948,7 +1899,7 @@ export default function DisasterMap({
     }
   }, [mapInstance, selectedRegions, selectedProvKeys])
 
-  // ── BMKG Data Fetch & Proximity Alert EWS ──
+  // ── BMKG earthquake data fetch ──
   useEffect(() => {
     let active = true
     async function fetchBmkg() {
@@ -1963,56 +1914,11 @@ export default function DisasterMap({
             if (active) {
               setBmkgGempas(list)
 
-              const latest = list[0]
-              if (latest && latest.Coordinates) {
-                const [latStr, lngStr] = latest.Coordinates.split(',')
-                const gempaLat = parseFloat(latStr)
-                const gempaLng = parseFloat(lngStr)
-
-                const savedCoords = localStorage.getItem('user_coords')
-                if (savedCoords) {
-                  try {
-                    const userCoords = JSON.parse(savedCoords)
-                    if (userCoords && typeof userCoords.lat === 'number' && typeof userCoords.lng === 'number') {
-                      const dist = getDistanceInKm(userCoords.lat, userCoords.lng, gempaLat, gempaLng)
-
-                      // EWS Trigger: within 150 km and magnitude >= 5.0
-                      if (dist <= 150 && parseFloat(latest.Magnitude) >= 5.0) {
-                        setActiveBmkgAlert({
-                          gempa: latest,
-                          distance: Math.round(dist)
-                        })
-
-                        if (typeof window !== 'undefined') {
-                          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
-                          if (AudioContextClass) {
-                            const ctx = new AudioContextClass()
-                            const osc = ctx.createOscillator()
-                            const gain = ctx.createGain()
-                            osc.connect(gain)
-                            gain.connect(ctx.destination)
-                            osc.type = 'sawtooth'
-                            osc.frequency.setValueAtTime(500, ctx.currentTime)
-                            osc.frequency.linearRampToValueAtTime(900, ctx.currentTime + 0.4)
-                            osc.frequency.linearRampToValueAtTime(500, ctx.currentTime + 0.8)
-                            gain.gain.setValueAtTime(0.3, ctx.currentTime)
-                            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2)
-                            osc.start()
-                            osc.stop(ctx.currentTime + 1.2)
-                          }
-                        }
-                      }
-                    }
-                  } catch (e) {
-                    console.error('[BMKG EWS] Coordinates parse error:', e)
-                  }
-                }
-              }
             }
           }
         }
       } catch (e) {
-        console.error('[BMKG EWS] Failed to fetch data:', e)
+        console.error('[BMKG] Failed to fetch earthquake data:', e)
       }
     }
 
@@ -2064,119 +1970,6 @@ export default function DisasterMap({
       pulseOverlaysRef.current = []
     }
 
-    // Draw proximity EWS warning circles if enabled
-    if (showEwsPulse) {
-      let userCoords: { lat: number; lng: number } | null = null
-      if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('user_coords')
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved)
-            if (parsed && typeof parsed.lat === 'number' && typeof parsed.lng === 'number') {
-              userCoords = parsed
-            }
-          } catch (e) {
-            console.error('[EWS Map Circle] Failed to parse coordinates:', e)
-          }
-        }
-      }
-
-      validMarkers.forEach((m) => {
-        if (m.lat && m.lng && (m.total_korban > 0 || m.jenis_bencana)) {
-          let drawRadius: number | null = null
-          let fillColor = 'rgba(239, 68, 68, 0.04)'
-          let strokeColor = 'rgba(239, 68, 68, 0.25)'
-          let isNear = false
-          let nearType: 'danger' | 'warning' = 'warning'
-
-          if (userCoords) {
-            const mLat = Number(m.lat)
-            const mLng = Number(m.lng)
-            const dist = getDistanceInKm(userCoords.lat, userCoords.lng, mLat, mLng)
-
-            if (dist <= 25) {
-              // Dalam 25km: peringatan bahaya dekat (lingkaran 25km radius merah)
-              drawRadius = 25000
-              fillColor = 'rgba(239, 68, 68, 0.08)'
-              strokeColor = 'rgba(239, 68, 68, 0.45)'
-              isNear = true
-              nearType = 'danger'
-            } else if (dist <= 50) {
-              // Dalam 50km: peringatan waspada (lingkaran 50km radius oranye)
-              drawRadius = 50000
-              fillColor = 'rgba(245, 158, 11, 0.05)'
-              strokeColor = 'rgba(245, 158, 11, 0.35)'
-              isNear = true
-              nearType = 'warning'
-            }
-          }
-
-          if (drawRadius !== null) {
-            const circleFeature = new Feature({
-              geometry: new CircleGeom(fromLonLat([m.lng, m.lat]), drawRadius),
-            })
-            circleFeature.setStyle(new Style({
-              fill: new Fill({ color: fillColor }),
-              stroke: new Stroke({ color: strokeColor, width: 1.2, lineDash: [4, 4] })
-            }))
-            features.push(circleFeature)
-
-            // Dynamic pulsing radar ring for dangerous proximity events!
-            if (isNear) {
-              createPulseOverlay(m.lng, m.lat, nearType)
-            }
-          }
-        }
-      })
-
-      // Fallback pulse overlay for the latest disaster if user location is not set yet
-      if (!userCoords && validMarkers.length > 0) {
-        const sorted = [...validMarkers].sort((a, b) => {
-          const dateA = a.tgl_kejadian ? new Date(a.tgl_kejadian.replace(/\s*WIB/gi, '').trim()).getTime() : 0
-          const dateB = b.tgl_kejadian ? new Date(b.tgl_kejadian.replace(/\s*WIB/gi, '').trim()).getTime() : 0
-          return dateB - dateA
-        })
-        const latest = sorted[0]
-        if (latest && latest.lat && latest.lng) {
-          createPulseOverlay(latest.lng, latest.lat, 'danger')
-        }
-      }
-    }
-
-    // Add User Current GPS Location blue pin
-    if (typeof window !== 'undefined') {
-      const savedCoords = localStorage.getItem('user_coords')
-      if (savedCoords) {
-        try {
-          const userCoords = JSON.parse(savedCoords)
-          if (userCoords && typeof userCoords.lat === 'number' && typeof userCoords.lng === 'number') {
-            const userFeature = new Feature({
-              geometry: new Point(fromLonLat([userCoords.lng, userCoords.lat])),
-              markerData: {
-                kode_trans: 'user-location',
-                jenis_bencana: 'Lokasi Saya',
-                provinsi: '',
-                kabupaten: localStorage.getItem('user_coords_name') || 'Saya Berada di Sini',
-                total_korban: 0,
-                lat: userCoords.lat,
-                lng: userCoords.lng
-              }
-            })
-            userFeature.setStyle(new Style({
-              image: new CircleStyle({
-                radius: 8,
-                fill: new Fill({ color: '#2563eb' }),
-                stroke: new Stroke({ color: '#ffffff', width: 2 })
-              })
-            }))
-            features.push(userFeature)
-          }
-        } catch (e) {
-          console.error('[DisasterMap] Failed to parse user coords:', e)
-        }
-      }
-    }
-
     // Add BMKG Gempa Terkini Layer
     if (showBmkg && bmkgGempas.length > 0) {
       bmkgGempas.forEach((g) => {
@@ -2206,22 +1999,6 @@ export default function DisasterMap({
             }))
             features.push(gempaFeature)
 
-            if (showEwsPulse) {
-              const warningCircle = new Feature({
-                geometry: new CircleGeom(fromLonLat([glng, glat]), 50000) // 50km radius
-              })
-              warningCircle.setStyle(new Style({
-                fill: new Fill({ color: 'rgba(249, 115, 22, 0.04)' }),
-                stroke: new Stroke({ color: 'rgba(249, 115, 22, 0.3)', width: 1.2, lineDash: [3, 3] })
-              }))
-              features.push(warningCircle)
-
-              // Dynamic pulse overlay for BMKG earthquakes (M >= 5.0)
-              const mag = parseFloat(g.Magnitude)
-              if (mag >= 5.0) {
-                createPulseOverlay(glng, glat, 'gempa')
-              }
-            }
           }
         }
       })
@@ -2229,7 +2006,7 @@ export default function DisasterMap({
 
     source.addFeatures(features)
 
-  }, [filteredMarkers, showMarkers, showBmkg, bmkgGempas, showEwsPulse, createPulseOverlay])
+  }, [filteredMarkers, showMarkers, showBmkg, bmkgGempas, createPulseOverlay])
 
   // ── Sync Ambulance Unit Layer ──
   useEffect(() => {
@@ -3002,33 +2779,6 @@ export default function DisasterMap({
           </div>
         </div>
       )}
-      {/* BMKG Proximity Warning Modal */}
-      {activeBmkgAlert && (
-        <div className="absolute inset-x-4 top-4 z-[30] animate-in slide-in-from-top-4 duration-500 max-w-md mx-auto">
-          <div className="bg-gradient-to-r from-rose-600 to-amber-600 border border-red-700 rounded-3xl p-5 shadow-[0_15px_40px_rgba(239,68,68,0.25)] text-white relative">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/20 text-white animate-pulse">
-                <AlertTriangle className="h-6 w-6 animate-bounce" />
-              </div>
-              <div className="space-y-1 flex-1">
-                <span className="text-[9px] font-black tracking-widest bg-white/20 px-2 py-0.5 rounded-full uppercase">BMKG EWS TERPADU</span>
-                <h4 className="text-xs font-black uppercase tracking-wide">GEMPA BUMI BAHAYA DEKAT</h4>
-                <p className="text-[11px] leading-relaxed opacity-95">
-                  Gempa kekuatan <strong className="font-extrabold">M {activeBmkgAlert.gempa.Magnitude}</strong> terdeteksi di {activeBmkgAlert.gempa.Wilayah}.
-                  Berjarak <strong className="font-extrabold">{activeBmkgAlert.distance} km</strong> dari posisi Anda! ({activeBmkgAlert.gempa.Potensi})
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setActiveBmkgAlert(null)}
-              className="absolute top-3 right-3 text-white/70 hover:text-white transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ── OL Map canvas ── */}
       <div ref={mapRef} className="h-full w-full min-h-[480px]" />
 
@@ -3722,31 +3472,13 @@ export default function DisasterMap({
                   </div>
                 </div>
 
-                {/* Toggle EWS Pulse Radius Circles */}
-                <div
-                  onClick={() => setShowEwsPulse((v) => !v)}
-                  className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 hover:bg-teal-50/50 hover:border-teal-100 transition-all"
-                >
-                  <div>
-                    <p className="text-xs font-semibold text-slate-800">Denyut Radius EWS</p>
-                    <p className="text-[10px] text-slate-400 font-medium">Lingkaran radius EWS 25km & 50km dekat GPS</p>
-                  </div>
-                  <div
-                    className={`relative h-5 w-9 rounded-full transition-colors duration-200 ${showEwsPulse ? 'bg-teal-600' : 'bg-slate-300'}`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${showEwsPulse ? 'translate-x-4' : 'translate-x-0'}`}
-                    />
-                  </div>
-                </div>
-
                 <div
                   onClick={() => setShowBmkg((v) => !v)}
                   className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 hover:bg-teal-50/50 hover:border-teal-100 transition-all"
                 >
                   <div>
                     <p className="text-xs font-semibold text-slate-800">Layer Gempa Terkini BMKG</p>
-                    <p className="text-[10px] text-slate-400 font-medium">Plot seismik realtime & radius bahaya 50km</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Plot seismik realtime BMKG</p>
                   </div>
                   <div
                     className={`relative h-5 w-9 rounded-full transition-colors duration-200 ${showBmkg ? 'bg-teal-600' : 'bg-slate-300'}`}
@@ -4865,27 +4597,6 @@ export default function DisasterMap({
               </>
             )}
           </div>
-
-          {/* Warnings from BMKG/API Indonesia */}
-          {activePopup.warnings && activePopup.warnings.length > 0 && (
-            <div className="mt-2.5 pt-2.5 border-t border-slate-100 space-y-1">
-              <p className="text-[10px] font-extrabold uppercase tracking-wider text-red-500 flex items-center gap-1.5">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                </span>
-                PERINGATAN DINI CUACA BMKG:
-              </p>
-              <div className="max-h-[70px] overflow-y-auto space-y-1 pr-1">
-                {activePopup.warnings.map((w, idx) => (
-                  <div key={idx} className="bg-red-50 border border-red-100 rounded-lg p-1.5 text-[10px] text-slate-700">
-                    <strong className="text-red-700 block">{w.event}</strong>
-                    <span className="block text-slate-600">{w.area}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Action Footer */}
           <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center gap-2">

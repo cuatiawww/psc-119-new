@@ -5,8 +5,6 @@ import { usePathname } from 'next/navigation'
 import { useAuthStore } from '@/lib/authStore'
 import DashboardHeader, { DashboardSidebar } from './DashboardHeader'
 import Footer from './Footer'
-import { NotificationProvider } from '@/components/NotificationProvider'
-import CookieConsent from './CookieConsent'
 import { Loader2 } from 'lucide-react'
 
 interface AppShellProps {
@@ -94,15 +92,12 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <NotificationProvider>
-      <main className="min-h-screen">
-        {!isGempaNttRoute && <DashboardSidebar open={sidebarOpen} onClose={closeSidebar} />}
-        <DashboardHeader onToggleSidebar={() => setSidebarOpen((open) => !open)} />
-        {children}
-        <Footer />
-        {!isGempaNttRoute && <CookieConsent />}
-      </main>
-    </NotificationProvider>
+    <main className="min-h-screen">
+      {!isGempaNttRoute && <DashboardSidebar open={sidebarOpen} onClose={closeSidebar} />}
+      <DashboardHeader onToggleSidebar={() => setSidebarOpen((open) => !open)} />
+      {children}
+      <Footer />
+    </main>
   )
 }
 

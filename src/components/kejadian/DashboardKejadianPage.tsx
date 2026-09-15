@@ -853,6 +853,10 @@ export default function DashboardKejadianPage() {
   const [tableSearchQuery, setTableSearchQuery] = useState('')
   const [tableCurrentPage, setTableCurrentPage] = useState(1)
   const [selectedEvent, setSelectedEvent] = useState<MarkerItem | null>(null)
+  const ewsAlertQueue: any[] = []
+  const activeEwsProximityAlert: any = null
+  const dismissFirstAlert = () => undefined
+  const dismissAllAlerts = () => undefined
   // Handle initial deep-linking from query parameter ?id=... or pathname /detail-kejadian/...
   const initialChecked = useRef(false);
   const hadSelectedEventRef = useRef(false);
@@ -4292,8 +4296,8 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
         </div>
       </section>
 
-      {/* EWS Proximity Warning Modal */}
-      {activeEwsProximityAlert && (
+      {/* EWS proximity alerts are temporarily disabled. */}
+      {false && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="relative w-full max-w-md rounded-3xl border border-slate-200 bg-white overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300 text-slate-800">
             <button
