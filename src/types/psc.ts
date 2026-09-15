@@ -193,6 +193,7 @@ export interface PscCallRecord {
   rumahsakit_rujukan?: string | null
   lat?: number | null
   lng?: number | null
+  response_time_minutes?: number | null
   raw_psc?: any
 }
 

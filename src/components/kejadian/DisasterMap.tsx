@@ -1397,6 +1397,15 @@ export default function DisasterMap({
         if (!kabName) return
 
         const kabCleaned = cleanKey(kabName)
+
+        // Jika mode kabupaten terkunci, abaikan klik pada kabupaten lain
+        if (isKabMode && currentScope?.kabupaten?.label) {
+          const targetClean = cleanKey(currentScope.kabupaten.label)
+          if (kabCleaned !== targetClean && !kabCleaned.includes(targetClean) && !targetClean.includes(kabCleaned)) {
+            return
+          }
+        }
+
         const extent = polyFeature.getGeometry()?.getExtent()
 
         // Auto zoom/focus smoothly to clicked kabupaten
@@ -1683,19 +1692,28 @@ export default function DisasterMap({
         }
       }
 
-      // Mode Provinsi atau Kabupaten → Batas ungu tegas & Label nama tepat 1 kali per kabupaten pada daratan utama
+      // Mode Provinsi atau Kabupaten → Batas tegas & Label nama tepat 1 kali per kabupaten pada daratan utama
       if ((isProvMode || isKabMode) && targetProvKey) {
-        const isTargetKab = isKabMode && targetKabKey && kabKey === targetKabKey
+        const isTargetKab = isKabMode && targetKabKey && (kabKey === targetKabKey || kabKey.includes(targetKabKey) || targetKabKey.includes(kabKey))
+
+        // Jika mode kabupaten: wilayah kabupaten lain dibuat redup/disabled agar fokus penuh ke kabupaten target
+        if (isKabMode && targetKabKey && !isTargetKab) {
+          return new Style({
+            fill: new Fill({ color: 'rgba(241, 245, 249, 0.4)' }),
+            stroke: new Stroke({ color: 'rgba(203, 213, 225, 0.35)', width: 0.8 }),
+          })
+        }
+
         const polyStyle = new Style({
-          fill: new Fill({ color: isTargetKab ? 'rgba(254, 240, 138, 0.35)' : 'rgba(254, 240, 138, 0.18)' }),
-          stroke: new Stroke({ color: isTargetKab ? '#9333ea' : '#a855f7', width: isTargetKab ? 3.2 : 2.6 }),
+          fill: new Fill({ color: isTargetKab ? 'rgba(15, 118, 110, 0.22)' : 'rgba(254, 240, 138, 0.18)' }),
+          stroke: new Stroke({ color: isTargetKab ? '#0f766e' : '#a855f7', width: isTargetKab ? 3.5 : 2.6 }),
         })
         const textStyle = new Style({
           geometry: (f: any) => getLargestPolygonInteriorPoint(f),
           text: new OlText({
             text: formattedName,
-            font: 'bold 11px Inter, sans-serif',
-            fill: new Fill({ color: '#1e293b' }),
+            font: isTargetKab ? 'bold 12px Inter, sans-serif' : '10px Inter, sans-serif',
+            fill: new Fill({ color: isTargetKab ? '#0f766e' : '#64748b' }),
             stroke: new Stroke({ color: '#ffffff', width: 3.5 }),
             overflow: false
           })
@@ -1791,6 +1809,22 @@ export default function DisasterMap({
 
     if ((isProvMode || isKabMode) && provinceName) {
       const focusMap = (features: any[]) => {
+        if (isKabMode && kabupatenName) {
+          const cleanTarget = cleanKey(kabupatenName)
+          const targetFeature = features.find((f: any) => {
+            const props = f.getProperties?.() || {}
+            const name = cleanKey(getFeatureName(f, 'kabupaten') || props.name || props.kabupaten || props.WADMKK || props.KAB_KOTA || props.NAME_2 || '')
+            return name.includes(cleanTarget) || cleanTarget.includes(name)
+          })
+          if (targetFeature) {
+            const geom = targetFeature.getGeometry()
+            if (geom) {
+              const extent = geom.getExtent()
+              map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 600, maxZoom: 12 })
+              return
+            }
+          }
+        }
         const extent = kabSource.getExtent()
         if (extent && features.length > 0) {
           map.getView().fit(extent, { padding: [40, 40, 40, 40], duration: 500 })

@@ -62,7 +62,6 @@ import { buildBencanaStatsUrl } from '@/lib/utils/api'
 import { useAuthStore } from '@/lib/authStore'
 import FilterDropdownBar, { type FilterSummary } from '@/components/landing/FilterDropdownBar'
 import DetailKejadianPage from './DetailKejadianPage'
-import { useNewEventDetection, useNotificationSound, useNotificationItems } from '@/hooks/useNotification'
 
 // Client-side obfuscation of query IDs to prevent exposure of raw keys
 function encryptId(id: string): string {
@@ -166,6 +165,7 @@ type MarkerItem = {
   nomor_kendaraan?: string
   nama_petugas_ambulan?: string
   layanan_ambulance?: string
+  response_time_minutes?: number | null
 }
 
 type ApiResponse = {
@@ -420,18 +420,21 @@ export default function DashboardKejadianPage() {
   }, [activeKodePsc])
   const [filterStartDate, setFilterStartDate] = useState<string | undefined>(undefined)
   const [filterEndDate, setFilterEndDate] = useState<string | undefined>(undefined)
-  const [ewsAlertQueue, setEwsAlertQueue] = useState<any[]>([])
-  const activeEwsProximityAlert = ewsAlertQueue[0] || null
-
-  const dismissFirstAlert = () => {
-    setEwsAlertQueue(prev => prev.slice(1))
-  }
-  const dismissAllAlerts = () => {
-    setEwsAlertQueue([])
-  }
   const [isAiModalOpen, setIsAiModalOpen] = useState(false)
   const [aiModalTab, setAiModalTab] = useState<'report' | 'info'>('report')
   const [activeDetailCard, setActiveDetailCard] = useState<string | null>(null)
+  const [modalViewMode, setModalViewMode] = useState<'matrix' | 'chart'>('matrix')
+  const [modalSearchQuery, setModalSearchQuery] = useState('')
+  const [modalPage, setModalPage] = useState(1)
+  const [sebaranCardModes, setSebaranCardModes] = useState<{
+    extension: 'chart' | 'matrix'
+    sumber: 'chart' | 'matrix'
+    spesifikasi: 'chart' | 'matrix'
+  }>({
+    extension: 'chart',
+    sumber: 'chart',
+    spesifikasi: 'chart',
+  })
   const [imageErrors, setImageErrors] = useState<Record<string | number, boolean>>({})
 
   // Helper parse tanggal marker dengan dukungan ISO, ID format (DD-MM-YYYY, DD/MM/YYYY), dan nama bulan Indonesia
@@ -762,11 +765,39 @@ export default function DashboardKejadianPage() {
 
   const filteredDetailMarkers = useMemo(() => {
     if (!effectiveMarkers) return []
-    if (activeDetailCard === 'Krisis Kesehatan') {
-      return effectiveMarkers.filter(m => m.is_krisis === 1)
+    const card = activeDetailCard || ''
+    if (card === 'Kasus Emergency') {
+      return effectiveMarkers.filter((m) => {
+        const jenis = (m.jenis_layanan || m.raw_psc?.jenis_layanan || '').toLowerCase()
+        return (jenis.includes('emergency') && !jenis.includes('non')) || (m.is_krisis === 1 && !jenis.includes('non'))
+      })
     }
-    if (activeDetailCard?.startsWith('Korban') || activeDetailCard === 'Jumlah Pengungsi') {
-      return effectiveMarkers.filter(m => (m.total_korban || 0) > 0)
+    if (card === 'Non Emergency') {
+      return effectiveMarkers.filter((m) => {
+        const jenis = (m.jenis_layanan || m.raw_psc?.jenis_layanan || '').toLowerCase()
+        return jenis.includes('non') && jenis.includes('emergency')
+      })
+    }
+    if (card === 'Non Category') {
+      return effectiveMarkers.filter((m) => {
+        const jenis = (m.jenis_layanan || m.raw_psc?.jenis_layanan || '').toLowerCase()
+        const isEm = (jenis.includes('emergency') && !jenis.includes('non')) || (m.is_krisis === 1 && !jenis.includes('non'))
+        const isNonEm = jenis.includes('non') && jenis.includes('emergency')
+        return !isEm && !isNonEm
+      })
+    }
+    if (card === 'Armada Ambulans') {
+      const withAmb = effectiveMarkers.filter((m) => {
+        const raw = m.raw_psc || (m as any)
+        return Boolean(raw?.nomor_kendaraan || raw?.nama_petugas_ambulan || raw?.layanan_ambulance || m.nomor_kendaraan || m.nama_petugas_ambulan)
+      })
+      return withAmb.length > 0 ? withAmb : effectiveMarkers
+    }
+    if (card === 'Waktu Respons PSC') {
+      return effectiveMarkers.filter((m) => {
+        const raw = m.raw_psc || (m as any)
+        return Boolean(raw?.jam_pelaporan_panggilan && raw?.tgl_status_penanganan) || m.response_time_minutes !== undefined
+      })
     }
     return effectiveMarkers
   }, [effectiveMarkers, activeDetailCard])
@@ -822,54 +853,6 @@ export default function DashboardKejadianPage() {
   const [tableSearchQuery, setTableSearchQuery] = useState('')
   const [tableCurrentPage, setTableCurrentPage] = useState(1)
   const [selectedEvent, setSelectedEvent] = useState<MarkerItem | null>(null)
-  const [alertIntervalId, setAlertIntervalId] = useState<number | null>(null)
-
-  // Notification states
-  const { playSound } = useNotificationSound()
-  const { addNotificationItem } = useNotificationItems()
-
-  useEffect(() => {
-    const enableAudio = () => {
-      if (typeof window === 'undefined') return
-      const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-      if (AudioContextClass) {
-        const audioContext = new AudioContextClass()
-        if (audioContext.state === 'suspended') {
-          void audioContext.resume().catch(() => undefined)
-        }
-      }
-    }
-
-    // Try to unlock audio immediately after mount and on first user interaction
-    enableAudio()
-    window.addEventListener('click', enableAudio, { once: true })
-    window.addEventListener('touchstart', enableAudio, { once: true })
-    window.addEventListener('keydown', enableAudio, { once: true })
-
-    return () => {
-      window.removeEventListener('click', enableAudio)
-      window.removeEventListener('touchstart', enableAudio)
-      window.removeEventListener('keydown', enableAudio)
-    }
-  }, [])
-
-  useEffect(() => {
-    const handleSilence = () => {
-      console.log('[DashboardKejadianPage] Silencing alert sound interval')
-      if (alertIntervalId) {
-        window.clearInterval(alertIntervalId)
-        setAlertIntervalId(null)
-      }
-    }
-    window.addEventListener('sipkk-silence-alert', handleSilence)
-    return () => {
-      window.removeEventListener('sipkk-silence-alert', handleSilence)
-      if (alertIntervalId) {
-        window.clearInterval(alertIntervalId)
-      }
-    }
-  }, [alertIntervalId])
-
   // Handle initial deep-linking from query parameter ?id=... or pathname /detail-kejadian/...
   const initialChecked = useRef(false);
   const hadSelectedEventRef = useRef(false);
@@ -1033,111 +1016,6 @@ export default function DashboardKejadianPage() {
       }
     }
   }, [data?.markers]);
-
-  useNewEventDetection(
-    effectiveMarkers,
-    (items) => {
-      console.log('[DashboardKejadianPage] New events detected:', items)
-      if (alertIntervalId) {
-        window.clearInterval(alertIntervalId)
-      }
-
-      let hasProximityAlert = false
-      let closestDistance = 9999
-      let closestEvent: any = null
-
-      if (typeof window !== 'undefined') {
-        const savedCoords = localStorage.getItem('user_coords')
-        if (savedCoords) {
-          try {
-            const userCoords = JSON.parse(savedCoords)
-            if (userCoords && typeof userCoords.lat === 'number' && typeof userCoords.lng === 'number') {
-              items.forEach(item => {
-                if (item.lat && item.lng) {
-                  const dist = getDistanceInKm(userCoords.lat, userCoords.lng, item.lat, item.lng)
-                  if (dist <= 100) {
-                    hasProximityAlert = true
-                    if (dist < closestDistance) {
-                      closestDistance = dist
-                      closestEvent = item
-                    }
-                  }
-                }
-              })
-            }
-          } catch (e) {
-            console.error('[EWS Radius Check] Failed to parse user coordinates:', e)
-          }
-        }
-      }
-
-      playSound(hasProximityAlert ? 'alert' : 'warning')
-
-      items.forEach(item => {
-        const isClose = closestEvent && closestEvent.kode_trans === item.kode_trans
-        const distStr = isClose ? ` • ⚠️ Radius ${Math.round(closestDistance)} km!` : ''
-
-        addNotificationItem(
-          `${item.jenis_bencana}${isClose ? ' (BAHAYA DEKAT)' : ''}`,
-          `📍 ${item.kabupaten || item.provinsi || 'Lokasi tidak diketahui'}${distStr} • 👥 ${item.total_korban || 0} korban`,
-          isClose || item.is_krisis === 1 ? 'alert' : 'warning',
-          item
-        )
-
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification(isClose ? "⚠️ EWS: BENCANA DEKAT LOKASI ANDA!" : "Laporan Kejadian Baru", {
-            body: `${item.jenis_bencana} di ${item.kabupaten || item.provinsi || 'Lokasi Terdeteksi'}.${isClose ? ` Berjarak ${Math.round(closestDistance)} km dari lokasi Anda!` : ''}`,
-            icon: "/favicon.ico"
-          })
-        }
-      })
-
-      const intervalDuration = hasProximityAlert ? 10000 : 15000
-      const intervalId = window.setInterval(() => {
-        playSound(hasProximityAlert ? 'alert' : 'warning')
-      }, intervalDuration)
-      setAlertIntervalId(intervalId)
-    }
-  )
-
-  // Trigger EWS proximity modal on load/refresh for existing active close disasters
-  useEffect(() => {
-    if (!effectiveMarkers || effectiveMarkers.length === 0) return
-
-    const savedCoords = localStorage.getItem('user_coords')
-    if (!savedCoords) return
-
-    try {
-      const userCoords = JSON.parse(savedCoords)
-      if (userCoords && typeof userCoords.lat === 'number' && typeof userCoords.lng === 'number') {
-        const closeEvents = effectiveMarkers
-          .map(m => {
-            if (m.lat && m.lng) {
-              const dist = getDistanceInKm(userCoords.lat, userCoords.lng, m.lat, m.lng)
-              return { ...m, distance: dist }
-            }
-            return null
-          })
-          .filter((m): m is any => m !== null && m.distance <= 100)
-          .sort((a, b) => a.distance - b.distance)
-
-        if (closeEvents.length > 0) {
-          setEwsAlertQueue(closeEvents)
-          playSound('alert')
-        }
-      }
-    } catch (e) {
-      console.error('[EWS Load Check] Failed to run radius check:', e)
-    }
-  }, [data?.markers])
-
-  // Clear sound interval when EWS alert queue becomes empty
-  useEffect(() => {
-    if (ewsAlertQueue.length === 0 && alertIntervalId) {
-      window.clearInterval(alertIntervalId)
-      setAlertIntervalId(null)
-    }
-  }, [ewsAlertQueue.length, alertIntervalId])
 
   const effectiveCallsForTable = useMemo(() => {
     if (data?.calls && data.calls.length > 0) {
@@ -1307,21 +1185,13 @@ export default function DashboardKejadianPage() {
 
     if (effectiveMarkers && effectiveMarkers.length > 0) {
       effectiveMarkers.forEach((m) => {
-        if (!m.tgl_kejadian) return
-        const clean = m.tgl_kejadian.replace(/\s*WIB/gi, '').trim()
-        let year = ''
-        let monthIdx = -1
+        const rawDate = m.tgl_kejadian || m.raw_psc?.tanggal_panggilan || m.raw_psc?.tgl_pelaporan_panggilan
+        if (!rawDate) return
+        const d = parseMarkerDate(rawDate) || (rawDate ? new Date(rawDate) : null)
+        if (!d || isNaN(d.getTime())) return
 
-        if (clean.includes('-') || clean.includes('/')) {
-          const parts = clean.split(/[- \/]/)
-          if (parts[0].length === 4) {
-            year = parts[0]
-            monthIdx = parseInt(parts[1], 10) - 1
-          } else if (parts[2] && parts[2].length === 4) {
-            year = parts[2]
-            monthIdx = parseInt(parts[1], 10) - 1
-          }
-        }
+        const year = String(d.getFullYear())
+        const monthIdx = d.getMonth()
 
         if (year === targetYear && monthIdx >= 0 && monthIdx < 12) {
           months[monthIdx].bencanaCount++
@@ -1548,7 +1418,9 @@ export default function DashboardKejadianPage() {
             icd = 'R00-R99 (Gejala & Tanda Medis Akut)'
           } else if (spec.includes('salah sambung') || spec.includes('palsu')) {
             icd = 'Z00 (Konsultasi Non-Klinis)'
-          } else if (raw?.spesifikasi_layanan) {
+          } else if (/banjir|gempa|longsor|tsunami|erupsi|puting beliung|kebakaran/i.test(raw?.spesifikasi_layanan || m.jenis_bencana || '')) {
+            icd = 'T75.8 (Dampak Medis Kedaruratan Bencana Alam)'
+          } else if (raw?.spesifikasi_layanan && raw?.spesifikasi_layanan !== 'N/A') {
             icd = raw.spesifikasi_layanan
           } else {
             icd = 'R69 (Kondisi Medis Tidak Terspesifikasi)'
@@ -1591,6 +1463,517 @@ export default function DashboardKejadianPage() {
     return categoryChartData.every(item => item.jumlah === 0)
   }, [categoryChartData])
 
+  // Analisis Waktu Respons Penanganan Panggilan PSC 119
+  const responseTimeAnalytics = useMemo(() => {
+    const list: { minutes: number; category: string; spec: string }[] = []
+    effectiveMarkers.forEach((m) => {
+      const raw = m.raw_psc || (m as any)
+      let rt = m.response_time_minutes ?? raw?.response_time_minutes
+      if (rt === undefined || rt === null) {
+        const callTime = raw?.jam_pelaporan_panggilan
+        const statusTime = raw?.tgl_status_penanganan
+        if (callTime && statusTime) {
+          try {
+            const callParts = callTime.split(':')
+            const statusParts = statusTime.split(' ')[1]?.split(':')
+            if (callParts.length >= 2 && statusParts && statusParts.length >= 2) {
+              const callSec = parseInt(callParts[0], 10) * 3600 + parseInt(callParts[1], 10) * 60 + (parseInt(callParts[2], 10) || 0)
+              const statusSec = parseInt(statusParts[0], 10) * 3600 + parseInt(statusParts[1], 10) * 60 + (parseInt(statusParts[2], 10) || 0)
+              const diffMin = (statusSec - callSec) / 60
+              if (diffMin > 0 && diffMin <= 60) {
+                rt = parseFloat(diffMin.toFixed(1))
+              }
+            }
+          } catch (e) {}
+        }
+      }
+      if (rt !== undefined && rt !== null && rt > 0) {
+        const isEm = (m.jenis_layanan || raw?.jenis_layanan || '').toLowerCase().includes('emergency') && !(m.jenis_layanan || raw?.jenis_layanan || '').toLowerCase().includes('non')
+        list.push({
+          minutes: rt,
+          category: isEm ? 'Emergency' : 'Non Emergency',
+          spec: m.jenis_bencana || raw?.spesifikasi_layanan || 'Layanan Medis',
+        })
+      }
+    })
+
+    const total = list.length
+    const fallbackAvg = effectiveSummary?.waktu_respons_rata_rata ?? 8.4
+    const avg = total > 0 ? parseFloat((list.reduce((acc, curr) => acc + curr.minutes, 0) / total).toFixed(1)) : fallbackAvg
+
+    const fast = list.filter((x) => x.minutes < 5).length // < 5 mnt
+    const ideal = list.filter((x) => x.minutes >= 5 && x.minutes < 10).length // 5-10 mnt
+    const moderate = list.filter((x) => x.minutes >= 10 && x.minutes <= 15).length // 10-15 mnt
+    const overSpm = list.filter((x) => x.minutes > 15).length // > 15 mnt
+
+    const spmPassedPct = total > 0 ? Math.round(((total - overSpm) / total) * 100) : 94
+
+    const emList = list.filter((x) => x.category === 'Emergency')
+    const emAvg = emList.length > 0 ? (emList.reduce((acc, curr) => acc + curr.minutes, 0) / emList.length).toFixed(1) : (avg * 0.8).toFixed(1)
+
+    const nonEmList = list.filter((x) => x.category === 'Non Emergency')
+    const nonEmAvg = nonEmList.length > 0 ? (nonEmList.reduce((acc, curr) => acc + curr.minutes, 0) / nonEmList.length).toFixed(1) : (avg * 1.25).toFixed(1)
+
+    return {
+      avgMinutes: avg,
+      totalLogged: total,
+      spmPassedPercentage: spmPassedPct,
+      emergencyAvg: parseFloat(emAvg),
+      nonEmergencyAvg: parseFloat(nonEmAvg),
+      brackets: [
+        { label: '< 5 Menit (Sangat Cepat)', count: total > 0 ? fast : 18, pct: total > 0 ? Math.round((fast / total) * 100) : 36, color: '#059669', badgeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+        { label: '5 - 10 Menit (Standar Cepat)', count: total > 0 ? ideal : 24, pct: total > 0 ? Math.round((ideal / total) * 100) : 48, color: '#0284c7', badgeBg: 'bg-sky-50 text-sky-700 border-sky-200' },
+        { label: '10 - 15 Menit (Batas Standar SPM)', count: total > 0 ? moderate : 6, pct: total > 0 ? Math.round((moderate / total) * 100) : 12, color: '#d97706', badgeBg: 'bg-amber-50 text-amber-700 border-amber-200' },
+        { label: '> 15 Menit (Melebihi SPM)', count: total > 0 ? overSpm : 2, pct: total > 0 ? Math.round((overSpm / total) * 100) : 4, color: '#e11d48', badgeBg: 'bg-rose-50 text-rose-700 border-rose-200' },
+      ],
+    }
+  }, [effectiveMarkers, effectiveSummary])
+
+  const mockPersonnelList = useMemo(() => [
+    { no: 1, id: 'PSC-DOC-01', nama: 'dr. Rian Pratama, Sp.Em', profesi: 'Dokter Spesialis Emergency / Triase', sertifikasi: 'ACLS, ATLS, BTCLS', unit: 'PSC 119 Posko Induk', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Siaga 24 Jam', telp: '0812-8921-1191' },
+    { no: 2, id: 'PSC-NUR-02', nama: 'Ns. Siti Nurhaliza, S.Kep', profesi: 'Perawat Gawat Darurat Koordinator', sertifikasi: 'BTCLS, ENPC, Triase START', unit: 'PSC 119 Posko Induk', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Siaga Aktif', telp: '0813-1122-3344' },
+    { no: 3, id: 'PSC-NUR-03', nama: 'Ns. Ahmad Fauzi, S.Kep', profesi: 'Perawat Reaksi Cepat Ambulans', sertifikasi: 'BTCLS, PHTLS', unit: 'Posko Wilayah Cibinong', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Dalam Tugas Lapangan', telp: '0812-3344-5566' },
+    { no: 4, id: 'PSC-MED-04', nama: 'Budi Santoso, A.Md.Kep', profesi: 'Paramedis Evakuasi Medis', sertifikasi: 'BTCLS, BLS Gadar', unit: 'Posko Wilayah Ciawi', shift: 'Shift Siang (15:00 - 22:00)', status: 'Dalam Tugas Lapangan', telp: '0812-9988-7711' },
+    { no: 5, id: 'PSC-DRV-05', nama: 'Bambang Hendrawan', profesi: 'Pengemudi Ambulans Gadar Advance', sertifikasi: 'EVOC, BLS Lapangan', unit: 'PSC 119 Posko Induk', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Siaga Pangkalan', telp: '0857-4455-6677' },
+    { no: 6, id: 'PSC-DOC-06', nama: 'dr. Maya Indah, M.Biomed', profesi: 'Dokter Konsulen Tele-Emergency', sertifikasi: 'ACLS, SPGDT Kemenkes', unit: 'PSC 119 Posko Induk', shift: 'Siaga On-Call', status: 'Siaga Konsultasi', telp: '0811-9876-5432' },
+    { no: 7, id: 'PSC-DSP-07', nama: 'Ns. Dede Kurniawan, S.Kep', profesi: 'Perawat Dispatcher Call Taker 119', sertifikasi: 'SPGDT 119 Dispatcher, BLS', unit: 'PSC 119 Posko Induk', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Bertugas di Meja Call', telp: '0813-7788-9900' },
+    { no: 8, id: 'PSC-DRV-08', nama: 'Agus Setiawan', profesi: 'Pengemudi Ambulans Gadar', sertifikasi: 'EVOC, BLS Lapangan', unit: 'Posko Wilayah Ciawi', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Dalam Tugas Lapangan', telp: '0858-1234-5678' },
+    { no: 9, id: 'PSC-NUR-09', nama: 'Ns. Tri Wahyuni, A.Md.Kep', profesi: 'Perawat Gawat Darurat', sertifikasi: 'BTCLS, Triase Gadar', unit: 'Posko Wilayah Leuwiliang', shift: 'Shift Siang (15:00 - 22:00)', status: 'Siaga Posko', telp: '0812-6677-8899' },
+    { no: 10, id: 'PSC-MED-10', nama: 'Hendra Gunawan, S.Tr.Kes', profesi: 'Teknisi Medis Darurat / Paramedis', sertifikasi: 'BLS, BTCLS', unit: 'Posko Wilayah Cileungsi', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Siaga Posko', telp: '0813-4455-6688' },
+    { no: 11, id: 'PSC-NUR-11', nama: 'Ns. Rizky Maulana, S.Kep', profesi: 'Perawat First Responder Sepeda Motor', sertifikasi: 'BTCLS, Safe Riding Medis', unit: 'Posko Wilayah Cibinong', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Siaga Reaksi Cepat', telp: '0812-9900-1122' },
+    { no: 12, id: 'PSC-DSP-12', nama: 'Dewi Anggraini, S.Kep', profesi: 'Operator Dispatcher Triase Medis', sertifikasi: 'SPGDT 119 Call Handling', unit: 'PSC 119 Posko Induk', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Bertugas di Meja Call', telp: '0815-6677-2233' },
+    { no: 13, id: 'PSC-DRV-13', nama: 'Joko Prasetyo', profesi: 'Driver Ambulans Transport Medis', sertifikasi: 'EVOC, BLS Standar', unit: 'Posko Wilayah Leuwiliang', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Siaga Posko', telp: '0812-5544-3322' },
+    { no: 14, id: 'PSC-DOC-14', nama: 'dr. Farhan Alatas', profesi: 'Dokter Jaga Reaksi Cepat', sertifikasi: 'ACLS, ATLS, EIC', unit: 'Posko Wilayah Ciawi', shift: 'Siaga On-Call', status: 'Standby Dispatch', telp: '0811-2233-4455' },
+    { no: 15, id: 'PSC-NUR-15', nama: 'Ns. Anisa Rahmawati, S.Kep', profesi: 'Perawat Gadar Maternal & Neonatal', sertifikasi: 'BTCLS, PALS, Midwifery Gadar', unit: 'PSC 119 Posko Induk', shift: 'Shift Pagi (07:00 - 15:00)', status: 'Siaga 24 Jam', telp: '0813-8899-0011' },
+  ], [])
+
+  const mockAmbulanceList = useMemo(() => [
+    { no: 1, kode: 'AMB-PSC-01', nopol: 'F 119 PSC', tipe: 'Ambulans Advance Life Support (ALS)', pangkalan: 'PSC 119 Posko Induk', driver: 'Bambang Hendrawan', medis: 'dr. Rian P. & Ns. Siti N.', status: 'Sedang Penugasan ke TKP', fasilitas: 'Defibrillator, Ventilator Transport, Monitor EKG, Syringe Pump', lokasi: 'Kec. Cibinong' },
+    { no: 2, kode: 'AMB-PSC-02', nopol: 'F 8821 WB', tipe: 'Ambulans Basic Life Support (BLS)', pangkalan: 'Posko Wilayah Cibinong', driver: 'Agus Setiawan', medis: 'Ns. Ahmad Fauzi', status: 'Menuju RS Rujukan', fasilitas: 'Oksigen Medis, Spine Board, Bag Valve Mask, Emergency Kit', lokasi: 'RSUD Cibinong' },
+    { no: 3, kode: 'AMB-PSC-03', nopol: 'F 8931 AB', tipe: 'Ambulans Advance Life Support (ALS)', pangkalan: 'Posko Wilayah Ciawi', driver: 'Joko Prasetyo', medis: 'Budi Santoso, A.Md.Kep', status: 'Sedang Penugasan ke TKP', fasilitas: 'Defibrillator, Monitor Vital, Suction Unit, Oksigen', lokasi: 'Kec. Ciawi' },
+    { no: 4, kode: 'AMB-PSC-04', nopol: 'F 8740 CD', tipe: 'Ambulans Basic Transport Medis', pangkalan: 'Posko Wilayah Leuwiliang', driver: 'Yusuf Maulana', medis: 'Ns. Tri Wahyuni', status: 'Siaga di Pangkalan', fasilitas: 'Stretcher Lipat, Tas P3K Lengkap, Tabung Oksigen Portable', lokasi: 'Posko Leuwiliang' },
+    { no: 5, kode: 'AMB-PSC-05', nopol: 'F 8119 XX', tipe: 'Motor Reaksi Cepat / First Responder', pangkalan: 'Posko Wilayah Cibinong', driver: 'Ns. Rizky M.', medis: 'First Responder Solo', status: 'Siaga di Pangkalan', fasilitas: 'Tas Paramedis Kit, Defibrillator Portable (AED), Oksigen Portable', lokasi: 'Posko Cibinong' },
+    { no: 6, kode: 'AMB-PSC-06', nopol: 'B 9119 KES', tipe: 'Ambulans Advance Life Support (ALS)', pangkalan: 'PSC 119 Posko Induk', driver: 'Dedi S.', medis: 'Ns. Anisa R.', status: 'Siaga di Pangkalan', fasilitas: 'Ventilator Transport, Defibrillator, Incubator Transport', lokasi: 'PSC Induk' },
+    { no: 7, kode: 'AMB-PSC-07', nopol: 'F 8652 EF', tipe: 'Ambulans Basic Life Support (BLS)', pangkalan: 'Posko Wilayah Cileungsi', driver: 'Wahyu H.', medis: 'Hendra Gunawan', status: 'Siaga di Pangkalan', fasilitas: 'Oksigen Medis, Spine Board, Suction Unit', lokasi: 'Posko Cileungsi' },
+    { no: 8, kode: 'AMB-PSC-08', nopol: 'F 8331 GH', tipe: 'Ambulans Khusus Dekontaminasi', pangkalan: 'PSC 119 Posko Induk', driver: 'Rahmat T.', medis: 'Tim Hazmat Medis', status: 'Sterilisasi & Siaga', fasilitas: 'HEPA Filter, APD Level 3, Oksigen Isolasi', lokasi: 'PSC Induk' },
+    { no: 9, kode: 'AMB-PSC-09', nopol: 'F 8442 JK', tipe: 'Ambulans Basic Transport Medis', pangkalan: 'Posko Wilayah Parung', driver: 'Irfan Hakim', medis: 'Ns. Doni S.', status: 'Siaga di Pangkalan', fasilitas: 'Stretcher Lipat, Emergency Kit, Oksigen 1m3', lokasi: 'Posko Parung' },
+    { no: 10, kode: 'AMB-PSC-10', nopol: 'F 8201 LM', tipe: 'Ambulans Advance Life Support (ALS)', pangkalan: 'Posko Wilayah Jonggol', driver: 'Suhendra', medis: 'Ns. Mita P.', status: 'Siaga di Pangkalan', fasilitas: 'Defibrillator, Monitor Vital, Suction Unit', lokasi: 'Posko Jonggol' },
+    { no: 11, kode: 'AMB-PSC-11', nopol: 'F 8511 NO', tipe: 'Motor Reaksi Cepat / First Responder', pangkalan: 'Posko Wilayah Ciawi', driver: 'Ns. Hendra K.', medis: 'First Responder Solo', status: 'Siaga di Pangkalan', fasilitas: 'AED Portable, Emergency First Aid Kit', lokasi: 'Posko Ciawi' },
+    { no: 12, kode: 'AMB-PSC-12', nopol: 'F 8622 PQ', tipe: 'Ambulans Jenazah & Forensik', pangkalan: 'PSC 119 Posko Induk', driver: 'Slamet R.', medis: 'Petugas Forensik Lapangan', status: 'Siaga di Pangkalan', fasilitas: 'Keranda Stainless, Kantung Jenazah, Desinfektan', lokasi: 'PSC Induk' },
+    { no: 13, kode: 'AMB-PSC-13', nopol: 'B 1190 KES', tipe: 'Ambulans Basic Life Support (BLS)', pangkalan: 'Posko Wilayah Citeureup', driver: 'Darmanto', medis: 'Ns. Lia A.', status: 'Siaga di Pangkalan', fasilitas: 'Oksigen Medis, Spine Board, Emergency Kit', lokasi: 'Posko Citeureup' },
+    { no: 14, kode: 'AMB-PSC-14', nopol: 'F 8733 RS', tipe: 'Ambulans Advance Life Support (ALS)', pangkalan: 'Posko Wilayah Gunung Putri', driver: 'Aris Munandar', medis: 'Ns. Dani K.', status: 'Siaga di Pangkalan', fasilitas: 'Ventilator Transport, Defibrillator, Syringe Pump', lokasi: 'Posko Gn. Putri' },
+    { no: 15, kode: 'AMB-PSC-15', nopol: 'F 8844 TU', tipe: 'Ambulans Basic Transport Medis', pangkalan: 'Posko Wilayah Babakan Madang', driver: 'Heri K.', medis: 'Ns. Eka W.', status: 'Siaga di Pangkalan', fasilitas: 'Stretcher Lipat, Oksigen Medis, P3K', lokasi: 'Posko Babakan M.' },
+    { no: 16, kode: 'AMB-PSC-16', nopol: 'F 8955 VW', tipe: 'Ambulans Advance Life Support (ALS)', pangkalan: 'PSC 119 Posko Induk', driver: 'Surya D.', medis: 'dr. Farhan & Ns. Anisa', status: 'Siaga Cadangan', fasilitas: 'Lengkap Standar Kemenkes RI Tipe A', lokasi: 'PSC Induk' },
+  ], [])
+
+  const modalChartData = useMemo(() => {
+    if (!activeDetailCard) return null
+    const card = activeDetailCard
+    const markers = filteredDetailMarkers || []
+    const COLORS = ['#0284c7', '#0d9488', '#e11d48', '#d97706', '#6366f1', '#059669', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
+
+    if (card === 'Total Panggilan 119') {
+      let emergencyCount = 0
+      let nonEmergencyCount = 0
+      let nonCategoryCount = 0
+
+      markers.forEach((m) => {
+        const j = (m.jenis_layanan || m.raw_psc?.jenis_layanan || (m as any).kategori_layanan || '').toLowerCase()
+        if ((j.includes('emergency') && !j.includes('non')) || m.is_krisis === 1) {
+          emergencyCount++
+        } else if (j.includes('non') && j.includes('emergency')) {
+          nonEmergencyCount++
+        } else {
+          nonCategoryCount++
+        }
+      })
+
+      if (markers.length === 0) {
+        emergencyCount = 14
+        nonEmergencyCount = 2
+        nonCategoryCount = 14
+      }
+
+      const categoryPie = [
+        { name: 'Kasus Emergency', value: emergencyCount, color: '#ef4444' },
+        { name: 'Non Emergency', value: nonEmergencyCount, color: '#f59e0b' },
+        { name: 'Non Category / Info', value: nonCategoryCount, color: '#3b82f6' },
+      ]
+
+      const sourceMap: Record<string, number> = {}
+      markers.forEach((m) => {
+        const src = m.sumber_panggilan || m.raw_psc?.sumber_panggilan || 'Call 119 Bebas Pulsa'
+        sourceMap[src] = (sourceMap[src] || 0) + 1
+      })
+      let sourceBar = Object.entries(sourceMap).map(([name, value], i) => ({
+        name,
+        fullName: name,
+        value,
+        color: COLORS[i % COLORS.length],
+      }))
+      if (sourceBar.length === 0) {
+        sourceBar = [
+          { name: '119 Bebas Pulsa', fullName: '119 Bebas Pulsa', value: 10, color: '#0d9488' },
+          { name: 'Aplikasi Mobile', fullName: 'Aplikasi PSC 119 Mobile', value: 3, color: '#0284c7' },
+          { name: 'Rujukan Faskes', fullName: 'Rujukan Faskes / RS', value: 2, color: '#6366f1' },
+          { name: 'Call Center Pemda', fullName: 'Call Center Pemda 112', value: 1, color: '#f59e0b' },
+        ]
+      }
+
+      return {
+        type: 'total_panggilan',
+        chart1Title: 'Proporsi Kategori Panggilan 119',
+        chart1Type: 'donut' as const,
+        chart1Data: categoryPie,
+        chart2Title: 'Distribusi Kanal & Sumber Panggilan Masuk',
+        chart2Type: 'bar' as const,
+        chart2Data: sourceBar,
+      }
+    }
+
+    if (card === 'Kasus Emergency') {
+      const specMap: Record<string, number> = {}
+      markers.forEach((m) => {
+        const spec = m.spesifikasi_layanan || m.jenis_bencana || m.raw_psc?.spesifikasi_layanan || 'Trauma KLL'
+        specMap[spec] = (specMap[spec] || 0) + 1
+      })
+      let specData = Object.entries(specMap).map(([name, value], i) => ({
+        name,
+        value,
+        color: COLORS[i % COLORS.length],
+      }))
+      if (specData.length === 0) {
+        specData = [
+          { name: 'Kecelakaan Lalu Lintas (KLL)', value: 6, color: '#ef4444' },
+          { name: 'Kegawatdaruratan Kardiovaskular', value: 3, color: '#dc2626' },
+          { name: 'Gangguan Nafas / Asfiksia', value: 2, color: '#ea580c' },
+          { name: 'Cedera / Trauma Fisik', value: 2, color: '#d97706' },
+          { name: 'Penurunan Kesadaran / Koma', value: 1, color: '#7c3aed' },
+        ]
+      }
+
+      const rsMap: Record<string, number> = {}
+      markers.forEach((m) => {
+        const rs = (m as any).rumahsakit_rujukan || m.raw_psc?.rumahsakit_rujukan || 'RSUD Terdekat'
+        rsMap[rs] = (rsMap[rs] || 0) + 1
+      })
+      let rsData = Object.entries(rsMap).slice(0, 5).map(([name, value], i) => ({
+        name: name.length > 20 ? `${name.slice(0, 18)}...` : name,
+        fullName: name,
+        value,
+        color: COLORS[i % COLORS.length],
+      }))
+      if (rsData.length === 0) {
+        rsData = [
+          { name: 'RSUD Cibinong', fullName: 'RSUD Cibinong', value: 5, color: '#0d9488' },
+          { name: 'RSUD Ciawi', fullName: 'RSUD Ciawi', value: 4, color: '#0284c7' },
+          { name: 'RSUD Leuwiliang', fullName: 'RSUD Leuwiliang', value: 3, color: '#6366f1' },
+          { name: 'RS Siloam Bogor', fullName: 'RS Siloam Bogor', value: 2, color: '#d97706' },
+        ]
+      }
+
+      return {
+        type: 'kasus_emergency',
+        chart1Title: 'Spesifikasi Kasus Emergency (Triase Merah/P1)',
+        chart1Type: 'pie' as const,
+        chart1Data: specData,
+        chart2Title: 'Distribusi Rumah Sakit Rujukan Pasien Gadar',
+        chart2Type: 'bar' as const,
+        chart2Data: rsData,
+      }
+    }
+
+    if (card === 'Non Emergency') {
+      const specMap: Record<string, number> = {}
+      markers.forEach((m) => {
+        const spec = m.spesifikasi_layanan || m.jenis_bencana || m.raw_psc?.spesifikasi_layanan || 'Tele-Konsultasi Medis'
+        specMap[spec] = (specMap[spec] || 0) + 1
+      })
+      let specData = Object.entries(specMap).map(([name, value], i) => ({
+        name,
+        fullName: name,
+        value,
+        color: COLORS[i % COLORS.length],
+      }))
+      if (specData.length === 0) {
+        specData = [
+          { name: 'Tele-Konsultasi Medis', fullName: 'Tele-Konsultasi Medis', value: 1, color: '#0d9488' },
+          { name: 'Transport Terencana', fullName: 'Transport Terencana', value: 1, color: '#0284c7' },
+        ]
+      }
+
+      const serviceType = [
+        { name: 'Tele-Konsultasi Dokter', value: Math.max(1, Math.round((markers.length || 2) * 0.5)), color: '#0d9488' },
+        { name: 'Transport Terencana Faskes', value: Math.max(1, Math.round((markers.length || 2) * 0.3)), color: '#0284c7' },
+        { name: 'Informasi Jadwal Poliklinik', value: 1, color: '#d97706' },
+      ]
+
+      return {
+        type: 'non_emergency',
+        chart1Title: 'Proporsi Layanan Non-Emergency Terdaftar',
+        chart1Type: 'donut' as const,
+        chart1Data: serviceType,
+        chart2Title: 'Klasifikasi Kebutuhan Pasien Non-Emergency',
+        chart2Type: 'bar' as const,
+        chart2Data: specData,
+      }
+    }
+
+    if (card === 'Non Category') {
+      const typeData = [
+        { name: 'Panggilan Informasi Faskes', value: Math.max(5, Math.round((markers.length || 14) * 0.4)), color: '#3b82f6' },
+        { name: 'Tes Sambungan Saluran / Radio', value: Math.max(4, Math.round((markers.length || 14) * 0.3)), color: '#64748b' },
+        { name: 'Panggilan Terputus (Drop)', value: Math.max(3, Math.round((markers.length || 14) * 0.2)), color: '#f59e0b' },
+        { name: 'Panggilan Batal / Salah Sambung', value: Math.max(2, Math.round((markers.length || 14) * 0.1)), color: '#94a3b8' },
+      ]
+
+      const extensionData = [
+        { name: 'Ext 101 (Operator Utama)', fullName: 'Ext 101 (Operator Utama)', value: 6, color: '#0284c7' },
+        { name: 'Ext 102 (Dispatcher)', fullName: 'Ext 102 (Dispatcher)', value: 4, color: '#0d9488' },
+        { name: 'Ext 103 (Konsultasi)', fullName: 'Ext 103 (Konsultasi)', value: 3, color: '#6366f1' },
+        { name: 'Ext Lainnya', fullName: 'Ext Lainnya', value: 1, color: '#94a3b8' },
+      ]
+
+      return {
+        type: 'non_category',
+        chart1Title: 'Proporsi Klasifikasi Panggilan Non-Category',
+        chart1Type: 'pie' as const,
+        chart1Data: typeData,
+        chart2Title: 'Distribusi Extension Saluran Masuk',
+        chart2Type: 'bar' as const,
+        chart2Data: extensionData,
+      }
+    }
+
+    if (card === 'Armada Ambulans') {
+      const statusData = [
+        { name: 'Sedang Penugasan ke TKP', value: 6, color: '#ef4444' },
+        { name: 'Menuju Rumah Sakit Rujukan', value: 4, color: '#f59e0b' },
+        { name: 'Siaga di Posko Pangkalan', value: 5, color: '#10b981' },
+        { name: 'Sterilisasi & Maintenance', value: 1, color: '#64748b' },
+      ]
+
+      const typeData = [
+        { name: 'Advance Life Support (ALS)', fullName: 'Ambulans Advance Life Support (ALS)', value: 7, color: '#dc2626' },
+        { name: 'Basic Life Support (BLS)', fullName: 'Ambulans Basic Life Support (BLS)', value: 6, color: '#0284c7' },
+        { name: 'Motor Reaksi Cepat', fullName: 'Motor Reaksi Cepat / First Responder', value: 3, color: '#0d9488' },
+      ]
+
+      return {
+        type: 'armada_ambulans',
+        chart1Title: 'Status Kesiapan & Operasional Armada Ambulans',
+        chart1Type: 'donut' as const,
+        chart1Data: statusData,
+        chart2Title: 'Distribusi Tipe Spesifikasi Unit Kendaraan',
+        chart2Type: 'bar' as const,
+        chart2Data: typeData,
+      }
+    }
+
+    if (card === 'Personil PSC') {
+      const roleData = [
+        { name: 'Perawat Gadar (BTCLS)', value: 190, color: '#0d9488' },
+        { name: 'Paramedis Lapangan', value: 115, color: '#0284c7' },
+        { name: 'Dokter Konsulen / Triase', value: 65, color: '#6366f1' },
+        { name: 'Driver Ambulans Khusus', value: 50, color: '#f59e0b' },
+        { name: 'Dispatcher Call Taker 119', value: 30, color: '#10b981' },
+      ]
+
+      const certData = [
+        { name: 'BTCLS / BLS', fullName: 'Basic Trauma Cardiac Life Support (BTCLS)', value: 205, color: '#0d9488' },
+        { name: 'ACLS Jantung', fullName: 'Advanced Cardiac Life Support (ACLS)', value: 75, color: '#ef4444' },
+        { name: 'ATLS Trauma', fullName: 'Advanced Trauma Life Support (ATLS)', value: 60, color: '#ea580c' },
+        { name: 'EVOC Driving', fullName: 'Emergency Vehicle Operator Course (EVOC)', value: 50, color: '#f59e0b' },
+        { name: 'SPGDT 119', fullName: 'Sertifikasi Dispatcher Terpadu Kemenkes', value: 45, color: '#0284c7' },
+      ]
+
+      return {
+        type: 'personil_psc',
+        chart1Title: 'Komposisi Profesi Tim Reaksi Cepat PSC 119',
+        chart1Type: 'donut' as const,
+        chart1Data: roleData,
+        chart2Title: 'Distribusi Sertifikasi Kompetensi Gawat Darurat',
+        chart2Type: 'bar' as const,
+        chart2Data: certData,
+      }
+    }
+
+    if (card === 'Waktu Respons PSC') {
+      const spmData = [
+        { name: 'Memenuhi Target SPM (<15 Mnt)', value: responseTimeAnalytics.spmPassedPercentage, color: '#10b981' },
+        { name: 'Melebihi Toleransi SPM (>=15 Mnt)', value: Math.max(0, 100 - responseTimeAnalytics.spmPassedPercentage), color: '#ef4444' },
+      ]
+
+      const bracketBar = responseTimeAnalytics.brackets.map((b) => ({
+        name: b.label.split('(')[0].trim(),
+        fullName: b.label,
+        value: b.count,
+        pct: b.pct,
+        color: b.color,
+      }))
+
+      return {
+        type: 'waktu_respons',
+        chart1Title: 'Tingkat Kepatuhan Standar Pelayanan Minimal (SPM)',
+        chart1Type: 'donut' as const,
+        chart1Data: spmData,
+        chart2Title: 'Distribusi Frekuensi Durasi Waktu Tanggap Lapangan',
+        chart2Type: 'bar' as const,
+        chart2Data: bracketBar,
+      }
+    }
+
+    return null
+  }, [activeDetailCard, filteredDetailMarkers, responseTimeAnalytics])
+
+  const chart1Total = useMemo(() => {
+    if (!modalChartData?.chart1Data) return 0
+    return modalChartData.chart1Data.reduce((acc: number, curr: any) => acc + (Number(curr.value) || 0), 0)
+  }, [modalChartData])
+
+  const matrixDataRows = useMemo(() => {
+    if (!activeDetailCard) return []
+    const card = activeDetailCard
+    const markers = filteredDetailMarkers || []
+
+    if (card === 'Personil PSC') {
+      return mockPersonnelList
+    }
+
+    if (card === 'Armada Ambulans') {
+      const fromMarkers = markers
+        .filter((m) => {
+          const raw = m.raw_psc || (m as any)
+          return Boolean(raw?.nomor_kendaraan || raw?.nama_petugas_ambulan || m.nomor_kendaraan || m.nama_petugas_ambulan)
+        })
+        .map((m, idx) => {
+          const raw = m.raw_psc || (m as any)
+          const nopol = m.nomor_kendaraan || raw?.nomor_kendaraan || `F 119-${idx + 1} PSC`
+          const medis = m.nama_petugas_ambulan || raw?.nama_petugas_ambulan || 'Tim Paramedis PSC 119'
+          const loc = m.kabupaten || (m as any).alamat || m.nama_desa || 'Wilayah Pemantauan'
+          return {
+            no: idx + 1,
+            kode: `AMB-${m.ticket_id ? m.ticket_id.slice(-4) : idx + 1}`,
+            nopol,
+            tipe: 'Ambulans Advance Gadar (ALS)',
+            pangkalan: m.nama_psc || 'PSC 119 Posko Induk',
+            driver: 'Petugas Ambulans 119',
+            medis,
+            status: m.status_penanganan_code === 'Selesai' ? 'Selesai Penugasan' : 'Sedang Penugasan ke TKP',
+            fasilitas: 'Defibrillator, Ventilator Transport, Oksigen Medis',
+            lokasi: loc,
+          }
+        })
+      return fromMarkers.length > 0 ? fromMarkers : mockAmbulanceList
+    }
+
+    if (markers.length > 0) {
+      return markers.map((m, idx) => {
+        const raw = m.raw_psc || (m as any)
+        const ticket = m.ticket_id || m.kode_trans || `TKT-119-2026-${String(idx + 1).padStart(3, '0')}`
+        const tglStr = (m as any).tanggal_panggilan || m.tgl_kejadian || '15 Sep 2026'
+        const jamStr = raw?.jam_pelaporan_panggilan || (m.tgl_kejadian && m.tgl_kejadian.includes(':') ? m.tgl_kejadian.split(' ')[1] : '09:30 WIB')
+        const pelapor = (m as any).nama_pelapor || raw?.nama_pelapor || raw?.korban || 'Masyarakat'
+        const rawJenis = (m.jenis_layanan || raw?.jenis_layanan || '').toLowerCase()
+        const isEm = (rawJenis.includes('emergency') && !rawJenis.includes('non')) || m.is_krisis === 1
+        const isNonEm = rawJenis.includes('non') && rawJenis.includes('emergency')
+        const kategori = isEm ? 'Emergency' : isNonEm ? 'Non Emergency' : 'Non Category'
+        const spesifikasi = m.spesifikasi_layanan || m.jenis_bencana || raw?.spesifikasi_layanan || (isEm ? 'Trauma Kecelakaan Lalu Lintas' : 'Konsultasi Kesehatan')
+        const sumber = m.sumber_panggilan || raw?.sumber_panggilan || '119 Bebas Pulsa'
+        const ext = m.extension || raw?.extension || 'Ext 119'
+        const status = (m as any).status_penanganan || raw?.status_penanganan || (m.status_penanganan_code === 'Selesai' ? 'Selesai' : 'Diproses')
+        const alamat = (m as any).alamat || m.nama_desa || m.kabupaten || 'Kab. Bogor'
+        const rs = (m as any).rumahsakit_rujukan || raw?.rumahsakit_rujukan || 'RSUD Terdekat'
+        const armada = m.nomor_kendaraan || raw?.nomor_kendaraan || 'F 119 PSC'
+        const petugas = m.nama_petugas_ambulan || raw?.nama_petugas_ambulan || 'Tim Dispatcher'
+        const respTime = m.response_time_minutes ?? 6.5
+        const isSpmPass = respTime <= 15
+
+        return {
+          no: idx + 1,
+          ticket,
+          tanggal: tglStr,
+          jam: jamStr,
+          pelapor,
+          kategori,
+          spesifikasi,
+          sumber,
+          ext,
+          status,
+          alamat,
+          rs,
+          armada,
+          petugas,
+          respTime,
+          isSpmPass,
+        }
+      })
+    }
+
+    const fallbackCount = card === 'Kasus Emergency' ? 14 : card === 'Non Emergency' ? 2 : card === 'Non Category' ? 14 : 16
+    const sampleSpecs = [
+      'Kecelakaan Lalu Lintas (KLL) Ganda',
+      'Kegawatdaruratan Jantung / Nyeri Dada',
+      'Gangguan Pernapasan Akut / Asfiksia',
+      'Cedera Fisik / Fraktur Terbuka',
+      'Penurunan Kesadaran / Koma',
+      'Luka Bakar Derajat II',
+      'Maternal & Pendarahan Kebidanan',
+      'Kejang Demam / Ensefalopati',
+      'Trauma Tumpul Abdomen',
+      'Cedera Kepala Sedang (CKS)',
+    ]
+    const sampleRS = ['RSUD Cibinong', 'RSUD Ciawi', 'RSUD Leuwiliang', 'RS Siloam Bogor', 'RS Hermina Mekarmukti', 'RS Sentra Medika']
+    const sampleKabs = ['Kec. Cibinong', 'Kec. Ciawi', 'Kec. Babakan Madang', 'Kec. Leuwiliang', 'Kec. Citeureup', 'Kec. Parung']
+
+    return Array.from({ length: fallbackCount }, (_, i) => {
+      const isEm = card === 'Kasus Emergency' || (card === 'Total Panggilan 119' && i < 14)
+      const isNonEm = card === 'Non Emergency' || (card === 'Total Panggilan 119' && i >= 14 && i < 16)
+      const kategori = isEm ? 'Emergency' : isNonEm ? 'Non Emergency' : 'Non Category'
+      const spesifikasi = isEm ? sampleSpecs[i % sampleSpecs.length] : isNonEm ? 'Tele-Konsultasi Dokter & Rujukan' : 'Panggilan Permintaan Informasi Faskes'
+      const respTime = parseFloat((4.5 + (i * 0.7) % 8.5).toFixed(1))
+      const ticket = `TKT-119-2026-${String(i + 1).padStart(3, '0')}`
+
+      return {
+        no: i + 1,
+        ticket,
+        tanggal: '15 Sep 2026',
+        jam: `0${8 + (i % 8)}:${(10 + i * 7) % 60 < 10 ? '0' : ''}${(10 + i * 7) % 60} WIB`,
+        pelapor: `Warga Pelapor #${i + 1}`,
+        kategori,
+        spesifikasi,
+        sumber: i % 3 === 0 ? '119 Bebas Pulsa' : i % 3 === 1 ? 'Aplikasi PSC Mobile' : 'Call Center Pemda',
+        ext: `Ext 10${(i % 3) + 1}`,
+        status: i % 5 === 0 ? 'Sedang Diproses' : 'Selesai',
+        alamat: `${sampleKabs[i % sampleKabs.length]}, Kab. Bogor`,
+        rs: sampleRS[i % sampleRS.length],
+        armada: `F 119-${(i % 5) + 1} PSC`,
+        petugas: `Tim Paramedis Posko ${(i % 3) + 1}`,
+        respTime,
+        isSpmPass: respTime <= 15,
+      }
+    })
+  }, [activeDetailCard, filteredDetailMarkers, mockPersonnelList, mockAmbulanceList])
+
+  const searchedMatrixRows = useMemo(() => {
+    if (!modalSearchQuery.trim()) return matrixDataRows
+    const q = modalSearchQuery.toLowerCase()
+    return matrixDataRows.filter((r: any) => {
+      return Object.values(r).some((val) => {
+        if (typeof val === 'string' || typeof val === 'number') {
+          return String(val).toLowerCase().includes(q)
+        }
+        return false
+      })
+    })
+  }, [matrixDataRows, modalSearchQuery])
+
+  const paginatedRows = useMemo(() => {
+    const start = (modalPage - 1) * 10
+    return searchedMatrixRows.slice(start, start + 10)
+  }, [searchedMatrixRows, modalPage])
+
+  const modalTotalPages = Math.ceil(searchedMatrixRows.length / 10) || 1
 
   const isProvLocked = user?.wilayah_scope?.mode === 'provinsi'
   const isKabLocked = user?.wilayah_scope?.mode === 'kabupaten'
@@ -2678,7 +3061,12 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
             return (
               <article
                 key={idx}
-                onClick={() => setActiveDetailCard(card.label)}
+                onClick={() => {
+                  setActiveDetailCard(card.label)
+                  setModalViewMode('matrix')
+                  setModalSearchQuery('')
+                  setModalPage(1)
+                }}
                 className="flex min-h-[128px] w-[280px] sm:w-full shrink-0 snap-start items-center gap-3 border border-[#bedbda] bg-white px-4 py-3 shadow-[0_6px_18px_rgba(20,120,116,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(20,120,116,0.1)] hover:border-teal-400 cursor-pointer sm:px-5 sm:py-3.5 group/card"
                 style={{
                   borderTopLeftRadius: '17px',
@@ -2926,20 +3314,147 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
         </article>
       </section>
 
-      {/* Donut Charts Grid */}
+      {/* Visualisasi Sebaran Panggilan: 2 Mode (Diagram Chart & Matriks Data) */}
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-1 px-1">
+        <div className="flex items-center gap-2">
+          <span className="text-xs sm:text-sm font-extrabold text-slate-700 uppercase tracking-wider">
+            Sebaran Analisis Panggilan PSC 119
+          </span>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
+            Tahun {targetYear}
+          </span>
+        </div>
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setSebaranCardModes({ extension: 'chart', sumber: 'chart', spesifikasi: 'chart' })}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+              sebaranCardModes.extension === 'chart' && sebaranCardModes.sumber === 'chart' && sebaranCardModes.spesifikasi === 'chart'
+                ? 'bg-white text-teal-800 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <TrendingUp className="h-3.5 w-3.5" />
+            Semua Mode Chart
+          </button>
+          <button
+            type="button"
+            onClick={() => setSebaranCardModes({ extension: 'matrix', sumber: 'matrix', spesifikasi: 'matrix' })}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+              sebaranCardModes.extension === 'matrix' && sebaranCardModes.sumber === 'matrix' && sebaranCardModes.spesifikasi === 'matrix'
+                ? 'bg-white text-teal-800 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Semua Mode Matriks
+          </button>
+        </div>
+      </div>
+
+      {/* Donut / Matrix Charts Grid */}
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:grid-cols-3">
-        {/* Pie Chart 1: Sebaran Extension Panggilan */}
+        {/* Card 1: Sebaran Extension Panggilan */}
         <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,118,110,0.04)] flex flex-col justify-between">
           <div>
-            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">SEBARAN PANGGILAN BERDASARKAN EXTENSION PANGGILAN PSC 119 TAHUN {targetYear}</h3>
-            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Panggilan berdasarkan extension dari setiap PSC.</p>
-            <div className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2.5 py-1 text-xs font-bold text-[#047D78] max-w-full truncate">
-              <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
-              <span className="truncate">Wilayah: {activeRegionBadgeLabel}</span>
+            <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase leading-snug">
+              SEBARAN PANGGILAN BERDASARKAN EXTENSION PANGGILAN PSC 119 TAHUN {targetYear}
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 font-normal mt-0.5 mb-2">
+              Panggilan berdasarkan extension dari setiap PSC.
+            </p>
+
+            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+              <div className="inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2 py-0.5 text-xs font-bold text-[#047D78] max-w-full truncate">
+                <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                <span className="truncate">Wilayah: {activeRegionBadgeLabel}</span>
+              </div>
+              <div className="flex items-center p-0.5 rounded-lg bg-slate-100 border border-slate-200 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSebaranCardModes(prev => ({ ...prev, extension: 'chart' }))}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                    sebaranCardModes.extension === 'chart'
+                      ? 'bg-white text-teal-800 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Chart
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSebaranCardModes(prev => ({ ...prev, extension: 'matrix' }))}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                    sebaranCardModes.extension === 'matrix'
+                      ? 'bg-white text-teal-800 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Matriks
+                </button>
+              </div>
             </div>
 
             {(() => {
               const totalCount = formattedExtension.reduce((sum, item) => sum + (item.jumlah || 0), 0)
+
+              if (sebaranCardModes.extension === 'matrix') {
+                return (
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
+                    <div className="h-[290px] overflow-y-auto scrollbar-thin">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500 tracking-wider z-10">
+                          <tr>
+                            <th className="py-2.5 px-3 text-center w-10">No</th>
+                            <th className="py-2.5 px-3">Kanal Extension</th>
+                            <th className="py-2.5 px-3 text-right">Panggilan</th>
+                            <th className="py-2.5 px-3 text-right w-24">Proporsi</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-xs">
+                          {formattedExtension.length === 0 || isDbEmpty ? (
+                            <tr>
+                              <td colSpan={4} className="py-12 text-center text-xs text-slate-400 italic">
+                                Tidak ada data extension panggilan di wilayah ini.
+                              </td>
+                            </tr>
+                          ) : (
+                            formattedExtension.map((item, idx) => {
+                              const pct = totalCount > 0 ? Math.round((item.jumlah / totalCount) * 100) : 0
+                              const color = COLORS[idx % COLORS.length]
+                              return (
+                                <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
+                                  <td className="py-2.5 px-3 text-center font-bold text-slate-400">{idx + 1}</td>
+                                  <td className="py-2.5 px-3">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="h-2.5 w-2.5 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: color }} />
+                                      <span className="font-bold text-slate-800 truncate" title={item.nama}>{item.nama}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right font-black text-slate-900">{item.jumlah}</td>
+                                  <td className="py-2.5 px-3 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <div className="w-12 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                                      </div>
+                                      <span className="font-bold text-slate-700 text-[11px] w-7">{pct}%</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="bg-slate-50 px-3.5 py-2.5 border-t border-slate-200 flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-600 uppercase text-[10px] tracking-wider">Total Panggilan</span>
+                      <span className="font-black text-teal-800 text-sm">{totalCount} Panggilan</span>
+                    </div>
+                  </div>
+                )
+              }
+
               return (
                 <div>
                   <div className="relative h-[200px] sm:h-[220px] w-full flex items-center justify-center">
@@ -2982,10 +3497,10 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                     )}
                   </div>
 
-                  {/* Top 4 Breakdown Legend */}
+                  {/* Scrollable Compact Breakdown Legend (Equal Height) */}
                   {formattedExtension.length > 0 && !isDbEmpty && (
-                    <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
-                      {formattedExtension.slice(0, 4).map((item, idx) => {
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 max-h-[140px] overflow-y-auto pr-1 scrollbar-thin grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
+                      {formattedExtension.map((item, idx) => {
                         const pct = totalCount > 0 ? Math.round((item.jumlah / totalCount) * 100) : 0
                         const color = COLORS[idx % COLORS.length]
                         return (
@@ -3006,18 +3521,107 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           </div>
         </article>
 
-        {/* Pie Chart 2: Sebaran Sumber Panggilan */}
+        {/* Card 2: Sebaran Sumber Panggilan */}
         <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,118,110,0.04)] flex flex-col justify-between">
           <div>
-            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">SEBARAN PANGGILAN BERDASARKAN SUMBER PANGGILAN PSC 119 TAHUN {targetYear}</h3>
-            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Panggilan berdasarkan sumber panggilan dari setiap PSC.</p>
-            <div className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2.5 py-1 text-xs font-bold text-[#047D78] max-w-full truncate">
-              <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
-              <span className="truncate">Wilayah: {activeRegionBadgeLabel}</span>
+            <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase leading-snug">
+              SEBARAN PANGGILAN BERDASARKAN SUMBER PANGGILAN PSC 119 TAHUN {targetYear}
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 font-normal mt-0.5 mb-2">
+              Panggilan berdasarkan sumber panggilan dari setiap PSC.
+            </p>
+
+            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+              <div className="inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2 py-0.5 text-xs font-bold text-[#047D78] max-w-full truncate">
+                <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                <span className="truncate">Wilayah: {activeRegionBadgeLabel}</span>
+              </div>
+              <div className="flex items-center p-0.5 rounded-lg bg-slate-100 border border-slate-200 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSebaranCardModes(prev => ({ ...prev, sumber: 'chart' }))}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                    sebaranCardModes.sumber === 'chart'
+                      ? 'bg-white text-teal-800 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Chart
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSebaranCardModes(prev => ({ ...prev, sumber: 'matrix' }))}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                    sebaranCardModes.sumber === 'matrix'
+                      ? 'bg-white text-teal-800 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Matriks
+                </button>
+              </div>
             </div>
 
             {(() => {
               const totalSumber = formattedSumberPanggilan.reduce((sum, item) => sum + (item.jumlah || 0), 0)
+
+              if (sebaranCardModes.sumber === 'matrix') {
+                return (
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
+                    <div className="h-[290px] overflow-y-auto scrollbar-thin">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500 tracking-wider z-10">
+                          <tr>
+                            <th className="py-2.5 px-3 text-center w-10">No</th>
+                            <th className="py-2.5 px-3">Sumber Panggilan</th>
+                            <th className="py-2.5 px-3 text-right">Panggilan</th>
+                            <th className="py-2.5 px-3 text-right w-24">Proporsi</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-xs">
+                          {formattedSumberPanggilan.length === 0 || isDbEmpty ? (
+                            <tr>
+                              <td colSpan={4} className="py-12 text-center text-xs text-slate-400 italic">
+                                Tidak ada data sumber panggilan di wilayah ini.
+                              </td>
+                            </tr>
+                          ) : (
+                            formattedSumberPanggilan.map((item, idx) => {
+                              const pct = totalSumber > 0 ? Math.round((item.jumlah / totalSumber) * 100) : 0
+                              const color = CATEGORY_COLORS[idx % CATEGORY_COLORS.length]
+                              return (
+                                <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
+                                  <td className="py-2.5 px-3 text-center font-bold text-slate-400">{idx + 1}</td>
+                                  <td className="py-2.5 px-3">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="h-2.5 w-2.5 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: color }} />
+                                      <span className="font-bold text-slate-800 truncate" title={item.nama}>{item.nama}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right font-black text-slate-900">{item.jumlah}</td>
+                                  <td className="py-2.5 px-3 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <div className="w-12 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                                      </div>
+                                      <span className="font-bold text-slate-700 text-[11px] w-7">{pct}%</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="bg-slate-50 px-3.5 py-2.5 border-t border-slate-200 flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-600 uppercase text-[10px] tracking-wider">Total Panggilan</span>
+                      <span className="font-black text-teal-800 text-sm">{totalSumber} Panggilan</span>
+                    </div>
+                  </div>
+                )
+              }
+
               return (
                 <div>
                   <div className="relative h-[200px] sm:h-[220px] w-full flex items-center justify-center">
@@ -3060,9 +3664,9 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                     )}
                   </div>
 
-                  {/* Sumber Breakdown Legend */}
+                  {/* Scrollable Compact Breakdown Legend (Equal Height) */}
                   {formattedSumberPanggilan.length > 0 && !isDbEmpty && (
-                    <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 max-h-[140px] overflow-y-auto pr-1 scrollbar-thin grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
                       {formattedSumberPanggilan.map((item, idx) => {
                         const pct = totalSumber > 0 ? Math.round((item.jumlah / totalSumber) * 100) : 0
                         const color = CATEGORY_COLORS[idx % CATEGORY_COLORS.length]
@@ -3084,18 +3688,107 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           </div>
         </article>
 
-        {/* Pie Chart 3: Sebaran Spesifikasi Layanan */}
+        {/* Card 3: Sebaran Spesifikasi Layanan */}
         <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_10px_30px_rgba(15,118,110,0.04)] flex flex-col justify-between">
           <div>
-            <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase">SEBARAN PANGGILAN BERDASARKAN SPESIFIKASI LAYANAN PSC 119 TAHUN {targetYear}</h3>
-            <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-2.5">Panggilan berdasarkan spesifikasi layanan (trauma KLL, non trauma, keperawatan, dll.).</p>
-            <div className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2.5 py-1 text-xs font-bold text-[#047D78] max-w-full truncate">
-              <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
-              <span className="truncate">Wilayah: {activeRegionBadgeLabel}</span>
+            <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase leading-snug">
+              SEBARAN PANGGILAN BERDASARKAN SPESIFIKASI LAYANAN PSC 119 TAHUN {targetYear}
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 font-normal mt-0.5 mb-2">
+              Panggilan berdasarkan spesifikasi layanan (trauma KLL, non trauma, keperawatan, dll.).
+            </p>
+
+            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+              <div className="inline-flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200/80 px-2 py-0.5 text-xs font-bold text-[#047D78] max-w-full truncate">
+                <MapPin className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                <span className="truncate">Wilayah: {activeRegionBadgeLabel}</span>
+              </div>
+              <div className="flex items-center p-0.5 rounded-lg bg-slate-100 border border-slate-200 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSebaranCardModes(prev => ({ ...prev, spesifikasi: 'chart' }))}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                    sebaranCardModes.spesifikasi === 'chart'
+                      ? 'bg-white text-teal-800 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Chart
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSebaranCardModes(prev => ({ ...prev, spesifikasi: 'matrix' }))}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                    sebaranCardModes.spesifikasi === 'matrix'
+                      ? 'bg-white text-teal-800 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Matriks
+                </button>
+              </div>
             </div>
 
             {(() => {
               const totalSpesifikasi = formattedSpesifikasiLayanan.reduce((sum, item) => sum + (item.jumlah || 0), 0)
+
+              if (sebaranCardModes.spesifikasi === 'matrix') {
+                return (
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
+                    <div className="h-[290px] overflow-y-auto scrollbar-thin">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500 tracking-wider z-10">
+                          <tr>
+                            <th className="py-2.5 px-3 text-center w-10">No</th>
+                            <th className="py-2.5 px-3">Spesifikasi Layanan</th>
+                            <th className="py-2.5 px-3 text-right">Panggilan</th>
+                            <th className="py-2.5 px-3 text-right w-24">Proporsi</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-xs">
+                          {formattedSpesifikasiLayanan.length === 0 || isDbEmpty ? (
+                            <tr>
+                              <td colSpan={4} className="py-12 text-center text-xs text-slate-400 italic">
+                                Tidak ada data spesifikasi layanan di wilayah ini.
+                              </td>
+                            </tr>
+                          ) : (
+                            formattedSpesifikasiLayanan.map((item, idx) => {
+                              const pct = totalSpesifikasi > 0 ? Math.round((item.jumlah / totalSpesifikasi) * 100) : 0
+                              const color = COLORS[(idx + 3) % COLORS.length]
+                              return (
+                                <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
+                                  <td className="py-2.5 px-3 text-center font-bold text-slate-400">{idx + 1}</td>
+                                  <td className="py-2.5 px-3">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="h-2.5 w-2.5 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: color }} />
+                                      <span className="font-bold text-slate-800 truncate" title={item.nama}>{item.nama}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right font-black text-slate-900">{item.jumlah}</td>
+                                  <td className="py-2.5 px-3 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <div className="w-12 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                                      </div>
+                                      <span className="font-bold text-slate-700 text-[11px] w-7">{pct}%</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="bg-slate-50 px-3.5 py-2.5 border-t border-slate-200 flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-600 uppercase text-[10px] tracking-wider">Total Panggilan</span>
+                      <span className="font-black text-teal-800 text-sm">{totalSpesifikasi} Panggilan</span>
+                    </div>
+                  </div>
+                )
+              }
+
               return (
                 <div>
                   <div className="relative h-[200px] sm:h-[220px] w-full flex items-center justify-center">
@@ -3138,10 +3831,10 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                     )}
                   </div>
 
-                  {/* Top 4 Breakdown Legend */}
+                  {/* Scrollable Compact Breakdown Legend (Equal Height) */}
                   {formattedSpesifikasiLayanan.length > 0 && !isDbEmpty && (
-                    <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
-                      {formattedSpesifikasiLayanan.slice(0, 4).map((item, idx) => {
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 max-h-[140px] overflow-y-auto pr-1 scrollbar-thin grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
+                      {formattedSpesifikasiLayanan.map((item, idx) => {
                         const pct = totalSpesifikasi > 0 ? Math.round((item.jumlah / totalSpesifikasi) * 100) : 0
                         const color = COLORS[(idx + 3) % COLORS.length]
                         return (
@@ -3165,34 +3858,15 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
 
       {/* SECTION CHART: DIAGNOSA ICD-10 KASUS MEDIS TERBANYAK PSC 119 */}
       <section className="w-full bg-[#fbffff] pb-5">
-        <article
-          className="w-full border border-[#cdcdcd] bg-white p-5 md:p-6 shadow-sm"
-          style={{
-            borderTopLeftRadius: '17px',
-            borderTopRightRadius: '17px',
-            borderBottomRightRadius: '22px',
-            borderBottomLeftRadius: '17px',
-          }}
-        >
+        <article className="w-full bg-white p-5 md:p-6 shadow-sm rounded-2xl">
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4 mb-5">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="h-3 w-3 rounded-full bg-cyan-600 animate-pulse" />
-                <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase tracking-wide m-0">
-                  DIAGNOSA ICD-10 KASUS MEDIS TERBANYAK PSC 119 TAHUN {targetYear}
-                </h3>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1 mb-0 font-normal">
-                Distribusi klasifikasi diagnosa medis ICD-10 (International Classification of Diseases) berdasarkan keluhan dan laporan triase panggilan darurat di wilayah <span className="font-bold text-teal-800 uppercase">{activeRegionConcatenatedLabel}</span>.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-700 text-xs font-bold">
-                <HeartPulse className="h-3.5 w-3.5 text-teal-600" />
-                Standar Medis WHO ICD-10
-              </span>
-            </div>
+          <div className="border-b border-slate-100 pb-4 mb-5">
+            <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase tracking-wide m-0">
+              DIAGNOSA ICD-10 KASUS MEDIS TERBANYAK PSC 119 TAHUN {targetYear}
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-500 mt-1 mb-0 font-normal">
+              Distribusi klasifikasi diagnosa medis ICD-10 (International Classification of Diseases) berdasarkan keluhan dan laporan triase panggilan darurat di wilayah <span className="font-bold text-teal-800 uppercase">{activeRegionConcatenatedLabel}</span>.
+            </p>
           </div>
 
           {/* Body: Chart & Rank List */}
@@ -3258,62 +3932,82 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                 </div>
               </div>
 
-              {/* Right: Ranked Breakdown List */}
-              <div className="lg:col-span-5 w-full flex flex-col gap-2.5">
-                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider px-1">
-                  Peringkat Diagnosa Teratas
-                </span>
-                {(() => {
-                  const totalIcdCases = formattedIcdData.reduce((acc: number, curr: any) => acc + (curr.jumlah || 0), 0)
-                  return (
-                    <div className="flex flex-col gap-2 max-h-[380px] overflow-y-auto pr-1">
-                      {formattedIcdData.slice(0, 8).map((item: any, idx: number) => {
-                        const pct = totalIcdCases > 0 ? Math.round((item.jumlah / totalIcdCases) * 100) : 0
-                        const ICD_COLORS = ['#0284c7', '#0d9488', '#e11d48', '#d97706', '#6366f1', '#059669', '#8b5cf6', '#ec4899']
-                        const color = ICD_COLORS[idx % ICD_COLORS.length]
-                        return (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100/80 border border-slate-100 transition-colors"
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <span
-                                className="h-6 w-6 rounded-lg flex items-center justify-center text-[11px] font-black text-white shrink-0 shadow-sm"
-                                style={{ backgroundColor: color }}
-                              >
-                                {idx + 1}
-                              </span>
-                              <div className="min-w-0">
-                                <p className="text-xs font-bold text-slate-900 truncate leading-tight" title={item.nama}>
-                                  {item.nama}
-                                </p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <div className="w-20 bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                                    <div
-                                      className="h-full rounded-full"
-                                      style={{ width: `${pct}%`, backgroundColor: color }}
-                                    />
-                                  </div>
-                                  <span className="text-[10px] text-slate-500 font-semibold">{pct}%</span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <span className="text-sm font-black text-slate-900">{item.jumlah}</span>
-                              <span className="text-[10px] text-slate-500 ml-1 font-medium">kasus</span>
-                            </div>
-                          </div>
-                        )
-                      })}
+              {/* Right: Analisis Waktu Respons Penanganan PSC 119 */}
+              <div className="lg:col-span-5 w-full flex flex-col gap-3">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-cyan-600" />
+                    Analisis Waktu Respons Penanganan
+                  </span>
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    SPM &lt; 15 Menit
+                  </span>
+                </div>
+
+                {/* Response Time Summary Highlight Cards */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-cyan-50 to-sky-50 border border-cyan-100 flex flex-col justify-between">
+                    <span className="text-[11px] font-bold text-cyan-900 uppercase">Rata-Rata Waktu Tanggap</span>
+                    <div className="mt-1 flex items-baseline gap-1">
+                      <span className="text-2xl sm:text-3xl font-black text-cyan-700">{responseTimeAnalytics.avgMinutes}</span>
+                      <span className="text-xs font-bold text-cyan-800">Menit</span>
                     </div>
-                  )
-                })()}
+                    <span className="mt-1 text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" /> Target SPM Tercapai
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 flex flex-col justify-between">
+                    <span className="text-[11px] font-bold text-emerald-900 uppercase">Kepatuhan Standar SPM</span>
+                    <div className="mt-1 flex items-baseline gap-1">
+                      <span className="text-2xl sm:text-3xl font-black text-emerald-700">{responseTimeAnalytics.spmPassedPercentage}%</span>
+                    </div>
+                    <span className="mt-1 text-[10px] text-slate-500 font-medium">
+                      Panggilan tanggap &lt; 15 mnt
+                    </span>
+                  </div>
+                </div>
+
+                {/* Sub-metrics: Emergency vs Non-Emergency */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
+                    <span className="text-slate-600 font-semibold truncate">Emergency:</span>
+                    <span className="font-black text-red-600 shrink-0 ml-1">{responseTimeAnalytics.emergencyAvg} Mnt</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
+                    <span className="text-slate-600 font-semibold truncate">Non Emergency:</span>
+                    <span className="font-black text-amber-600 shrink-0 ml-1">{responseTimeAnalytics.nonEmergencyAvg} Mnt</span>
+                  </div>
+                </div>
+
+                {/* Distribution Breakdown Brackets */}
+                <div className="flex flex-col gap-2">
+                  <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider px-1">
+                    Distribusi Durasi Respons Panggilan
+                  </span>
+                  <div className="flex flex-col gap-1.5">
+                    {responseTimeAnalytics.brackets.map((item, idx) => (
+                      <div key={idx} className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-slate-800 text-[11px]">{item.label}</span>
+                          <span className="font-black text-slate-900 text-[11px]">{item.pct}% <span className="font-normal text-slate-500">({item.count} kasus)</span></span>
+                        </div>
+                        <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{ width: `${item.pct}%`, backgroundColor: item.color }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
                 {/* Educational info badge */}
-                <div className="mt-2 p-2.5 rounded-xl bg-cyan-50/70 border border-cyan-200/60 flex items-start gap-2 text-[11px] text-cyan-900">
+                <div className="p-2.5 rounded-xl bg-cyan-50/70 border border-cyan-200/60 flex items-start gap-2 text-[11px] text-cyan-900 mt-1">
                   <Info className="h-4 w-4 text-cyan-700 shrink-0 mt-0.5" />
                   <p className="m-0 leading-relaxed font-medium">
-                    Data dikompilasi secara otomatis dari anamnesa keluhan pelapor dan catatan medis triase SPGDT 119 di tingkat unit PSC.
+                    Standar Pelayanan Minimal (SPM) Kemenkes RI: Target waktu tanggap kegawatdaruratan pra-faskes PSC 119 adalah &lt; 15 menit sejak panggilan terverifikasi.
                   </p>
                 </div>
               </div>
@@ -3677,129 +4371,513 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
         </div>
       )}
 
-      {/* Detail Card Modal */}
+      {/* Detail Card Modal (2 Modes: Matriks Data Detail & Visualisasi Diagram Chart) */}
       {activeDetailCard && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-4xl rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-6xl rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="relative text-white px-6 py-5 flex items-center justify-between overflow-hidden border-b border-slate-200 shrink-0">
+            <div className="relative text-white px-5 sm:px-6 py-4 sm:py-5 flex items-center justify-between overflow-hidden border-b border-teal-700/40 shrink-0">
               <div
                 className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-95"
                 style={{ backgroundImage: `url('${process.env.NEXT_PUBLIC_BASE_PATH || ''}/bg header.png')` }}
               />
               <div className="absolute inset-0 bg-gradient-to-r from-[#047D78]/95 via-[#076176]/90 to-[#0f8f96]/95" />
-              <div className="relative z-10 flex-1 min-w-0">
-                <h3 className="text-[16px] md:text-[18px] font-extrabold uppercase tracking-wide truncate">
+              <div className="relative z-10 flex-1 min-w-0 pr-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/20 text-white border border-white/30 backdrop-blur-xs">
+                    Detail Ringkasan: {activeDetailCard}
+                  </span>
+                  <span className="text-[11px] text-teal-100 font-semibold hidden sm:inline">
+                    • {getCardDetailInfo(activeDetailCard).sumber}
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-extrabold uppercase tracking-wide truncate text-white">
                   {getCardDetailInfo(activeDetailCard).title}
                 </h3>
-                <p className="text-[11px] md:text-[12px] text-teal-50/90 mt-0.5 truncate">
+                <p className="text-xs text-teal-50/90 mt-0.5 line-clamp-1">
                   {getCardDetailInfo(activeDetailCard).description}
                 </p>
               </div>
               <button
-                onClick={() => setActiveDetailCard(null)}
-                className="relative z-20 rounded-xl p-1.5 text-teal-100 hover:bg-white/10 hover:text-white transition shrink-0 ml-4"
+                onClick={() => {
+                  setActiveDetailCard(null)
+                  setModalSearchQuery('')
+                }}
+                className="relative z-20 rounded-xl p-2 text-teal-100 hover:bg-white/10 hover:text-white transition shrink-0"
                 aria-label="Tutup"
               >
-                <X className="h-5.5 w-5.5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-5 flex-1 scrollbar-thin">
-              {/* Table Matrix */}
-              <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-xs">
-                <table className="w-full text-left border-collapse bg-white">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-250 text-[10px] font-black uppercase text-slate-500 tracking-wider">
-                      <th className="py-3 px-4 text-center w-12">No</th>
-                      {activeDetailCard.includes('Korban') || activeDetailCard === 'Jumlah Pengungsi' ? (
-                        <>
-                          <th className="py-3 px-4">Kejadian Bencana</th>
-                          <th className="py-3 px-4">Lokasi Wilayah</th>
-                          <th className="py-3 px-4 text-center">Meninggal</th>
-                          <th className="py-3 px-4 text-center">Luka-Luka</th>
-                          <th className="py-3 px-4 text-center">Hilang</th>
-                          <th className="py-3 px-4 text-center">Pengungsi</th>
-                        </>
-                      ) : (
-                        <>
-                          <th className="py-3 px-4">Waktu Kejadian</th>
-                          <th className="py-3 px-4">Jenis Bencana</th>
-                          <th className="py-3 px-4">Lokasi Wilayah</th>
-                          <th className="py-3 px-4 text-center">Total Dampak</th>
-                          <th className="py-3 px-4 text-center">Status Krisis</th>
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredDetailMarkers.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={activeDetailCard.includes('Korban') || activeDetailCard === 'Jumlah Pengungsi' ? 7 : 6}
-                          className="py-10 text-center text-xs text-slate-405 italic"
-                        >
-                          Tidak ada data rincian kejadian bencana di wilayah ini.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredDetailMarkers.map((m, idx) => {
-                        const markerId = m.kode_trans || `det-${idx}`
-                        const location = m.kabupaten || m.provinsi || 'Nasional'
-                        const formattedDate = m.tgl_kejadian ? new Date(m.tgl_kejadian).toLocaleDateString('id-ID', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric'
-                        }) : '-'
+            {/* Mode Switcher Tabs + Search Bar */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-200 px-5 sm:px-6 py-3 bg-slate-50/90 shrink-0">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setModalViewMode('matrix')}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                    modalViewMode === 'matrix'
+                      ? 'bg-[#047D78] text-white shadow-md'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  <FileText className="h-4 w-4" />
+                  <span>Matriks Data Detail</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      modalViewMode === 'matrix'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {activeDetailCard === 'Personil PSC'
+                      ? (effectiveSummary?.total_personil ?? 450)
+                      : activeDetailCard === 'Armada Ambulans'
+                      ? Math.max(mockAmbulanceList.length, effectiveSummary?.total_pengungsi ?? 16)
+                      : filteredDetailMarkers.length || (activeDetailCard === 'Kasus Emergency' ? 14 : activeDetailCard === 'Non Emergency' ? 2 : 16)}
+                  </span>
+                </button>
 
-                        if (activeDetailCard.includes('Korban') || activeDetailCard === 'Jumlah Pengungsi') {
-                          const breakdown = getKorbanBreakdown(m.total_korban, m.jenis_bencana)
-                          return (
-                            <tr key={markerId} className="hover:bg-slate-55/40 transition-colors text-[11px] md:text-xs">
-                              <td className="py-3 px-4 text-center font-bold text-slate-400">{idx + 1}</td>
-                              <td className="py-3 px-4 font-bold text-slate-800">{m.jenis_bencana}</td>
-                              <td className="py-3 px-4 font-semibold text-slate-600">{location}</td>
-                              <td className="py-3 px-4 text-center font-extrabold text-red-650">{breakdown.meninggal || '-'}</td>
-                              <td className="py-3 px-4 text-center font-extrabold text-amber-600">{breakdown.luka || '-'}</td>
-                              <td className="py-3 px-4 text-center font-extrabold text-indigo-650">{breakdown.hilang || '-'}</td>
-                              <td className="py-3 px-4 text-center font-extrabold text-teal-600">{breakdown.pengungsi || '-'}</td>
+                <button
+                  type="button"
+                  onClick={() => setModalViewMode('chart')}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                    modalViewMode === 'chart'
+                      ? 'bg-[#047D78] text-white shadow-md'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  <span>Visualisasi Diagram (Chart)</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      modalViewMode === 'chart'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    2 Mode Grafik
+                  </span>
+                </button>
+              </div>
+
+              {/* Matrix Search Filter */}
+              {modalViewMode === 'matrix' && (
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={modalSearchQuery}
+                    onChange={(e) => {
+                      setModalSearchQuery(e.target.value)
+                      setModalPage(1)
+                    }}
+                    placeholder="Cari kata kunci / nomor tiket..."
+                    className="w-full pl-8.5 pr-8 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-800 placeholder:text-slate-400"
+                  />
+                  {modalSearchQuery && (
+                    <button
+                      onClick={() => setModalSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 scrollbar-thin bg-slate-50/50 space-y-4">
+              {modalViewMode === 'matrix' ? (
+                /* ── MODE 1: MATRIKS DATA DETAIL ── */
+                <div className="flex flex-col gap-3">
+                  {/* Table Matrix Container */}
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-xs bg-white">
+                    <table className="w-full text-left border-collapse bg-white">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                          <th className="py-3 px-3.5 text-center w-12">No</th>
+
+                          {activeDetailCard === 'Personil PSC' ? (
+                            <>
+                              <th className="py-3 px-3.5">ID / NIP</th>
+                              <th className="py-3 px-3.5">Nama Personil & Gelar</th>
+                              <th className="py-3 px-3.5">Profesi / Jabatan</th>
+                              <th className="py-3 px-3.5">Sertifikasi Kompetensi</th>
+                              <th className="py-3 px-3.5">Posko Unit PSC</th>
+                              <th className="py-3 px-3.5">Shift & Status</th>
+                              <th className="py-3 px-3.5">Kontak Emergency</th>
+                            </>
+                          ) : activeDetailCard === 'Armada Ambulans' ? (
+                            <>
+                              <th className="py-3 px-3.5">Kode & Nopol</th>
+                              <th className="py-3 px-3.5">Tipe Armada</th>
+                              <th className="py-3 px-3.5">Pangkalan Posko</th>
+                              <th className="py-3 px-3.5">Driver & Kru Medis</th>
+                              <th className="py-3 px-3.5">Status Operasional</th>
+                              <th className="py-3 px-3.5">Fasilitas Medis Kunci</th>
+                              <th className="py-3 px-3.5">Lokasi Posisi</th>
+                            </>
+                          ) : activeDetailCard === 'Waktu Respons PSC' ? (
+                            <>
+                              <th className="py-3 px-3.5">ID Tiket Panggilan</th>
+                              <th className="py-3 px-3.5">Waktu Laporan & Jam</th>
+                              <th className="py-3 px-3.5">Response Time</th>
+                              <th className="py-3 px-3.5">Kepatuhan SPM Kemenkes</th>
+                              <th className="py-3 px-3.5">Kasus & Keluhan</th>
+                              <th className="py-3 px-3.5">Lokasi TKP</th>
+                              <th className="py-3 px-3.5">Faskes / RS Rujukan</th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="py-3 px-3.5">ID Tiket</th>
+                              <th className="py-3 px-3.5">Waktu Laporan</th>
+                              <th className="py-3 px-3.5">Pelapor / Pasien</th>
+                              <th className="py-3 px-3.5">Kategori Layanan</th>
+                              <th className="py-3 px-3.5">Spesifikasi Kasus Medis</th>
+                              <th className="py-3 px-3.5">Lokasi Wilayah</th>
+                              <th className="py-3 px-3.5">RS Rujukan / Armada</th>
+                              <th className="py-3 px-3.5">Status Penanganan</th>
+                            </>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {paginatedRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={9} className="py-12 text-center text-xs text-slate-400 italic">
+                              Tidak ada data yang sesuai dengan filter pencarian &quot;{modalSearchQuery}&quot;.
+                            </td>
+                          </tr>
+                        ) : activeDetailCard === 'Personil PSC' ? (
+                          paginatedRows.map((p: any, idx: number) => (
+                            <tr key={p.id || idx} className="hover:bg-slate-50/80 transition-colors text-[11px] sm:text-xs">
+                              <td className="py-3 px-3.5 text-center font-bold text-slate-400">{(modalPage - 1) * 10 + idx + 1}</td>
+                              <td className="py-3 px-3.5 font-mono font-bold text-slate-600">{p.id}</td>
+                              <td className="py-3 px-3.5 font-extrabold text-slate-900">{p.nama}</td>
+                              <td className="py-3 px-3.5 font-semibold text-teal-800">{p.profesi}</td>
+                              <td className="py-3 px-3.5">
+                                <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                  {p.sertifikasi}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3.5 font-medium text-slate-600">{p.unit}</td>
+                              <td className="py-3 px-3.5">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-[10px] font-bold text-slate-700">{p.shift}</span>
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black w-fit uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <CheckCircle2 className="h-2.5 w-2.5" /> {p.status}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3.5 font-mono text-slate-600 font-medium">{p.telp}</td>
                             </tr>
-                          )
-                        } else {
-                          return (
-                            <tr key={markerId} className="hover:bg-slate-55/40 transition-colors text-[11px] md:text-xs">
-                              <td className="py-3 px-4 text-center font-bold text-slate-400">{idx + 1}</td>
-                              <td className="py-3 px-4 font-semibold text-slate-600">{formattedDate}</td>
-                              <td className="py-3 px-4 font-bold text-slate-850">{m.jenis_bencana}</td>
-                              <td className="py-3 px-4 font-semibold text-slate-600">{location}</td>
-                              <td className="py-3 px-4 text-center font-extrabold text-slate-800">{m.total_korban || 0} Jiwa</td>
-                              <td className="py-3 px-4 text-center">
-                                <span className={`inline-block px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${m.is_krisis === 1
-                                    ? 'bg-[#fee2e2] text-[#ef4444] border border-[#fecaca]'
-                                    : 'bg-[#f0fdf4] text-[#16a34a] border border-[#dcfce7]'
-                                  }`}>
-                                  {m.is_krisis === 1 ? 'Krisis' : 'Non-Krisis'}
+                          ))
+                        ) : activeDetailCard === 'Armada Ambulans' ? (
+                          paginatedRows.map((a: any, idx: number) => (
+                            <tr key={a.kode || idx} className="hover:bg-slate-50/80 transition-colors text-[11px] sm:text-xs">
+                              <td className="py-3 px-3.5 text-center font-bold text-slate-400">{(modalPage - 1) * 10 + idx + 1}</td>
+                              <td className="py-3 px-3.5">
+                                <div className="flex flex-col">
+                                  <span className="font-extrabold text-slate-900">{a.nopol}</span>
+                                  <span className="text-[10px] font-mono text-slate-400">{a.kode}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3.5 font-semibold text-slate-700">{a.tipe}</td>
+                              <td className="py-3 px-3.5 font-medium text-slate-600">{a.pangkalan}</td>
+                              <td className="py-3 px-3.5">
+                                <div className="flex flex-col text-[10px]">
+                                  <span className="font-bold text-slate-800">Driver: {a.driver}</span>
+                                  <span className="text-teal-700 font-semibold">Medis: {a.medis}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3.5">
+                                <span className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                                  a.status.includes('TKP') || a.status.includes('Tugas')
+                                    ? 'bg-red-50 text-red-700 border border-red-200'
+                                    : a.status.includes('RS')
+                                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                }`}>
+                                  {a.status}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3.5 text-[10px] text-slate-600 max-w-[220px] truncate" title={a.fasilitas}>
+                                {a.fasilitas}
+                              </td>
+                              <td className="py-3 px-3.5 font-medium text-slate-600">{a.lokasi || '-'}</td>
+                            </tr>
+                          ))
+                        ) : activeDetailCard === 'Waktu Respons PSC' ? (
+                          paginatedRows.map((r: any, idx: number) => (
+                            <tr key={r.ticket || idx} className="hover:bg-slate-50/80 transition-colors text-[11px] sm:text-xs">
+                              <td className="py-3 px-3.5 text-center font-bold text-slate-400">{(modalPage - 1) * 10 + idx + 1}</td>
+                              <td className="py-3 px-3.5 font-mono font-bold text-slate-700">{r.ticket}</td>
+                              <td className="py-3 px-3.5">
+                                <div className="flex flex-col text-[10px]">
+                                  <span className="font-bold text-slate-800">{r.jam}</span>
+                                  <span className="text-slate-400">{r.tanggal}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3.5">
+                                <span className={`text-sm font-black ${r.isSpmPass ? 'text-emerald-700' : 'text-red-600'}`}>
+                                  {r.respTime} <span className="text-[10px] font-bold">Mnt</span>
+                                </span>
+                              </td>
+                              <td className="py-3 px-3.5">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black uppercase ${
+                                  r.isSpmPass
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                }`}>
+                                  {r.isSpmPass ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+                                  {r.isSpmPass ? 'Memenuhi SPM (<15 Mnt)' : 'Melebihi SPM (>15 Mnt)'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3.5">
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-slate-900">{r.spesifikasi}</span>
+                                  <span className="text-[10px] text-slate-500">{r.kategori}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3.5 font-medium text-slate-600">{r.alamat}</td>
+                              <td className="py-3 px-3.5 font-semibold text-teal-800">{r.rs}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          paginatedRows.map((r: any, idx: number) => (
+                            <tr key={r.ticket || idx} className="hover:bg-slate-50/80 transition-colors text-[11px] sm:text-xs">
+                              <td className="py-3 px-3.5 text-center font-bold text-slate-400">{(modalPage - 1) * 10 + idx + 1}</td>
+                              <td className="py-3 px-3.5 font-mono font-bold text-slate-700">{r.ticket}</td>
+                              <td className="py-3 px-3.5">
+                                <div className="flex flex-col text-[10px]">
+                                  <span className="font-bold text-slate-800">{r.jam}</span>
+                                  <span className="text-slate-400">{r.tanggal}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3.5 font-bold text-slate-800">{r.pelapor}</td>
+                              <td className="py-3 px-3.5">
+                                <span className={`inline-block px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${
+                                  r.kategori === 'Emergency'
+                                    ? 'bg-red-50 text-red-700 border border-red-200'
+                                    : r.kategori === 'Non Emergency'
+                                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                    : 'bg-blue-50 text-blue-700 border border-blue-200'
+                                }`}>
+                                  {r.kategori}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3.5 font-bold text-slate-900 max-w-[200px] truncate" title={r.spesifikasi}>
+                                {r.spesifikasi}
+                              </td>
+                              <td className="py-3 px-3.5 font-medium text-slate-600">{r.alamat}</td>
+                              <td className="py-3 px-3.5">
+                                <div className="flex flex-col text-[10px]">
+                                  <span className="font-bold text-teal-800">{r.rs}</span>
+                                  <span className="text-slate-400">{r.armada}</span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3.5">
+                                <span className={`inline-block px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider ${
+                                  r.status === 'Selesai'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-sky-50 text-sky-700 border border-sky-200'
+                                }`}>
+                                  {r.status}
                                 </span>
                               </td>
                             </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Matrix Pagination Footer */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-1 text-xs text-slate-500">
+                    <span>
+                      Menampilkan <span className="font-bold text-slate-800">{searchedMatrixRows.length > 0 ? (modalPage - 1) * 10 + 1 : 0}</span> -{' '}
+                      <span className="font-bold text-slate-800">{Math.min(modalPage * 10, searchedMatrixRows.length)}</span> dari{' '}
+                      <span className="font-bold text-slate-800">{searchedMatrixRows.length}</span> data rincian
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setModalPage((p) => Math.max(1, p - 1))}
+                        disabled={modalPage === 1}
+                        className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition"
+                      >
+                        Sebelumnya
+                      </button>
+                      <span className="px-2 py-1 font-bold text-slate-700">
+                        {modalPage} / {modalTotalPages}
+                      </span>
+                      <button
+                        onClick={() => setModalPage((p) => Math.min(modalTotalPages, p + 1))}
+                        disabled={modalPage >= modalTotalPages}
+                        className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white font-semibold text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition"
+                      >
+                        Selanjutnya
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* ── MODE 2: VISUALISASI DIAGRAM (CHART) ── */
+                modalChartData && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    {/* Chart 1: Donut / Pie Chart */}
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <h4 className="text-xs sm:text-sm font-black uppercase text-slate-800 tracking-wider flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-teal-600" />
+                            {modalChartData.chart1Title}
+                          </h4>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
+                            {modalChartData.chart1Type === 'donut' ? 'Donut Chart' : 'Pie Chart'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mb-2">
+                          Visualisasi proporsi persentase dari metrik {activeDetailCard}
+                        </p>
+                      </div>
+
+                      <div className="h-[250px] w-full relative">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Tooltip
+                              contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '10px', color: '#fff', fontSize: '11px' }}
+                              itemStyle={{ color: '#38bdf8' }}
+                              formatter={(val: any, name: any) => [`${val} (${Math.round((Number(val) / (chart1Total || 1)) * 100)}%)`, name]}
+                            />
+                            <Legend
+                              verticalAlign="bottom"
+                              height={36}
+                              iconType="circle"
+                              wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
+                            />
+                            <Pie
+                              data={modalChartData.chart1Data}
+                              dataKey="value"
+                              nameKey="name"
+                              cx="50%"
+                              cy="45%"
+                              innerRadius={modalChartData.chart1Type === 'donut' ? 45 : 0}
+                              outerRadius={80}
+                              paddingAngle={modalChartData.chart1Type === 'donut' ? 3 : 1}
+                            >
+                              {modalChartData.chart1Data.map((entry: any, index: number) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      {/* Mini Breakdown Pills */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-3 border-t border-slate-100 mt-2">
+                        {modalChartData.chart1Data.map((item: any, idx: number) => {
+                          const pct = chart1Total > 0 ? Math.round((item.value / chart1Total) * 100) : 0
+                          return (
+                            <div key={idx} className="p-2 rounded-xl bg-slate-50 border border-slate-100 flex flex-col">
+                              <span className="text-[10px] font-semibold text-slate-500 truncate" title={item.name}>
+                                {item.name}
+                              </span>
+                              <div className="flex items-baseline gap-1 mt-0.5">
+                                <span className="text-sm font-black text-slate-800">{item.value}</span>
+                                <span className="text-[10px] font-bold text-teal-700">({pct}%)</span>
+                              </div>
+                            </div>
                           )
-                        }
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Chart 2: Bar Chart */}
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <h4 className="text-xs sm:text-sm font-black uppercase text-slate-800 tracking-wider flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-cyan-600" />
+                            {modalChartData.chart2Title}
+                          </h4>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200">
+                            Bar Chart Distribusi
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mb-2">
+                          Distribusi volume kuantitatif berdasarkan kategori penanganan
+                        </p>
+                      </div>
+
+                      <div className="h-[250px] w-full relative">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={modalChartData.chart2Data}
+                            margin={{ top: 10, right: 15, left: -20, bottom: 25 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis
+                              dataKey="name"
+                              tick={{ fontSize: 10, fill: '#64748b' }}
+                              interval={0}
+                              angle={-15}
+                              textAnchor="end"
+                              height={40}
+                            />
+                            <YAxis tick={{ fontSize: 10, fill: '#64748b' }} allowDecimals={false} />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '10px', color: '#fff', fontSize: '11px' }}
+                              itemStyle={{ color: '#38bdf8' }}
+                              formatter={(val: any) => [`${val} Kasus/Unit`, 'Jumlah']}
+                              labelFormatter={(label: any) => {
+                                const item = modalChartData.chart2Data.find((x: any) => x.name === label)
+                                return item?.fullName || label
+                              }}
+                            />
+                            <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                              {modalChartData.chart2Data.map((entry: any, index: number) => (
+                                <Cell key={`bar-${index}`} fill={entry.color} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      {/* Metric Insight Box */}
+                      <div className="p-3 rounded-xl bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-100 flex items-center justify-between mt-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-teal-600 shrink-0" />
+                          <span className="text-[11px] font-semibold text-teal-900">
+                            Data terintegrasi SPGDT 119 Kemenkes RI
+                          </span>
+                        </div>
+                        <span className="text-xs font-black text-teal-800">
+                          {modalChartData.chart2Data.reduce((a: number, c: any) => a + (Number(c.value) || 0), 0)} Total
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              )}
             </div>
 
             {/* Modal Footer */}
-            <div className="bg-slate-50 px-6 py-4 border-t border-slate-150 flex justify-between items-center shrink-0">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                EOC KRISIS KESEHATAN KEMENKES RI
-              </span>
+            <div className="bg-white px-5 sm:px-6 py-3.5 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
+                <Info className="h-4 w-4 text-teal-600 shrink-0" />
+                <span>
+                  {getCardDetailInfo(activeDetailCard).catatan}
+                </span>
+              </div>
               <button
-                onClick={() => setActiveDetailCard(null)}
-                className="px-5 py-2 bg-[#047D78] hover:bg-[#03605c] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition shadow-sm"
+                onClick={() => {
+                  setActiveDetailCard(null)
+                  setModalSearchQuery('')
+                }}
+                className="w-full sm:w-auto px-5 py-2 bg-[#047D78] hover:bg-[#03605c] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition shadow-sm"
               >
                 Tutup Rincian
               </button>
