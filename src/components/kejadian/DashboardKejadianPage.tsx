@@ -386,6 +386,7 @@ export default function DashboardKejadianPage() {
     return ''
   })
   const [selectedAdminKodePsc, setSelectedAdminKodePsc] = useState('')
+  const [selectedPscCenter, setSelectedPscCenter] = useState<any | null>(null)
   const [activePscCenter, setActivePscCenter] = useState<any | null>(null)
 
   // Otomatisasi kunci wilayah berdasarkan unit kode_psc
@@ -2011,6 +2012,34 @@ export default function DashboardKejadianPage() {
     }
   }, [isInitialized, user])
 
+  // Ambil koordinat unit PSC terpilih agar peta dapat langsung memusat ke wilayahnya.
+  useEffect(() => {
+    if (!selectedAdminKodePsc) {
+      setSelectedPscCenter(null)
+      return
+    }
+
+    let isMounted = true
+    const fetchSelectedPscCenter = async () => {
+      try {
+        const response = await fetch(`/api/psc/centers?kode_psc=${encodeURIComponent(selectedAdminKodePsc)}`, {
+          cache: 'no-store',
+        })
+        const payload = await response.json().catch(() => null)
+        const center = payload?.data?.[0]
+        if (isMounted) setSelectedPscCenter(center || null)
+      } catch (err) {
+        console.error('Gagal mengambil koordinat unit PSC terpilih', err)
+        if (isMounted) setSelectedPscCenter(null)
+      }
+    }
+
+    fetchSelectedPscCenter()
+    return () => {
+      isMounted = false
+    }
+  }, [selectedAdminKodePsc])
+
   // When should the reset button show?
   const showResetButton = useMemo(() => {
     if (selectedRegions.length > 0) return true
@@ -2024,6 +2053,7 @@ export default function DashboardKejadianPage() {
   const handleResetFilter = () => {
     setSelectedRegions([])
     setSelectedAdminKodePsc('')
+    setSelectedPscCenter(null)
     setFilterStartDate(undefined)
     setFilterEndDate(undefined)
     if (isKabLocked && user?.wilayah_scope?.kabupaten?.label) {
@@ -3205,6 +3235,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                 hospitals={data?.hospitals || []}
                 selectedRegions={selectedRegions}
                 userScope={activeUserScope}
+                selectedPscCenter={selectedPscCenter}
                 onSelectProvince={(prov) => setProvince(prov)}
                 isGuest={false}
                 markerMonths={markerMonths}

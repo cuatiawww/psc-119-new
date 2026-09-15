@@ -206,6 +206,8 @@ interface DisasterMapProps {
   hospitals?: any[]
   selectedRegions?: any[]
   userScope?: any
+  /** Fokus peta ke center PSC yang dipilih admin/tamu. */
+  selectedPscCenter?: any | null
   onSelectProvince?: (prov: string) => void
   isGuest?: boolean
   /** Jumlah bulan ke belakang untuk menampilkan pin (0 = semua periode) */
@@ -453,6 +455,7 @@ export default function DisasterMap({
   hospitals = [],
   selectedRegions = [],
   userScope,
+  selectedPscCenter = null,
   onSelectProvince,
   isGuest: propIsGuest,
   markerMonths,
@@ -1505,6 +1508,22 @@ export default function DisasterMap({
   }, [])
 
   // ── Sync Basemap and GeoJSON Layer states ──
+  // Pusatkan peta ke lokasi unit PSC saat filter Kode PSC dipilih.
+  useEffect(() => {
+    const map = mapInstanceRef.current || mapInstance
+    if (!map || !selectedPscCenter) return
+
+    const lat = Number(selectedPscCenter.latitude ?? selectedPscCenter.lat)
+    const lng = Number(selectedPscCenter.longitude ?? selectedPscCenter.lng)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) < 0.0001 || Math.abs(lng) < 0.0001) return
+
+    map.getView().animate({
+      center: fromLonLat([lng, lat]),
+      zoom: 10,
+      duration: 800,
+    })
+  }, [mapInstance, selectedPscCenter])
+
   useEffect(() => {
     const baseMapLayer = baseMapLayerRef.current
     const provinceLayer = provinceLayerRef.current
