@@ -250,7 +250,7 @@ interface MarkerPopupState {
 
 interface EocPopupState {
   rawItem: any
-  type: 'hospital' | 'clinic' | 'pustu' | 'shelter' | 'disaster' | 'tck' | 'earthquake'
+  type: 'hospital' | 'clinic' | 'pustu' | 'shelter' | 'disaster' | 'tck' | 'earthquake' | 'volcano'
   name: string
   address?: string
   lat: number
@@ -297,6 +297,17 @@ interface EocPopupState {
     distKm?: number
     source?: string
   }
+  volcanoInfo?: {
+    level: 1 | 2 | 3 | 4
+    status: string
+    statusColor: string
+    elevation: number
+    hazardRadiusKm: number
+    rekomendasi: string
+    link: string
+    provinsi: string
+    kabupaten: string
+  }
   x: number
   y: number
 }
@@ -304,6 +315,55 @@ interface EocPopupState {
 // ─────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────
+
+function getSvgVolcanoPin(level: number, color: string): string {
+  const isHigh = level >= 3
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="36" viewBox="0 0 32 36">
+    <path d="M16 35 C16 35 4 22 4 14 A12 12 0 0 1 28 14 C28 22 16 35 16 35 Z" fill="${color}" stroke="#ffffff" stroke-width="2.2" filter="drop-shadow(0px 2px 3px rgba(0,0,0,0.3))"/>
+    <path d="M10 20 L13 11 L19 11 L22 20 Z" fill="#ffffff" opacity="0.95"/>
+    <path d="M13 11 L16 7 L19 11 Z" fill="#ffedd5" opacity="0.95"/>
+    <circle cx="16" cy="8" r="2" fill="${isHigh ? '#ef4444' : '#f97316'}"/>
+  </svg>`
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
+}
+
+function getSvgMainshockPin(mag: number): string {
+  const magText = mag > 0 ? (mag >= 10 ? mag.toFixed(0) : mag.toFixed(1)) : '7.4'
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="46" height="54" viewBox="0 0 46 54" fill="none">
+    <circle cx="23" cy="20" r="19" fill="rgba(220, 38, 38, 0.25)" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <path d="M23 4C14.16 4 7 11.16 7 20C7 31 23 50 23 50S39 31 39 20C39 11.16 31.84 4 23 4Z" fill="#dc2626" stroke="#ffffff" stroke-width="2.5"/>
+    <circle cx="23" cy="20" r="11" fill="#ffffff"/>
+    <text x="23" y="24" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="900" fill="#991b1b">M ${magText}</text>
+  </svg>`
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
+}
+
+function getSvgAftershockNode(mag: number): string {
+  if (mag >= 6.0) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" fill="#b91c1c" stroke="#ffffff" stroke-width="2.5"/>
+      <text x="12" y="15.5" text-anchor="middle" font-family="system-ui, sans-serif" font-size="8.5" font-weight="900" fill="#ffffff">${mag.toFixed(1)}</text>
+    </svg>`
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
+  }
+  if (mag >= 5.0) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="8" fill="#ea580c" stroke="#ffffff" stroke-width="2"/>
+      <text x="10" y="13" text-anchor="middle" font-family="system-ui, sans-serif" font-size="7.5" font-weight="900" fill="#ffffff">${mag.toFixed(1)}</text>
+    </svg>`
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
+  }
+  if (mag >= 4.0) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14">
+      <circle cx="7" cy="7" r="5.5" fill="#f59e0b" stroke="#ffffff" stroke-width="1.8"/>
+    </svg>`
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10">
+    <circle cx="5" cy="5" r="4" fill="#fbbf24" stroke="#ffffff" stroke-width="1.2"/>
+  </svg>`
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
+}
 
 /** Normalisasi nama wilayah → key perbandingan (strip prefix, uppercase, tanpa spasi/simbol) */
 const cleanKey = (name?: string | null) => {
@@ -522,6 +582,21 @@ export default function DisasterMap({
   const [showTckLayer, setShowTckLayer] = useState(false) // Toggle layer TCK Kemkes (default: non-aktif)
   const [showPosko, setShowPosko] = useState(false) // Toggle layer Posko Pengungsian (default: non-aktif)
   const [showSeismicLayer, setShowSeismicLayer] = useState(!isCallDetailMode) // Toggle layer Titik Gempa USGS/BMKG
+  // ── Volcano (MAGMA ESDM) state ──
+  const [showVolcanoLayer, setShowVolcanoLayer] = useState(false) // Default non-aktif as requested
+  const [volcanoList, setVolcanoList] = useState<any[]>([])
+  const [isVolcanoLoading, setIsVolcanoLoading] = useState(false)
+  const [volcanoMinLevel, setVolcanoMinLevel] = useState(1) // Default 1 (Semua Level)
+  // ── Live USGS Earthquake state (Strictly Indonesia Only) ──
+  const [liveEarthquakes, setLiveEarthquakes] = useState<any[]>([])
+  const [eqDays, setEqDays] = useState<number>(30) // Default 30 hari (1 bulan)
+  const [eqMinMag, setEqMinMag] = useState<number>(4.5) // Default M >= 4.5
+  const [isEqLoading, setIsEqLoading] = useState<boolean>(false)
+  const [eqCustomStart, setEqCustomStart] = useState<string | null>(null)
+
+  const activeEqList = useMemo(() => {
+    return (liveEarthquakes && liveEarthquakes.length > 0) ? liveEarthquakes : earthquakePoints
+  }, [liveEarthquakes, earthquakePoints])
   const [showAmbulances, setShowAmbulances] = useState(true) // Toggle layer Ambulans PSC
   const [showHospitals, setShowHospitals] = useState(true) // Toggle layer RS Rujukan
   const [ambulancePopup, setAmbulancePopup] = useState<any | null>(null)
@@ -567,6 +642,8 @@ export default function DisasterMap({
   const eocLayerRef = useRef<VectorLayer<VectorSource<any>> | null>(null)
   const ambulanceLayerRef = useRef<VectorLayer<VectorSource<any>> | null>(null)
   const hospitalLayerRef = useRef<VectorLayer<VectorSource<any>> | null>(null)
+  const seismicLayerRef = useRef<VectorLayer<VectorSource<any>> | null>(null)
+  const volcanoLayerRef = useRef<VectorLayer<VectorSource<any>> | null>(null)
 
   // Stable callback refs (avoid stale closures inside OL event handlers)
   const onSelectProvinceRef = useRef(onSelectProvince)
@@ -1120,6 +1197,14 @@ export default function DisasterMap({
     const ambulanceLayer = new VectorLayer({ source: new VectorSource(), zIndex: 14 })
     ambulanceLayerRef.current = ambulanceLayer
 
+    // Dedicated Seismic (Earthquake USGS) layer
+    const seismicLayer = new VectorLayer({ source: new VectorSource(), zIndex: 13 })
+    seismicLayerRef.current = seismicLayer
+
+    // Dedicated Volcano (MAGMA ESDM) layer
+    const volcanoLayer = new VectorLayer({ source: new VectorSource(), zIndex: 15 })
+    volcanoLayerRef.current = volcanoLayer
+
     const firstM = markers && markers[0]
     const hasInitialCoord = firstM && Number(firstM.lng) !== 0 && Number(firstM.lat) !== 0
     const initialCenter = isFloodEocMode && hasInitialCoord
@@ -1143,7 +1228,9 @@ export default function DisasterMap({
         hospitalLayer,
         markerLayer,
         ambulanceLayer,
-        eocLayer
+        eocLayer,
+        seismicLayer,
+        volcanoLayer
       ],
       controls: defaultControls({ attribution: false }),
       view: new View({
@@ -1158,11 +1245,11 @@ export default function DisasterMap({
 
     // ── Click handler ──
     map.on('singleclick', (evt) => {
-      // 1. Check EOC Layer feature first
+      // 1. Check EOC Layer, Seismic, and Volcano features
       const eocFeature = map.forEachFeatureAtPixel(
         evt.pixel,
         (f) => f,
-        { layerFilter: (l) => l === eocLayerRef.current }
+        { layerFilter: (l) => l === eocLayerRef.current || l === seismicLayerRef.current || l === volcanoLayerRef.current }
       )
       if (eocFeature) {
         const id = eocFeature.get('id')
@@ -1206,13 +1293,16 @@ export default function DisasterMap({
 
             const isTerdampak = (!!rawItem._isTerdampak && hasStructuralDamage) || hasStructuralDamage
             const isEarthquake = itemType === 'earthquake'
+            const isVolcano = itemType === 'volcano'
 
             setEocPopup({
               rawItem,
               type: (itemType as any) || 'clinic',
-              name: isEarthquake ? (rawItem.name || name) : name,
+              name: isEarthquake ? (rawItem.name || name) : isVolcano ? (rawItem.nama || name) : name,
               address: isEarthquake
-                ? (rawItem.place || 'Wilayah Episentrum Gempa NTT')
+                ? (rawItem.place || 'Wilayah Episentrum Gempa Indonesia')
+                : isVolcano
+                ? `${rawItem.kabupaten || ''}, ${rawItem.provinsi || ''} (${rawItem.elevation || 0} mdpl)`
                 : (rawItem.alamat || rawItem.kecamatan || (rawItem.kab_kota ? `Kab. ${rawItem.kab_kota}` : '') || (rawItem.nama_desa ? `Desa ${rawItem.nama_desa}, Kec. ${rawItem.kecamatan || ''}` : '')),
               lat,
               lng,
@@ -1246,7 +1336,7 @@ export default function DisasterMap({
               earthquakeInfo: isEarthquake ? {
                 magnitude: Number(rawItem.magnitude || 0),
                 depth: Number(rawItem.depth || 10),
-                place: rawItem.place || 'Wilayah Episentrum NTT',
+                place: rawItem.place || 'Wilayah Episentrum Indonesia',
                 time: rawItem.time || '',
                 dateStr: rawItem.dateStr || '',
                 dateLabel: rawItem.dateLabel || '',
@@ -1255,6 +1345,17 @@ export default function DisasterMap({
                 tsunami: rawItem.tsunami,
                 distKm: rawItem.distKm,
                 source: 'Katalog Seismik Global USGS & BMKG TEWS'
+              } : undefined,
+              volcanoInfo: isVolcano ? {
+                level: rawItem.level || 1,
+                status: rawItem.status || 'Level I (Normal)',
+                statusColor: rawItem.statusColor || '#10b981',
+                elevation: Number(rawItem.elevation || 0),
+                hazardRadiusKm: Number(rawItem.hazardRadiusKm || 0),
+                rekomendasi: rawItem.rekomendasi || 'Tetap waspada dan ikuti arahan PVMBG.',
+                link: rawItem.link || 'https://magma.esdm.go.id/v1/gunung-api/laporan',
+                provinsi: rawItem.provinsi || '',
+                kabupaten: rawItem.kabupaten || '',
               } : undefined,
               x,
               y
@@ -1649,6 +1750,8 @@ export default function DisasterMap({
       kabupatenLayerRef.current = null
       markerLayerRef.current = null
       eocLayerRef.current = null
+      seismicLayerRef.current = null
+      volcanoLayerRef.current = null
     }
   }, [])
 
@@ -2095,6 +2198,64 @@ export default function DisasterMap({
     }
   }, [])
 
+  // ── USGS Live Earthquake fetch (Strictly Indonesia Only) ──
+  const fetchUsgsEarthquakes = useCallback(async () => {
+    if (!showSeismicLayer || isCallDetailMode) return
+    setIsEqLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (eqCustomStart) {
+        params.set('starttime', eqCustomStart)
+      } else {
+        params.set('days', String(eqDays))
+      }
+      params.set('minmagnitude', String(eqMinMag))
+
+      const res = await fetch(`${basePath}/api/gempa-usgs?${params.toString()}`)
+      if (res.ok) {
+        const json = await res.json()
+        if (json.success && Array.isArray(json.data)) {
+          setLiveEarthquakes(json.data)
+        }
+      }
+    } catch (e) {
+      console.error('[USGS] Failed to fetch earthquake data:', e)
+    } finally {
+      setIsEqLoading(false)
+    }
+  }, [showSeismicLayer, isCallDetailMode, basePath, eqDays, eqMinMag, eqCustomStart])
+
+  useEffect(() => {
+    if (showSeismicLayer && !isCallDetailMode) {
+      void fetchUsgsEarthquakes()
+    }
+  }, [fetchUsgsEarthquakes, showSeismicLayer, isCallDetailMode])
+
+  // ── MAGMA ESDM Volcano fetch ──
+  const fetchVolcanoes = useCallback(async () => {
+    if (!showVolcanoLayer || isCallDetailMode) return
+    setIsVolcanoLoading(true)
+    try {
+      const res = await fetch(`${basePath}/api/magma-gunung?min_level=${volcanoMinLevel}`)
+      if (res.ok) {
+        const json = await res.json()
+        if (json.success && Array.isArray(json.data)) {
+          setVolcanoList(json.data)
+        }
+      }
+    } catch (e) {
+      console.error('[MAGMA] Failed to fetch volcano data:', e)
+    } finally {
+      setIsVolcanoLoading(false)
+    }
+  }, [showVolcanoLayer, isCallDetailMode, basePath, volcanoMinLevel])
+
+  useEffect(() => {
+    if (showVolcanoLayer && !isCallDetailMode) {
+      void fetchVolcanoes()
+    }
+  }, [fetchVolcanoes, showVolcanoLayer, isCallDetailMode])
+
   // ─────────────────────────────────────────────
   // Sync marker features when markers/visibility changes
   // ─────────────────────────────────────────────
@@ -2283,6 +2444,177 @@ export default function DisasterMap({
     source.addFeatures(features)
   }, [hospitals, showHospitals])
 
+  // ── Sync Dedicated Seismic (Earthquake USGS) Layer ──
+  useEffect(() => {
+    const layer = seismicLayerRef.current
+    if (!layer) return
+    const source = layer.getSource()
+    if (!source) return
+    source.clear()
+
+    if (!showSeismicLayer || isCallDetailMode || !Array.isArray(activeEqList) || activeEqList.length === 0) {
+      layer.setVisible(false)
+      return
+    }
+
+    layer.setVisible(true)
+
+    let mainshockIdx = 0
+    let maxMag = -1
+    activeEqList.forEach((eq: any, i: number) => {
+      const m = Number(eq.magnitude || 0)
+      if (eq.isMainshock || m > maxMag) {
+        maxMag = m
+        mainshockIdx = i
+      }
+    })
+
+    activeEqList.forEach((eq: any, idx: number) => {
+      const eqLat = Number(eq.lat || 0)
+      const eqLng = Number(eq.lng || 0)
+      if (eqLat !== 0 && eqLng !== 0) {
+        const mag = Number(eq.magnitude || 0)
+        const isMain = idx === mainshockIdx
+
+        if (isMain) {
+          const primaryRadiusKm = Math.min(80, Math.max(35, (mag - 3) * 12))
+          const shockCircle = new Feature({
+            geometry: new CircleGeom(fromLonLat([eqLng, eqLat]), primaryRadiusKm * 1000),
+            id: 'eq-circle-main'
+          })
+          shockCircle.setStyle(new Style({
+            fill: new Fill({ color: 'rgba(220, 38, 38, 0.07)' }),
+            stroke: new Stroke({
+              color: 'rgba(220, 38, 38, 0.75)',
+              width: 2.2,
+              lineDash: [6, 6]
+            })
+          }))
+          source.addFeature(shockCircle)
+
+          const innerRadiusKm = Math.max(15, primaryRadiusKm * 0.45)
+          const innerShockCircle = new Feature({
+            geometry: new CircleGeom(fromLonLat([eqLng, eqLat]), innerRadiusKm * 1000),
+            id: 'eq-circle-inner'
+          })
+          innerShockCircle.setStyle(new Style({
+            fill: new Fill({ color: 'rgba(220, 38, 38, 0.12)' }),
+            stroke: new Stroke({
+              color: '#dc2626',
+              width: 1.5
+            })
+          }))
+          source.addFeature(innerShockCircle)
+
+          createPulseOverlay(eqLng, eqLat, 'danger')
+        }
+
+        const eqFeat = new Feature({
+          geometry: new Point(fromLonLat([eqLng, eqLat])),
+          id: `eq-point-${idx}`,
+          name: `${isMain ? '★ Episentrum Gempa Utama' : '⚡ Titik Gempa Susulan'} M ${mag.toFixed(1)} - ${eq.place || 'Indonesia'}`,
+          rawItem: {
+            ...eq,
+            latitude: eqLat,
+            longitude: eqLng
+          },
+          itemType: 'earthquake'
+        })
+
+        if (isMain) {
+          eqFeat.setStyle(new Style({
+            image: new Icon({
+              src: getSvgMainshockPin(mag),
+              scale: 1.0,
+              anchor: [0.5, 0.92]
+            }),
+            zIndex: 100
+          }))
+        } else {
+          eqFeat.setStyle(new Style({
+            image: new Icon({
+              src: getSvgAftershockNode(mag),
+              scale: 1.0,
+              anchor: [0.5, 0.5]
+            }),
+            zIndex: Math.round(mag * 10)
+          }))
+        }
+
+        source.addFeature(eqFeat)
+      }
+    })
+  }, [showSeismicLayer, isCallDetailMode, activeEqList, createPulseOverlay])
+
+  // ── Sync Dedicated Volcano (MAGMA ESDM) Layer ──
+  useEffect(() => {
+    const layer = volcanoLayerRef.current
+    if (!layer) return
+    const source = layer.getSource()
+    if (!source) return
+    source.clear()
+
+    if (!showVolcanoLayer || isCallDetailMode || !Array.isArray(volcanoList) || volcanoList.length === 0) {
+      layer.setVisible(false)
+      return
+    }
+
+    layer.setVisible(true)
+
+    volcanoList.forEach((v: any, idx: number) => {
+      const vLat = Number(v.lat || 0)
+      const vLng = Number(v.lng || 0)
+      if (vLat !== 0 && vLng !== 0) {
+        const level = Number(v.level || 1)
+        const color = v.statusColor || (level === 4 ? '#dc2626' : level === 3 ? '#ea580c' : level === 2 ? '#eab308' : '#10b981')
+
+        if (level >= 3 && v.hazardRadiusKm > 0) {
+          const radiusMeters = v.hazardRadiusKm * 1000
+          const hazardCircle = new Feature({
+            geometry: new CircleGeom(fromLonLat([vLng, vLat]), radiusMeters),
+            id: `volcano-circle-${idx}`
+          })
+          hazardCircle.setStyle(new Style({
+            fill: new Fill({ color: level === 4 ? 'rgba(220, 38, 38, 0.15)' : 'rgba(234, 88, 12, 0.12)' }),
+            stroke: new Stroke({
+              color: color,
+              width: 2,
+              lineDash: [4, 4]
+            })
+          }))
+          source.addFeature(hazardCircle)
+
+          if (level === 4) {
+            createPulseOverlay(vLng, vLat, 'danger')
+          }
+        }
+
+        const vFeat = new Feature({
+          geometry: new Point(fromLonLat([vLng, vLat])),
+          id: `volcano-${idx}`,
+          name: `🌋 ${v.nama} (${v.status})`,
+          rawItem: {
+            ...v,
+            latitude: vLat,
+            longitude: vLng
+          },
+          itemType: 'volcano'
+        })
+
+        vFeat.setStyle(new Style({
+          image: new Icon({
+            src: getSvgVolcanoPin(level, color),
+            scale: level >= 3 ? 1.05 : 0.85,
+            anchor: [0.5, 0.95]
+          }),
+          zIndex: 50 + level * 10
+        }))
+
+        source.addFeature(vFeat)
+      }
+    })
+  }, [showVolcanoLayer, isCallDetailMode, volcanoList, createPulseOverlay])
+
   // ── Sync EOC Routing & Faskes Layer ──
   useEffect(() => {
     const eocLayer = eocLayerRef.current
@@ -2437,12 +2769,12 @@ export default function DisasterMap({
       })
     }
 
-    // 1.5. Add Real Earthquake Points & Epicenters (from USGS/BMKG API)
-    if (!isCallDetailMode && showSeismicLayer && Array.isArray(earthquakePoints) && earthquakePoints.length > 0) {
+    // 1.5. Add Real Earthquake Points & Epicenters (from USGS/BMKG API - Strictly Indonesia)
+    if (!isCallDetailMode && showSeismicLayer && Array.isArray(activeEqList) && activeEqList.length > 0) {
       // Identify mainshock index (highest magnitude or marked isMainshock)
       let mainshockIdx = 0
       let maxMag = -1
-      earthquakePoints.forEach((eq: any, i: number) => {
+      activeEqList.forEach((eq: any, i: number) => {
         const m = Number(eq.magnitude || 0)
         if (eq.isMainshock || m > maxMag) {
           maxMag = m
@@ -2450,7 +2782,7 @@ export default function DisasterMap({
         }
       })
 
-      earthquakePoints.forEach((eq: any, idx: number) => {
+      activeEqList.forEach((eq: any, idx: number) => {
         const eqLat = Number(eq.lat || 0)
         const eqLng = Number(eq.lng || 0)
         if (eqLat !== 0 && eqLng !== 0) {
@@ -2837,7 +3169,7 @@ export default function DisasterMap({
         pulseOverlaysRef.current = []
       }
     }
-  }, [showEocRoute, isFloodEocMode, isCallDetailMode, showMarkers, showPosko, showTckLayer, showSeismicLayer, earthquakePoints, tckList, faskesList, faskesRusakList, faskesTypeFilters, poskoList, selectedRouteTarget, routeCoords, markers, mapInstance, pulseRadius])
+  }, [showEocRoute, isFloodEocMode, isCallDetailMode, showMarkers, showPosko, showTckLayer, showSeismicLayer, earthquakePoints, activeEqList, tckList, faskesList, faskesRusakList, faskesTypeFilters, poskoList, selectedRouteTarget, routeCoords, markers, mapInstance, pulseRadius])
 
   // ─────────────────────────────────────────────
   // Legend / UI data
@@ -3639,30 +3971,232 @@ export default function DisasterMap({
                   SUMBER DATA & LAYANAN TERPADU
                 </p>
 
-                {/* Toggle Real USGS/BMKG Seismic Epicenters */}
-                <div
-                  onClick={() => setShowSeismicLayer((v) => !v)}
-                  className="hidden flex cursor-pointer items-center justify-between rounded-xl border border-red-100 bg-red-50/50 px-3 py-2 hover:bg-red-100/50 transition-all"
-                >
-                  <div>
-                    <p className="text-xs font-semibold text-red-900 flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-red-600 animate-ping" />
-                      Titik Episentrum Gempa (USGS/BMKG)
-                      {earthquakePoints && earthquakePoints.length > 0 && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.2 bg-red-700 text-white rounded-full">
-                          {earthquakePoints.length}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-[10px] text-red-700 font-medium">Plot koordinat riil episentrum & radius guncangan gempa</p>
-                  </div>
+                {/* Toggle Real USGS Seismic Epicenters (Strictly Indonesia) */}
+                <div className="rounded-xl border border-red-100 bg-red-50/50 p-3 space-y-2.5 transition-all">
                   <div
-                    className={`relative h-5 w-9 rounded-full transition-colors duration-200 ${showSeismicLayer ? 'bg-red-600' : 'bg-slate-300'}`}
+                    onClick={() => setShowSeismicLayer((v) => !v)}
+                    className="flex cursor-pointer items-center justify-between"
                   >
-                    <span
-                      className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${showSeismicLayer ? 'translate-x-4' : 'translate-x-0'}`}
-                    />
+                    <div>
+                      <p className="text-xs font-semibold text-red-900 flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-red-600 animate-ping" />
+                        Titik Episentrum Gempa (USGS Indonesia)
+                        {activeEqList && activeEqList.length > 0 && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 bg-red-700 text-white rounded-full">
+                            {activeEqList.length}
+                          </span>
+                        )}
+                        {isEqLoading && (
+                          <Loader2 className="h-3 w-3 text-red-600 animate-spin" />
+                        )}
+                      </p>
+                      <p className="text-[10px] text-red-700 font-medium">
+                        Plot data seismik riil episentrum gempa bumi di wilayah Indonesia
+                      </p>
+                    </div>
+                    <div
+                      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ${showSeismicLayer ? 'bg-red-600' : 'bg-slate-300'}`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${showSeismicLayer ? 'translate-x-4' : 'translate-x-0'}`}
+                      />
+                    </div>
                   </div>
+
+                  {/* Filter controls when layer active */}
+                  {showSeismicLayer && (
+                    <div className="pt-2 border-t border-red-100/80 space-y-2.5 animate-in fade-in duration-200">
+                      {/* Timeframe selector */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[9.5px] font-bold text-red-800 uppercase tracking-wider">
+                            Periode Gempa
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void fetchUsgsEarthquakes()
+                            }}
+                            disabled={isEqLoading}
+                            className="inline-flex items-center gap-1 text-[9.5px] text-red-700 hover:text-red-900 font-bold px-1.5 py-0.5 rounded hover:bg-red-100 transition cursor-pointer"
+                            title="Muat ulang data USGS terkini"
+                          >
+                            <RotateCcw className={`h-2.5 w-2.5 ${isEqLoading ? 'animate-spin' : ''}`} />
+                            Muat Ulang
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-4 gap-1">
+                          {[
+                            { label: '7 Hari', days: 7, start: null },
+                            { label: '30 Hari', days: 30, start: null },
+                            { label: '90 Hari', days: 90, start: null },
+                            { label: 'Tahun 2026', days: 0, start: '2026-01-01' },
+                          ].map((t) => {
+                            const isActive = t.start ? eqCustomStart === t.start : (!eqCustomStart && eqDays === t.days)
+                            return (
+                              <button
+                                key={t.label}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (t.start) {
+                                    setEqCustomStart(t.start)
+                                  } else {
+                                    setEqCustomStart(null)
+                                    setEqDays(t.days)
+                                  }
+                                }}
+                                className={`text-[9px] font-bold py-1 px-0.5 rounded-lg border transition text-center cursor-pointer ${
+                                  isActive
+                                    ? 'bg-red-600 text-white border-red-700 shadow-xs'
+                                    : 'bg-white text-slate-600 border-red-100 hover:bg-red-100/60'
+                                }`}
+                              >
+                                {t.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Magnitude filter */}
+                      <div>
+                        <span className="text-[9.5px] font-bold text-red-800 uppercase tracking-wider block mb-1">
+                          Batas Minimal Magnitudo
+                        </span>
+                        <div className="grid grid-cols-3 gap-1">
+                          {[
+                            { label: 'M ≥ 4.5', mag: 4.5 },
+                            { label: 'M ≥ 5.0', mag: 5.0 },
+                            { label: 'M ≥ 6.0', mag: 6.0 },
+                          ].map((m) => {
+                            const isActive = eqMinMag === m.mag
+                            return (
+                              <button
+                                key={m.label}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setEqMinMag(m.mag)
+                                }}
+                                className={`text-[9px] font-bold py-1 px-1 rounded-lg border transition text-center cursor-pointer ${
+                                  isActive
+                                    ? 'bg-red-600 text-white border-red-700 shadow-xs'
+                                    : 'bg-white text-slate-600 border-red-100 hover:bg-red-100/60'
+                                }`}
+                              >
+                                {m.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Scope note */}
+                      <div className="flex items-center gap-1 text-[8.5px] text-red-700/90 bg-red-100/50 p-1.5 rounded-md">
+                        <span>🇮🇩</span>
+                        <span className="font-medium">Khusus Wilayah Indonesia (-11.5° s/d 6.5° LU, 95.0° s/d 141.0° BT)</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Toggle MAGMA ESDM Volcano Layer (Default NON-AKTIF) */}
+                <div className="rounded-xl border border-orange-100 bg-orange-50/50 p-3 space-y-2.5 transition-all">
+                  <div
+                    onClick={() => setShowVolcanoLayer((v) => !v)}
+                    className="flex cursor-pointer items-center justify-between"
+                  >
+                    <div>
+                      <p className="text-xs font-semibold text-orange-950 flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-orange-600 animate-pulse" />
+                        Aktivitas Gunung Api (MAGMA ESDM)
+                        {volcanoList && volcanoList.length > 0 && showVolcanoLayer && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 bg-orange-700 text-white rounded-full">
+                            {volcanoList.length}
+                          </span>
+                        )}
+                        {isVolcanoLoading && (
+                          <Loader2 className="h-3 w-3 text-orange-600 animate-spin" />
+                        )}
+                      </p>
+                      <p className="text-[10px] text-orange-800/90 font-medium">
+                        Status aktivitas &amp; rekomendasi bahaya PVMBG Badan Geologi ESDM
+                      </p>
+                    </div>
+                    <div
+                      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ${showVolcanoLayer ? 'bg-orange-600' : 'bg-slate-300'}`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${showVolcanoLayer ? 'translate-x-4' : 'translate-x-0'}`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Filter controls when volcano layer active */}
+                  {showVolcanoLayer && (
+                    <div className="pt-2 border-t border-orange-100/80 space-y-2.5 animate-in fade-in duration-200">
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[9.5px] font-bold text-orange-900 uppercase tracking-wider">
+                            Filter Tingkat Status
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void fetchVolcanoes()
+                            }}
+                            disabled={isVolcanoLoading}
+                            className="inline-flex items-center gap-1 text-[9.5px] text-orange-800 hover:text-orange-950 font-bold px-1.5 py-0.5 rounded hover:bg-orange-100 transition cursor-pointer"
+                            title="Segarkan data MAGMA ESDM"
+                          >
+                            <RotateCcw className={`h-2.5 w-2.5 ${isVolcanoLoading ? 'animate-spin' : ''}`} />
+                            Segarkan
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1">
+                          {[
+                            { label: 'Semua Level', level: 1 },
+                            { label: 'Waspada+ (2-4)', level: 2 },
+                            { label: 'Siaga & Awas', level: 3 },
+                          ].map((l) => {
+                            const isActive = volcanoMinLevel === l.level
+                            return (
+                              <button
+                                key={l.label}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setVolcanoMinLevel(l.level)
+                                }}
+                                className={`text-[9px] font-bold py-1 px-1 rounded-lg border transition text-center cursor-pointer ${
+                                  isActive
+                                    ? 'bg-orange-600 text-white border-orange-700 shadow-xs'
+                                    : 'bg-white text-slate-600 border-orange-100 hover:bg-orange-100/60'
+                                }`}
+                              >
+                                {l.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[8.5px] text-orange-800/90 pt-0.5">
+                        <span>Sumber: magma.esdm.go.id/v1/gunung-api/laporan</span>
+                        <a
+                          href="https://magma.esdm.go.id/v1/gunung-api/laporan"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-bold underline text-orange-900 hover:text-orange-950"
+                        >
+                          Portal Resmi
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Toggle TCK Kemkes Layer */}
@@ -4291,20 +4825,24 @@ export default function DisasterMap({
           <div className="flex items-start justify-between border-b border-slate-100 p-3.5 pb-3 bg-slate-50/70">
             <div className="min-w-0 flex-1">
               {/* Only show badge for Earthquake, TCK, or Shelter. Faskes/RS badges removed as requested */}
-              {(eocPopup.type === 'earthquake' || eocPopup.type === 'tck' || eocPopup.type === 'shelter') && (
+              {(eocPopup.type === 'earthquake' || eocPopup.type === 'volcano' || eocPopup.type === 'tck' || eocPopup.type === 'shelter') && (
                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${
                   eocPopup.type === 'earthquake'
                     ? 'bg-red-100 text-red-800 border border-red-300 font-black'
-                    : eocPopup.type === 'tck'
-                      ? 'bg-teal-50 text-teal-800 border border-teal-200'
-                      : 'bg-purple-50 text-purple-700 border border-purple-200'
+                    : eocPopup.type === 'volcano'
+                      ? 'bg-orange-100 text-orange-800 border border-orange-300 font-black'
+                      : eocPopup.type === 'tck'
+                        ? 'bg-teal-50 text-teal-800 border border-teal-200'
+                        : 'bg-purple-50 text-purple-700 border border-purple-200'
                 }`}>
                   <span className="h-1.5 w-1.5 rounded-full bg-current"></span>
                   {eocPopup.type === 'earthquake'
                     ? (eocPopup.earthquakeInfo?.isMainshock ? '⚡ Episentrum Gempa Utama' : '⚡ Titik Gempa Susulan')
-                    : eocPopup.type === 'tck'
-                      ? 'Relawan TCK Kemkes RI'
-                      : 'Posko Kesehatan & Darurat'}
+                    : eocPopup.type === 'volcano'
+                      ? `🌋 ${eocPopup.volcanoInfo?.status || 'Gunung Api'}`
+                      : eocPopup.type === 'tck'
+                        ? 'Relawan TCK Kemkes RI'
+                        : 'Posko Kesehatan & Darurat'}
                 </span>
               )}
               <h4 className={`text-sm font-black text-slate-900 leading-snug ${(eocPopup.type === 'earthquake' || eocPopup.type === 'tck' || eocPopup.type === 'shelter') ? 'mt-1.5' : 'mt-0'}`}>
@@ -4434,6 +4972,67 @@ export default function DisasterMap({
                 </div>
               )
             })()}
+
+            {eocPopup.type === 'volcano' && eocPopup.volcanoInfo && (
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-2 gap-2">
+                  <div
+                    className="rounded-xl p-2.5 text-center border"
+                    style={{
+                      backgroundColor: `${eocPopup.volcanoInfo.statusColor}15`,
+                      borderColor: `${eocPopup.volcanoInfo.statusColor}40`,
+                    }}
+                  >
+                    <span className="text-[9px] font-black uppercase block" style={{ color: eocPopup.volcanoInfo.statusColor }}>
+                      Tingkat Status
+                    </span>
+                    <span className="text-sm font-black block mt-0.5" style={{ color: eocPopup.volcanoInfo.statusColor }}>
+                      {eocPopup.volcanoInfo.status}
+                    </span>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-2.5 text-center">
+                    <span className="text-[9px] font-black uppercase text-slate-500 block">Ketinggian</span>
+                    <span className="text-sm font-black text-slate-800 block mt-0.5">
+                      {eocPopup.volcanoInfo.elevation} mdpl
+                    </span>
+                    <span className="text-[8.5px] font-bold text-slate-400 block">Meter DPL</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 text-[11px]">
+                  {eocPopup.volcanoInfo.hazardRadiusKm > 0 && (
+                    <div className="flex items-center justify-between border-b border-slate-200/60 pb-1.5">
+                      <span className="text-slate-500 font-medium">Radius Bahaya:</span>
+                      <span className="font-bold text-rose-700">
+                        {eocPopup.volcanoInfo.hazardRadiusKm} km dari kawah
+                      </span>
+                    </div>
+                  )}
+                  <div className="border-b border-slate-200/60 pb-1.5">
+                    <span className="text-slate-500 font-medium block mb-1">Rekomendasi PVMBG:</span>
+                    <p className="text-[10px] text-slate-700 leading-relaxed font-medium">
+                      {eocPopup.volcanoInfo.rekomendasi}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between pt-0.5">
+                    <span className="text-slate-500 font-medium">Sumber Data:</span>
+                    <span className="font-bold text-teal-800 text-[10px]">
+                      MAGMA Indonesia (PVMBG ESDM)
+                    </span>
+                  </div>
+                </div>
+
+                <a
+                  href={eocPopup.volcanoInfo.link || 'https://magma.esdm.go.id/v1/gunung-api/laporan'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-xl text-xs font-bold transition shadow-xs"
+                >
+                  <Globe className="h-3.5 w-3.5" />
+                  Buka Laporan Resmi MAGMA ESDM
+                </a>
+              </div>
+            )}
 
             {eocPopup.type === 'earthquake' && eocPopup.earthquakeInfo && (
               <div className="space-y-2.5">
@@ -4669,13 +5268,15 @@ export default function DisasterMap({
 
           {/* Footer Actions */}
           <div className="border-t border-slate-100 p-2.5 bg-slate-50/50 flex gap-2">
-            {eocPopup.type === 'earthquake' ? (
+            {(eocPopup.type === 'earthquake' || eocPopup.type === 'volcano') ? (
               <div className="w-full flex gap-2">
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${eocPopup.lat},${eocPopup.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white py-2 text-[11px] font-bold shadow-xs transition"
+                  className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl text-white py-2 text-[11px] font-bold shadow-xs transition ${
+                    eocPopup.type === 'volcano' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-red-600 hover:bg-red-700'
+                  }`}
                 >
                   <Globe className="h-3.5 w-3.5" />
                   Buka Titik Koordinat di Google Maps

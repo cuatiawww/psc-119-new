@@ -3195,7 +3195,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                 <span className="truncate">Wilayah: {activeRegionBadgeLabel}</span>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5 self-start md:self-center">
+            <div className="hidden flex-wrap items-center gap-2.5 sm:gap-3.5 self-start md:self-center">
               <Link
                 href="/tv"
                 target="_blank"
