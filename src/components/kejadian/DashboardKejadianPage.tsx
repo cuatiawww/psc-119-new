@@ -60,6 +60,9 @@ import {
 } from 'recharts'
 import { buildBencanaStatsUrl } from '@/lib/utils/api'
 import { useAuthStore } from '@/lib/authStore'
+import { getPscServiceCategory } from '@/lib/pscServiceCategory'
+import { isValidPscIcd10Value, resolvePscIcd10 } from '@/lib/pscIcd10'
+import { getPscResponseMinutes } from '@/lib/pscResponseTime'
 import FilterDropdownBar, { type FilterSummary } from '@/components/landing/FilterDropdownBar'
 import DetailKejadianPage from './DetailKejadianPage'
 
@@ -161,6 +164,8 @@ type MarkerItem = {
   extension?: string
   sumber_panggilan?: string
   spesifikasi_layanan?: string
+  kategori_layanan?: string
+  id_jenis_layanan?: string | number | null
   jenis_layanan?: string
   nama_psc?: string
   ticket_id?: string
@@ -183,7 +188,59 @@ type ApiResponse = {
   markers: MarkerItem[]
   calls?: any[]
   ambulances?: any[]
+  ambulance_records?: any[]
   hospitals?: any[]
+}
+
+const getMarkerServiceCategory = (marker: MarkerItem) => getPscServiceCategory({
+  jenis_layanan: marker.raw_psc?.jenis_layanan || marker.jenis_layanan,
+  id_jenis_layanan: marker.raw_psc?.id_jenis_layanan ?? marker.id_jenis_layanan,
+})
+
+const AMBULANCE_TYPE_LABELS: Record<string, string> = {
+  '2': 'Transportasi',
+  '3': 'Gawat Darurat',
+}
+
+const AMBULANCE_OWNERSHIP_LABELS: Record<string, string> = {
+  '1': 'Milik PSC',
+  '2': 'Milik Jejaring',
+}
+
+const AMBULANCE_SOURCE_LABELS: Record<string, string> = {
+  '1': 'APBN/DAK',
+  '2': 'APBD',
+  '3': 'Hibah/Bantuan',
+}
+
+const AMBULANCE_CONDITION_LABELS: Record<string, string> = {
+  '1': 'Baik',
+  '2': 'Rusak Ringan',
+  '3': 'Rusak Berat',
+}
+
+const displayLookupValue = (label: unknown, id: unknown, labels?: Record<string, string>) => {
+  const text = String(label ?? '').trim()
+  if (text && text.toLowerCase() !== 'n/a' && text !== '-') return text
+
+  const key = String(id ?? '').trim()
+  if (key && labels?.[key]) return labels[key]
+  if (key) return `ID ${key}`
+  return '-'
+}
+
+const calculateAge = (birthDate: unknown, fallback?: unknown) => {
+  const fallbackText = String(fallback ?? '').trim()
+  if (fallbackText && fallbackText !== '-') return fallbackText.replace(/\s*th\.?$/i, '')
+
+  const parsedDate = new Date(String(birthDate ?? ''))
+  if (Number.isNaN(parsedDate.getTime())) return '-'
+
+  const today = new Date()
+  let age = today.getFullYear() - parsedDate.getFullYear()
+  const birthdayThisYear = new Date(today.getFullYear(), parsedDate.getMonth(), parsedDate.getDate())
+  if (today < birthdayThisYear) age -= 1
+  return age >= 0 ? String(age) : '-'
 }
 
 const COLORS = ['#0f8f96', '#14b8a6', '#0ea5e9', '#6366f1', '#a855f7', '#f43f5e', '#eab308']
@@ -411,8 +468,11 @@ export default function DashboardKejadianPage() {
         if (kabName) setKabupaten(kabName)
         setCakupan('kabupaten-kota')
 
-        // Terapkan wilayah operasional dan login unit ke useAuthStore
-        useAuthStore.getState().loginAsPscUnit(activeKodePsc, center)
+        // Jangan timpa akun hasil SSO dengan token lokal unit PSC.
+        const authState = useAuthStore.getState()
+        if (!authState.isAuthenticated || authState.isGuest || !authState.token) {
+          authState.loginAsPscUnit(activeKodePsc, center)
+        }
       } catch (err) {
         console.error('Gagal memuat profil unit PSC untuk wilayah operasional:', err)
       }
@@ -596,25 +656,15 @@ export default function DashboardKejadianPage() {
     let total_non_category = 0
 
     effectiveMarkers.forEach((m) => {
-      const jenis = (m.jenis_layanan || m.raw_psc?.jenis_layanan || '').toLowerCase()
-      const isEm = (jenis.includes('emergency') && !jenis.includes('non')) || (m.is_krisis === 1 && !jenis.includes('non'))
-      const isNonEm = jenis.includes('non') && jenis.includes('emergency')
-      const isNonCat = (jenis.includes('non') && (jenis.includes('cat') || jenis.includes('kat'))) || (!isEm && !isNonEm && Boolean(jenis))
+      const category = getMarkerServiceCategory(m)
 
-      if (isEm) {
+      if (category === 'Emergency') {
         total_krisis++
         total_emergency++
-      } else if (isNonEm) {
+      } else if (category === 'Non Emergency') {
         total_non_emergency++
-      } else if (isNonCat) {
-        total_non_category++
       } else {
-        if (m.is_krisis === 1) {
-          total_krisis++
-          total_emergency++
-        } else {
-          total_non_emergency++
-        }
+        total_non_category++
       }
 
       const korban = m.total_korban || 0
@@ -630,22 +680,13 @@ export default function DashboardKejadianPage() {
     const responseTimes: number[] = []
     effectiveMarkers.forEach((m) => {
       const raw = m.raw_psc || (m as any)
-      const callTime = raw?.jam_pelaporan_panggilan
-      const statusTime = raw?.tgl_status_penanganan
-      if (callTime && statusTime) {
-        try {
-          const callTimeParts = callTime.split(':')
-          const statusTimeParts = statusTime.split(' ')[1]?.split(':')
-          if (callTimeParts.length >= 2 && statusTimeParts && statusTimeParts.length >= 2) {
-            const callSec = parseInt(callTimeParts[0], 10) * 3600 + parseInt(callTimeParts[1], 10) * 60 + (parseInt(callTimeParts[2], 10) || 0)
-            const statusSec = parseInt(statusTimeParts[0], 10) * 3600 + parseInt(statusTimeParts[1], 10) * 60 + (parseInt(statusTimeParts[2], 10) || 0)
-            const diffMin = (statusSec - callSec) / 60
-            if (diffMin > 0) {
-              responseTimes.push(diffMin)
-            }
-          }
-        } catch (e) {}
-      }
+      const responseMinutes = getPscResponseMinutes({
+        response_time_minutes: m.response_time_minutes,
+        waktu_respons: raw?.waktu_respons,
+        jam_pelaporan_panggilan: raw?.jam_pelaporan_panggilan,
+        tgl_status_penanganan: raw?.tgl_status_penanganan,
+      })
+      if (responseMinutes !== null) responseTimes.push(responseMinutes)
     })
     const avgResponse = responseTimes.length > 0
       ? parseFloat((responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(1))
@@ -654,8 +695,8 @@ export default function DashboardKejadianPage() {
     return {
       total_bencana,
       total_krisis,
-      total_meninggal: total_non_emergency > 0 ? total_non_emergency : total_meninggal,
-      total_luka: total_non_category > 0 ? total_non_category : total_luka,
+      total_meninggal,
+      total_luka,
       total_hilang,
       total_pengungsi,
       total_terdampak,
@@ -773,24 +814,13 @@ export default function DashboardKejadianPage() {
     if (!effectiveMarkers) return []
     const card = activeDetailCard || ''
     if (card === 'Kasus Emergency') {
-      return effectiveMarkers.filter((m) => {
-        const jenis = (m.jenis_layanan || m.raw_psc?.jenis_layanan || '').toLowerCase()
-        return (jenis.includes('emergency') && !jenis.includes('non')) || (m.is_krisis === 1 && !jenis.includes('non'))
-      })
+      return effectiveMarkers.filter((m) => getMarkerServiceCategory(m) === 'Emergency')
     }
     if (card === 'Non Emergency') {
-      return effectiveMarkers.filter((m) => {
-        const jenis = (m.jenis_layanan || m.raw_psc?.jenis_layanan || '').toLowerCase()
-        return jenis.includes('non') && jenis.includes('emergency')
-      })
+      return effectiveMarkers.filter((m) => getMarkerServiceCategory(m) === 'Non Emergency')
     }
     if (card === 'Non Category') {
-      return effectiveMarkers.filter((m) => {
-        const jenis = (m.jenis_layanan || m.raw_psc?.jenis_layanan || '').toLowerCase()
-        const isEm = (jenis.includes('emergency') && !jenis.includes('non')) || (m.is_krisis === 1 && !jenis.includes('non'))
-        const isNonEm = jenis.includes('non') && jenis.includes('emergency')
-        return !isEm && !isNonEm
-      })
+      return effectiveMarkers.filter((m) => getMarkerServiceCategory(m) === 'Non Category')
     }
     if (card === 'Armada Ambulans') {
       const withAmb = effectiveMarkers.filter((m) => {
@@ -802,7 +832,12 @@ export default function DashboardKejadianPage() {
     if (card === 'Waktu Respons PSC') {
       return effectiveMarkers.filter((m) => {
         const raw = m.raw_psc || (m as any)
-        return Boolean(raw?.jam_pelaporan_panggilan && raw?.tgl_status_penanganan) || m.response_time_minutes !== undefined
+        return getPscResponseMinutes({
+          response_time_minutes: m.response_time_minutes,
+          waktu_respons: raw?.waktu_respons,
+          jam_pelaporan_panggilan: raw?.jam_pelaporan_panggilan,
+          tgl_status_penanganan: raw?.tgl_status_penanganan,
+        }) !== null
       })
     }
     return effectiveMarkers
@@ -1037,7 +1072,9 @@ export default function DashboardKejadianPage() {
       nama_psc: m.nama_psc || m.kecamatan || 'PSC 119 Kemenkes',
       status_penanganan_code: m.status_penanganan_code || (m.is_krisis === 1 ? 'Diproses' : 'Selesai'),
       status_penanganan: m.status_penanganan_code || 'Status Selesai',
-      jenis_layanan: m.spesifikasi_layanan || m.jenis_bencana || 'Gawat Darurat 119',
+      id_jenis_layanan: m.id_jenis_layanan ?? (m.raw_psc as any)?.id_jenis_layanan,
+      jenis_layanan: (m.raw_psc as any)?.jenis_layanan || m.jenis_layanan || 'Non Category',
+      kategori_layanan: m.kategori_layanan || getMarkerServiceCategory(m),
       spesifikasi_layanan: m.spesifikasi_layanan || m.jenis_bencana || 'Gawat Darurat 119',
       tanggal_panggilan: m.tgl_kejadian || '15 Sep 2026',
       jam_pelaporan_panggilan: (m.raw_psc as any)?.jam_pelaporan_panggilan || '',
@@ -1134,7 +1171,8 @@ export default function DashboardKejadianPage() {
         if (token) headers['Authorization'] = `Bearer ${token}`
 
         const res = await fetch(`/api/regions-search?q=${encodeURIComponent(searchQuery)}`, { headers })
-        const json = await res.json()
+        const json = await res.json().catch(() => null)
+        if (!res.ok || !json) return
         if (json?.success && Array.isArray(json?.data)) {
           setSuggestions(json.data)
         }
@@ -1207,25 +1245,15 @@ export default function DashboardKejadianPage() {
           months[monthIdx].bencanaCount++
           months[monthIdx].bencanaKorban += m.total_korban || 0
 
-          const jenis = (m.jenis_layanan || m.raw_psc?.jenis_layanan || '').toLowerCase()
-          const isEm = (jenis.includes('emergency') && !jenis.includes('non')) || (m.is_krisis === 1 && !jenis.includes('non'))
-          const isNonEm = jenis.includes('non') && jenis.includes('emergency')
-          const isNonCat = (jenis.includes('non') && (jenis.includes('cat') || jenis.includes('kat'))) || (!isEm && !isNonEm && Boolean(jenis))
+          const category = getMarkerServiceCategory(m)
 
-          if (isEm) {
+          if (category === 'Emergency') {
             months[monthIdx].krisisCount++
             months[monthIdx].emergencyCount++
-          } else if (isNonEm) {
+          } else if (category === 'Non Emergency') {
             months[monthIdx].nonEmergencyCount++
-          } else if (isNonCat) {
-            months[monthIdx].nonCategoryCount++
           } else {
-            if (m.is_krisis === 1) {
-              months[monthIdx].krisisCount++
-              months[monthIdx].emergencyCount++
-            } else {
-              months[monthIdx].nonEmergencyCount++
-            }
+            months[monthIdx].nonCategoryCount++
           }
         }
       })
@@ -1308,11 +1336,7 @@ export default function DashboardKejadianPage() {
 
     const basePercent = ((currVal - prevVal) / prevVal) * 100
 
-    // Memberikan variasi kecil unik untuk setiap card berdasarkan label agar tidak seragam,
-    // tapi tetap mempertahankan arah tren yang logis
-    const hash = cardLabel.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-    const variation = ((hash % 15) - 7) / 10 // antara -0.7% sampai +0.7%
-    const finalPercent = basePercent + (basePercent !== 0 ? variation : 0)
+    const finalPercent = basePercent
 
     // Arah tren: karena semua indikator di card adalah hal negatif (jumlah kejadian, kematian, luka, hilang, dll),
     // kenaikan (finalPercent > 0) berarti buruk/red, sedangkan penurunan (finalPercent < 0) berarti baik/green.
@@ -1407,41 +1431,18 @@ export default function DashboardKejadianPage() {
       const counts: Record<string, number> = {}
       effectiveMarkers.forEach((m) => {
         const raw = m.raw_psc || (m as any)
-        let icd = raw?.icd_10
-        if (!icd || icd === 'N/A' || icd === '-') {
-          const spec = (raw?.spesifikasi_layanan || raw?.kategori_layanan || raw?.keluhan || m.jenis_bencana || '').toLowerCase()
-          if (spec.includes('kll') || spec.includes('kecelakaan') || spec.includes('laka')) {
-            icd = 'V01-V99 (Kecelakaan Transportasi / KLL)'
-          } else if (spec.includes('kejang') || spec.includes('epilepsi') || spec.includes('konvulsi')) {
-            icd = 'R56 (Kejang & Konvulsi Akut)'
-          } else if (spec.includes('jantung') || spec.includes('dada') || spec.includes('cardiac')) {
-            icd = 'I20-I25 (Kedaruratan Kardiovaskular)'
-          } else if (spec.includes('sesak') || spec.includes('napas') || spec.includes('asma')) {
-            icd = 'J45-J98 (Gangguan Saluran Pernapasan)'
-          } else if (spec.includes('luka') || spec.includes('robek') || spec.includes('fraktur') || spec.includes('patah')) {
-            icd = 'S00-T14 (Cedera & Trauma Fisik)'
-          } else if (spec.includes('kia') || spec.includes('ibu') || spec.includes('bersalin') || spec.includes('hamil')) {
-            icd = 'O00-O99 (Kedaruratan Maternal & Neonatal)'
-          } else if (spec.includes('rawat') || spec.includes('perawat')) {
-            icd = 'Z76 (Pelayanan Medik & Keperawatan)'
-          } else if (spec.includes('non trauma')) {
-            icd = 'R00-R99 (Gejala & Tanda Medis Akut)'
-          } else if (spec.includes('salah sambung') || spec.includes('palsu')) {
-            icd = 'Z00 (Konsultasi Non-Klinis)'
-          } else if (/banjir|gempa|longsor|tsunami|erupsi|puting beliung|kebakaran/i.test(raw?.spesifikasi_layanan || m.jenis_bencana || '')) {
-            icd = 'T75.8 (Dampak Medis Kedaruratan Bencana Alam)'
-          } else if (raw?.spesifikasi_layanan && raw?.spesifikasi_layanan !== 'N/A') {
-            icd = raw.spesifikasi_layanan
-          } else {
-            icd = 'R69 (Kondisi Medis Tidak Terspesifikasi)'
-          }
-        }
-        counts[icd] = (counts[icd] || 0) + 1
+        const icd = resolvePscIcd10({
+          icd_10: raw?.icd_10,
+          spesifikasi_layanan: raw?.spesifikasi_layanan || m.spesifikasi_layanan || m.jenis_bencana,
+          kategori_layanan: raw?.kategori_layanan || m.kategori_layanan,
+          keluhan: raw?.keluhan,
+        })
+        if (icd) counts[icd] = (counts[icd] || 0) + 1
       })
       const items = Object.entries(counts).map(([nama, jumlah]) => ({ nama, jumlah }))
       if (items.length > 0) return items.sort((a, b) => b.jumlah - a.jumlah)
     }
-    return (data as any)?.sebaran_icd || []
+    return ((data as any)?.sebaran_icd || []).filter((item: any) => isValidPscIcd10Value(item?.nama))
   }, [data, selectedRegions, effectiveMarkers])
 
   const categoryChartData = useMemo(() => {
@@ -1477,31 +1478,18 @@ export default function DashboardKejadianPage() {
   const responseTimeAnalytics = useMemo(() => {
     const list: { minutes: number; category: string; spec: string }[] = []
     effectiveMarkers.forEach((m) => {
-      const raw = m.raw_psc || (m as any)
-      let rt = m.response_time_minutes ?? raw?.response_time_minutes
-      if (rt === undefined || rt === null) {
-        const callTime = raw?.jam_pelaporan_panggilan
-        const statusTime = raw?.tgl_status_penanganan
-        if (callTime && statusTime) {
-          try {
-            const callParts = callTime.split(':')
-            const statusParts = statusTime.split(' ')[1]?.split(':')
-            if (callParts.length >= 2 && statusParts && statusParts.length >= 2) {
-              const callSec = parseInt(callParts[0], 10) * 3600 + parseInt(callParts[1], 10) * 60 + (parseInt(callParts[2], 10) || 0)
-              const statusSec = parseInt(statusParts[0], 10) * 3600 + parseInt(statusParts[1], 10) * 60 + (parseInt(statusParts[2], 10) || 0)
-              const diffMin = (statusSec - callSec) / 60
-              if (diffMin > 0) {
-                rt = parseFloat(diffMin.toFixed(1))
-              }
-            }
-          } catch (e) {}
-        }
-      }
+        const raw = m.raw_psc || (m as any)
+        const rt = getPscResponseMinutes({
+          response_time_minutes: m.response_time_minutes,
+          waktu_respons: raw?.waktu_respons,
+          jam_pelaporan_panggilan: raw?.jam_pelaporan_panggilan,
+          tgl_status_penanganan: raw?.tgl_status_penanganan,
+        })
       if (rt !== undefined && rt !== null && rt > 0) {
-        const isEm = (m.jenis_layanan || raw?.jenis_layanan || '').toLowerCase().includes('emergency') && !(m.jenis_layanan || raw?.jenis_layanan || '').toLowerCase().includes('non')
+        const category = getMarkerServiceCategory(m)
         list.push({
           minutes: rt,
-          category: isEm ? 'Emergency' : 'Non Emergency',
+          category,
           spec: m.jenis_bencana || raw?.spesifikasi_layanan || 'Layanan Medis',
         })
       }
@@ -1517,10 +1505,10 @@ export default function DashboardKejadianPage() {
     const overSpm = list.filter((x) => x.minutes > 15).length // > 15 mnt
 
     const emList = list.filter((x) => x.category === 'Emergency')
-    const emAvg = emList.length > 0 ? (emList.reduce((acc, curr) => acc + curr.minutes, 0) / emList.length).toFixed(1) : (avg * 0.8).toFixed(1)
+    const emAvg = emList.length > 0 ? (emList.reduce((acc, curr) => acc + curr.minutes, 0) / emList.length).toFixed(1) : '0.0'
 
     const nonEmList = list.filter((x) => x.category === 'Non Emergency')
-    const nonEmAvg = nonEmList.length > 0 ? (nonEmList.reduce((acc, curr) => acc + curr.minutes, 0) / nonEmList.length).toFixed(1) : (avg * 1.25).toFixed(1)
+    const nonEmAvg = nonEmList.length > 0 ? (nonEmList.reduce((acc, curr) => acc + curr.minutes, 0) / nonEmList.length).toFixed(1) : '0.0'
 
     return {
       avgMinutes: avg,
@@ -1544,27 +1532,48 @@ export default function DashboardKejadianPage() {
       id: `PSN-${p.id_user || idx + 1}`,
       nama: p.detail_lengkap || p.nama || `Petugas PSC #${idx + 1}`,
       profesi: p.jabatan || 'Tenaga Medis Reaksi Cepat',
-      sertifikasi: p.relawan_jkel ? `Kualifikasi: ${p.relawan_jkel}` : 'BTCLS / SPGDT Kemenkes',
-      unit: p.kode_psc || 'PSC 119 Operasional',
-      shift: p.join_date ? `Bergabung: ${p.join_date.split(' ')[0]}` : 'Siaga 24 Jam',
-      status: p.status === 1 ? 'Siaga Aktif' : 'Non-Aktif',
-      telp: p.relawan_no_telp || p.email || '0811-119-PSC',
+      jenisKelamin: p.relawan_jkel || p.jenis_kelamin || '-',
+      usia: calculateAge(p.relawan_tanggal_lahir || p.tanggal_lahir, p.usia),
+      wilayah: [p.kabupaten, p.provinsi].filter(Boolean).join(', ') ||
+        [p.relawan_id_kab, p.relawan_id_prov].filter((value) => value !== undefined && value !== null && value !== '')
+          .map((value) => `ID ${value}`).join(' / ') || '-',
+      kategori: displayLookupValue(p.kategori_tenaga || p.kategori, p.relawan_kategori_tenaga),
+      golongan: displayLookupValue(p.golongan || p.golongan_tenaga || p.jenis_tenaga, p.relawan_jenis_tenaga) !== '-'
+        ? displayLookupValue(p.golongan || p.golongan_tenaga || p.jenis_tenaga, p.relawan_jenis_tenaga)
+        : (p.golongan_darah || p.relawan_golongan_darah || '-'),
+      spesifikasiKontak: [
+        p.relawan_no_telp || p.no_telp || p.phone ? `Telp: ${p.relawan_no_telp || p.no_telp || p.phone}` : '',
+        p.email ? `Email: ${p.email}` : '',
+      ].filter(Boolean).join(' | ') || '-',
+      foto: p.foto || p.photo || p.photo_personil || p.photo_url || null,
+      // Tetap dipertahankan untuk chart popup.
+      sertifikasi: p.relawan_kompetensi || 'Tidak ada data kompetensi',
+      unit: p.kode_psc || p.nama_psc || 'PSC 119 Operasional',
+      shift: p.join_date ? `Bergabung: ${String(p.join_date).split(' ')[0]}` : 'Siaga 24 Jam',
+      status: p.status === 1 || p.status === '1' ? 'Siaga Aktif' : 'Non-Aktif',
+      telp: p.relawan_no_telp || p.email || '-',
     }))
   }, [data])
 
   // Data armada ambulans resmi dari endpoint API Kemenkes (/data-ambulan-psc)
   const realAmbulanceList = useMemo(() => {
-    const rawAmb: any[] = (data as any)?.ambulances || []
+    const rawAmb: any[] = (data as any)?.ambulance_records || (data as any)?.ambulances || []
     return rawAmb.map((a, idx) => ({
       no: idx + 1,
       kode: a.kode_ambulan || `AMB-${idx + 1}`,
       nopol: a.no_kendaraan || 'Plat Dinas Kemenkes',
-      tipe: a.assestment_gawat_darurat ? 'Ambulans Advance Gadar (ALS)' : 'Ambulans Transport Medis (BLS)',
+      tipe: displayLookupValue(a.jenis || a.jenis_ambulan || a.jenis_ambulans, a.id_jenis, AMBULANCE_TYPE_LABELS),
+      kategori: displayLookupValue(a.j_ambulan || a.kategori_ambulan || a.kategori, a.id_j_ambulan || a.id_kategori_ambulan),
+      sumberPengadaan: displayLookupValue(a.sumber_pengadaan, a.sumber_pengadaan_id, AMBULANCE_SOURCE_LABELS),
+      kepemilikan: displayLookupValue(a.kepemilikan, a.kepemilikan_id, AMBULANCE_OWNERSHIP_LABELS),
+      tahun: a.tahun || '-',
+      kondisiKendaraan: displayLookupValue(a.kondisi_kendaraan, a.kondisi_kendaraan_id, AMBULANCE_CONDITION_LABELS),
+      penanggungJawab: a.penanggung_jawab || a.nama_penanggung_jawab || a.nama_petugas || (a.id_petugas ? `ID Petugas ${a.id_petugas}` : '-'),
+      // Tetap dipertahankan untuk chart popup.
       pangkalan: a.nama_psc || a.kode_psc || 'PSC 119 Posko Induk',
-      driver: 'Kru Sopir & Paramedis PSC',
-      medis: 'Tim Evakuasi Lapangan 119',
+      driver: a.nama_petugas || '-',
+      medis: a.nama_petugas || '-',
       status: a.status_aktif === '1' || a.status_aktif === 1 ? 'Siaga Operasional' : 'Sedang Penugasan',
-      fasilitas: a.assestment_gawat_darurat ? 'Defibrillator, Ventilator Transport, Oksigen Medis' : 'Oksigen Medis, Spine Board, Emergency Kit',
       lokasi: a.kode_psc || 'Pangkalan Siaga',
     }))
   }, [data])
@@ -1580,21 +1589,23 @@ export default function DashboardKejadianPage() {
       let nonEmergencyCount = 0
       let nonCategoryCount = 0
 
-      markers.forEach((m) => {
-        const j = (m.jenis_layanan || m.raw_psc?.jenis_layanan || (m as any).kategori_layanan || '').toLowerCase()
-        if ((j.includes('emergency') && !j.includes('non')) || m.is_krisis === 1) {
-          emergencyCount++
-        } else if (j.includes('non') && j.includes('emergency')) {
-          nonEmergencyCount++
-        } else {
-          nonCategoryCount++
-        }
-      })
-
-      if (markers.length === 0) {
-        emergencyCount = effectiveSummary?.total_emergency || effectiveSummary?.total_krisis || 0
-        nonEmergencyCount = effectiveSummary?.total_non_emergency || effectiveSummary?.total_meninggal || 0
-        nonCategoryCount = effectiveSummary?.total_non_category || effectiveSummary?.total_luka || 0
+      const hasClientFilter = selectedRegions.length > 0 || !!filterStartDate || !!filterEndDate
+      if (!hasClientFilter && data?.summary) {
+        // Gunakan angka sumber yang sama dengan card saat cakupan dashboard penuh.
+        emergencyCount = data.summary.total_emergency ?? data.summary.total_krisis ?? 0
+        nonEmergencyCount = data.summary.total_non_emergency ?? 0
+        nonCategoryCount = data.summary.total_non_category ?? 0
+      } else {
+        markers.forEach((m) => {
+          const category = getMarkerServiceCategory(m)
+          if (category === 'Emergency') {
+            emergencyCount++
+          } else if (category === 'Non Emergency') {
+            nonEmergencyCount++
+          } else {
+            nonCategoryCount++
+          }
+        })
       }
 
       const categoryPie = [
@@ -1645,14 +1656,6 @@ export default function DashboardKejadianPage() {
         value,
         color: COLORS[i % COLORS.length],
       }))
-      if (specData.length === 0 && Array.isArray((data as any)?.sebaran_spesifikasi)) {
-        specData = ((data as any).sebaran_spesifikasi || []).slice(0, 5).map((s: any, i: number) => ({
-          name: s.nama,
-          value: s.jumlah,
-          color: COLORS[i % COLORS.length],
-        }))
-      }
-
       const rsMap: Record<string, number> = {}
       markers.forEach((m) => {
         const rs = (m as any).rumahsakit_rujukan || m.raw_psc?.rumahsakit_rujukan
@@ -1664,15 +1667,6 @@ export default function DashboardKejadianPage() {
         value,
         color: COLORS[i % COLORS.length],
       }))
-      if (rsData.length === 0 && Array.isArray((data as any)?.hospitals)) {
-        rsData = ((data as any).hospitals || []).slice(0, 5).map((h: any, i: number) => ({
-          name: (h.nama || '').length > 20 ? `${(h.nama || '').slice(0, 18)}...` : (h.nama || 'RS Rujukan'),
-          fullName: h.nama || 'RS Rujukan',
-          value: 1,
-          color: COLORS[i % COLORS.length],
-        }))
-      }
-
       return {
         type: 'kasus_emergency',
         chart1Title: 'Spesifikasi Kasus Emergency (Triase Merah/P1)',
@@ -1696,15 +1690,6 @@ export default function DashboardKejadianPage() {
         value,
         color: COLORS[i % COLORS.length],
       }))
-      if (specData.length === 0 && Array.isArray((data as any)?.sebaran_spesifikasi)) {
-        specData = ((data as any).sebaran_spesifikasi || []).slice(0, 5).map((s: any, i: number) => ({
-          name: s.nama,
-          fullName: s.nama,
-          value: s.jumlah,
-          color: COLORS[i % COLORS.length],
-        }))
-      }
-
       const statusMap: Record<string, number> = {}
       markers.forEach((m) => {
         const st = m.status_penanganan_code || (m.raw_psc as any)?.status_penanganan_code || 'Selesai'
@@ -1717,7 +1702,7 @@ export default function DashboardKejadianPage() {
       }))
       if (serviceType.length === 0) {
         serviceType = [
-          { name: 'Status Selesai', value: effectiveSummary?.total_non_emergency || 1, color: '#0d9488' }
+          { name: 'Tidak ada data', value: 0, color: '#94a3b8' }
         ]
       }
 
@@ -1744,15 +1729,6 @@ export default function DashboardKejadianPage() {
         value,
         color: COLORS[i % COLORS.length],
       }))
-      if (extensionData.length === 0 && Array.isArray((data as any)?.sebaran_extension)) {
-        extensionData = ((data as any).sebaran_extension || []).slice(0, 5).map((e: any, i: number) => ({
-          name: e.nama,
-          fullName: e.nama,
-          value: e.jumlah,
-          color: COLORS[i % COLORS.length],
-        }))
-      }
-
       const pscMap: Record<string, number> = {}
       markers.forEach((m) => {
         const p = m.nama_psc || 'PSC 119'
@@ -1765,7 +1741,7 @@ export default function DashboardKejadianPage() {
         color: COLORS[(i + 2) % COLORS.length],
       }))
       if (typeData.length === 0) {
-        typeData = [{ name: 'Non Category / Info', fullName: 'Non Category / Info', value: effectiveSummary?.total_non_category || 1, color: '#3b82f6' }]
+        typeData = [{ name: 'Tidak ada data', fullName: 'Tidak ada data', value: 0, color: '#94a3b8' }]
       }
 
       return {
@@ -1805,10 +1781,10 @@ export default function DashboardKejadianPage() {
         type: 'armada_ambulans',
         chart1Title: 'Status Kesiapan & Operasional Armada Ambulans',
         chart1Type: 'donut' as const,
-        chart1Data: statusData.length > 0 ? statusData : [{ name: 'Siaga Operasional', value: (data as any)?.totalAmbulance || 1, color: '#10b981' }],
+        chart1Data: statusData.length > 0 ? statusData : [{ name: 'Tidak ada data', value: 0, color: '#94a3b8' }],
         chart2Title: 'Distribusi Tipe Spesifikasi Unit Kendaraan',
         chart2Type: 'bar' as const,
-        chart2Data: typeData.length > 0 ? typeData : [{ name: 'Ambulans Kemenkes', fullName: 'Ambulans Kemenkes', value: (data as any)?.totalAmbulance || 1, color: '#0284c7' }],
+        chart2Data: typeData.length > 0 ? typeData : [{ name: 'Tidak ada data', fullName: 'Tidak ada data', value: 0, color: '#94a3b8' }],
       }
     }
 
@@ -1838,10 +1814,10 @@ export default function DashboardKejadianPage() {
         type: 'personil_psc',
         chart1Title: 'Komposisi Jabatan & Profesi Personil PSC 119',
         chart1Type: 'donut' as const,
-        chart1Data: roleData.length > 0 ? roleData : [{ name: 'Tenaga Reaksi Cepat', value: (data as any)?.totalPersonnel || 1, color: '#0d9488' }],
+        chart1Data: roleData.length > 0 ? roleData : [{ name: 'Tidak ada data', value: 0, color: '#94a3b8' }],
         chart2Title: 'Distribusi Penempatan Posko Unit PSC',
         chart2Type: 'bar' as const,
-        chart2Data: certData.length > 0 ? certData : [{ name: 'Unit PSC Operasional', fullName: 'Unit PSC Operasional', value: (data as any)?.totalPersonnel || 1, color: '#0284c7' }],
+        chart2Data: certData.length > 0 ? certData : [{ name: 'Tidak ada data', fullName: 'Tidak ada data', value: 0, color: '#94a3b8' }],
       }
     }
 
@@ -1870,7 +1846,7 @@ export default function DashboardKejadianPage() {
     }
 
     return null
-  }, [activeDetailCard, filteredDetailMarkers, responseTimeAnalytics, realPersonnelList, realAmbulanceList, data, effectiveSummary])
+  }, [activeDetailCard, filteredDetailMarkers, responseTimeAnalytics, realPersonnelList, realAmbulanceList, data, effectiveSummary, selectedRegions, filterStartDate, filterEndDate])
 
   const chart1Total = useMemo(() => {
     if (!modalChartData?.chart1Data) return 0
@@ -1904,7 +1880,13 @@ export default function DashboardKejadianPage() {
             no: idx + 1,
             kode: `AMB-${m.ticket_id ? m.ticket_id.slice(-4) : idx + 1}`,
             nopol,
-            tipe: 'Ambulans Advance Gadar (ALS)',
+            tipe: displayLookupValue(raw?.jenis || raw?.jenis_ambulan || raw?.jenis_ambulans, raw?.id_jenis, AMBULANCE_TYPE_LABELS),
+            kategori: displayLookupValue(raw?.j_ambulan || raw?.kategori_ambulan || raw?.kategori, raw?.id_j_ambulan || raw?.id_kategori_ambulan),
+            sumberPengadaan: displayLookupValue(raw?.sumber_pengadaan, raw?.sumber_pengadaan_id, AMBULANCE_SOURCE_LABELS),
+            kepemilikan: displayLookupValue(raw?.kepemilikan, raw?.kepemilikan_id, AMBULANCE_OWNERSHIP_LABELS),
+            tahun: raw?.tahun || '-',
+            kondisiKendaraan: displayLookupValue(raw?.kondisi_kendaraan, raw?.kondisi_kendaraan_id, AMBULANCE_CONDITION_LABELS),
+            penanggungJawab: raw?.penanggung_jawab || raw?.nama_penanggung_jawab || raw?.nama_petugas || raw?.nama_petugas_ambulan || '-',
             pangkalan: m.nama_psc || 'PSC 119 Posko Induk',
             driver: 'Petugas Ambulans 119',
             medis,
@@ -1922,10 +1904,9 @@ export default function DashboardKejadianPage() {
         const tglStr = (m as any).tanggal_panggilan || m.tgl_kejadian || ''
         const jamStr = raw?.jam_pelaporan_panggilan || (m.tgl_kejadian && m.tgl_kejadian.includes(':') ? m.tgl_kejadian.split(' ')[1] : '')
         const pelapor = (m as any).nama_pelapor || raw?.nama_pelapor || raw?.korban || 'Masyarakat'
-        const rawJenis = (m.jenis_layanan || raw?.jenis_layanan || '').toLowerCase()
-        const isEm = (rawJenis.includes('emergency') && !rawJenis.includes('non')) || m.is_krisis === 1
-        const isNonEm = rawJenis.includes('non') && rawJenis.includes('emergency')
-        const kategori = isEm ? 'Emergency' : isNonEm ? 'Non Emergency' : 'Non Category'
+        const kategori = getMarkerServiceCategory(m)
+        const jenisLayanan = raw?.jenis_layanan || m.jenis_layanan || kategori
+        const idJenisLayanan = raw?.id_jenis_layanan ?? m.id_jenis_layanan
         const spesifikasi = m.spesifikasi_layanan || m.jenis_bencana || raw?.spesifikasi_layanan || ''
         const sumber = m.sumber_panggilan || raw?.sumber_panggilan || '119'
         const ext = m.extension || raw?.extension || 'Ext 119'
@@ -1934,19 +1915,12 @@ export default function DashboardKejadianPage() {
         const rs = (m as any).rumahsakit_rujukan || raw?.rumahsakit_rujukan || '-'
         const armada = m.nomor_kendaraan || raw?.nomor_kendaraan || '-'
         const petugas = m.nama_petugas_ambulan || raw?.nama_petugas_ambulan || '-'
-        let respTime = m.response_time_minutes ?? raw?.response_time_minutes ?? null
-        if (respTime === null && raw?.jam_pelaporan_panggilan && raw?.tgl_status_penanganan) {
-          try {
-            const callParts = raw.jam_pelaporan_panggilan.split(':')
-            const statusParts = raw.tgl_status_penanganan.split(' ')[1]?.split(':')
-            if (callParts.length >= 2 && statusParts && statusParts.length >= 2) {
-              const callSec = parseInt(callParts[0], 10) * 3600 + parseInt(callParts[1], 10) * 60 + (parseInt(callParts[2], 10) || 0)
-              const statusSec = parseInt(statusParts[0], 10) * 3600 + parseInt(statusParts[1], 10) * 60 + (parseInt(statusParts[2], 10) || 0)
-              const diffMin = (statusSec - callSec) / 60
-              if (diffMin > 0) respTime = parseFloat(diffMin.toFixed(1))
-            }
-          } catch (e) {}
-        }
+        const respTime = getPscResponseMinutes({
+          response_time_minutes: m.response_time_minutes ?? raw?.response_time_minutes,
+          waktu_respons: raw?.waktu_respons,
+          jam_pelaporan_panggilan: raw?.jam_pelaporan_panggilan,
+          tgl_status_penanganan: raw?.tgl_status_penanganan,
+        })
         const isSpmPass = typeof respTime === 'number' && respTime > 0 && respTime <= 15
 
         return {
@@ -1956,6 +1930,8 @@ export default function DashboardKejadianPage() {
           jam: jamStr,
           pelapor,
           kategori,
+          jenisLayanan,
+          idJenisLayanan,
           spesifikasi,
           sumber,
           ext,
@@ -1992,6 +1968,17 @@ export default function DashboardKejadianPage() {
   }, [searchedMatrixRows, modalPage])
 
   const modalTotalPages = Math.ceil(searchedMatrixRows.length / 10) || 1
+
+  const detailCardCount = useMemo(() => {
+    if (activeDetailCard === 'Total Panggilan 119') return effectiveSummary?.total_bencana ?? filteredDetailMarkers.length
+    if (activeDetailCard === 'Kasus Emergency') return effectiveSummary?.total_emergency ?? filteredDetailMarkers.length
+    if (activeDetailCard === 'Non Emergency') return effectiveSummary?.total_non_emergency ?? filteredDetailMarkers.length
+    if (activeDetailCard === 'Non Category') return effectiveSummary?.total_non_category ?? filteredDetailMarkers.length
+    if (activeDetailCard === 'Personil PSC') return effectiveSummary?.total_personil ?? (data as any)?.totalPersonnel ?? realPersonnelList.length
+    if (activeDetailCard === 'Armada Ambulans') return effectiveSummary?.total_ambulan ?? (data as any)?.totalAmbulance ?? realAmbulanceList.length
+    if (activeDetailCard === 'Waktu Respons PSC') return responseTimeAnalytics.totalLogged
+    return filteredDetailMarkers.length
+  }, [activeDetailCard, effectiveSummary, filteredDetailMarkers.length, data, realPersonnelList.length, realAmbulanceList.length, responseTimeAnalytics.totalLogged])
 
   const isProvLocked = user?.wilayah_scope?.mode === 'provinsi'
   const isKabLocked = user?.wilayah_scope?.mode === 'kabupaten'
@@ -3099,9 +3086,9 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           ))
           : [
             { label: 'Total Panggilan 119', value: effectiveSummary?.total_bencana ?? 0, color: 'text-teal-700', icon: Phone, bg: 'bg-teal-50/80' },
-            { label: 'Kasus Emergency', value: (effectiveSummary?.total_emergency !== undefined && effectiveSummary.total_emergency > 0 ? effectiveSummary.total_emergency : effectiveSummary?.total_krisis) ?? 0, color: 'text-red-600', icon: AlertTriangle, bg: 'bg-red-50/80' },
-            { label: 'Non Emergency', value: (effectiveSummary?.total_non_emergency !== undefined && effectiveSummary.total_non_emergency > 0 ? effectiveSummary.total_non_emergency : effectiveSummary?.total_meninggal) ?? 0, color: 'text-amber-600', icon: ShieldAlert, bg: 'bg-amber-50/80' },
-            { label: 'Non Category', value: (effectiveSummary?.total_non_category !== undefined && effectiveSummary.total_non_category > 0 ? effectiveSummary.total_non_category : effectiveSummary?.total_luka) ?? 0, color: 'text-blue-600', icon: HeartPulse, bg: 'bg-blue-50/80' },
+            { label: 'Kasus Emergency', value: effectiveSummary?.total_emergency ?? effectiveSummary?.total_krisis ?? 0, color: 'text-red-600', icon: AlertTriangle, bg: 'bg-red-50/80' },
+            { label: 'Non Emergency', value: effectiveSummary?.total_non_emergency ?? 0, color: 'text-amber-600', icon: ShieldAlert, bg: 'bg-amber-50/80' },
+            { label: 'Non Category', value: effectiveSummary?.total_non_category ?? 0, color: 'text-blue-600', icon: HeartPulse, bg: 'bg-blue-50/80' },
             { label: 'Armada Ambulans', value: effectiveSummary?.total_ambulan ?? (data as any)?.totalAmbulance ?? realAmbulanceList.length ?? 0, color: 'text-indigo-650', icon: Ambulance, bg: 'bg-indigo-50/80' },
             { label: 'Personil PSC', value: effectiveSummary?.total_personil ?? (data as any)?.totalPersonnel ?? realPersonnelList.length ?? 0, color: 'text-emerald-700', icon: Users, bg: 'bg-emerald-50/80' },
             {
@@ -4421,11 +4408,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                         : 'bg-slate-100 text-slate-700'
                     }`}
                   >
-                    {activeDetailCard === 'Personil PSC'
-                      ? (effectiveSummary?.total_personil || (data as any)?.totalPersonnel || realPersonnelList.length || 0)
-                      : activeDetailCard === 'Armada Ambulans'
-                      ? (effectiveSummary?.total_ambulan || (data as any)?.totalAmbulance || realAmbulanceList.length || 0)
-                      : filteredDetailMarkers.length}
+                    {detailCardCount}
                   </span>
                 </button>
 
@@ -4492,23 +4475,27 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
 
                           {activeDetailCard === 'Personil PSC' ? (
                             <>
-                              <th className="py-3 px-3.5">ID / NIP</th>
-                              <th className="py-3 px-3.5">Nama Personil & Gelar</th>
-                              <th className="py-3 px-3.5">Profesi / Jabatan</th>
-                              <th className="py-3 px-3.5">Sertifikasi Kompetensi</th>
-                              <th className="py-3 px-3.5">Posko Unit PSC</th>
-                              <th className="py-3 px-3.5">Shift & Status</th>
-                              <th className="py-3 px-3.5">Kontak Emergency</th>
+                              <th className="py-3 px-3.5">Foto Personil</th>
+                              <th className="py-3 px-3.5">Jabatan</th>
+                              <th className="py-3 px-3.5">Nama Lengkap</th>
+                              <th className="py-3 px-3.5">Jenis Kelamin</th>
+                              <th className="py-3 px-3.5">Usia (Th)</th>
+                              <th className="py-3 px-3.5">Wilayah</th>
+                              <th className="py-3 px-3.5">Kategori</th>
+                              <th className="py-3 px-3.5">Golongan</th>
+                              <th className="py-3 px-3.5">Spesifikasi Kontak</th>
                             </>
                           ) : activeDetailCard === 'Armada Ambulans' ? (
                             <>
-                              <th className="py-3 px-3.5">Kode & Nopol</th>
-                              <th className="py-3 px-3.5">Tipe Armada</th>
-                              <th className="py-3 px-3.5">Pangkalan Posko</th>
-                              <th className="py-3 px-3.5">Driver & Kru Medis</th>
-                              <th className="py-3 px-3.5">Status Operasional</th>
-                              <th className="py-3 px-3.5">Fasilitas Medis Kunci</th>
-                              <th className="py-3 px-3.5">Lokasi Posisi</th>
+                              <th className="py-3 px-3.5">Kode Ambulan</th>
+                              <th className="py-3 px-3.5">No. Kendaraan</th>
+                              <th className="py-3 px-3.5">Jenis Ambulan</th>
+                              <th className="py-3 px-3.5">Kategori Ambulan</th>
+                              <th className="py-3 px-3.5">Sumber Pengadaan</th>
+                              <th className="py-3 px-3.5">Kepemilikan</th>
+                              <th className="py-3 px-3.5">Tahun</th>
+                              <th className="py-3 px-3.5">Kondisi Kendaraan</th>
+                              <th className="py-3 px-3.5">Penanggung Jawab</th>
                             </>
                           ) : activeDetailCard === 'Waktu Respons PSC' ? (
                             <>
@@ -4525,7 +4512,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                               <th className="py-3 px-3.5">Waktu Laporan</th>
                               <th className="py-3 px-3.5">Response Time</th>
                               <th className="py-3 px-3.5">Pelapor / Pasien</th>
-                              <th className="py-3 px-3.5">Kategori Layanan</th>
+                              <th className="py-3 px-3.5">Jenis Layanan</th>
                               <th className="py-3 px-3.5">Spesifikasi Kasus Medis</th>
                               <th className="py-3 px-3.5">Lokasi Wilayah</th>
                               <th className="py-3 px-3.5">RS Rujukan / Armada</th>
@@ -4537,7 +4524,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                       <tbody className="divide-y divide-slate-100">
                         {paginatedRows.length === 0 ? (
                           <tr>
-                            <td colSpan={activeDetailCard === 'Personil PSC' ? 9 : activeDetailCard === 'Armada Ambulans' || activeDetailCard === 'Waktu Respons PSC' ? 8 : 10} className="py-12 text-center text-xs text-slate-400 italic">
+                            <td colSpan={activeDetailCard === 'Personil PSC' || activeDetailCard === 'Armada Ambulans' ? 10 : activeDetailCard === 'Waktu Respons PSC' ? 8 : 10} className="py-12 text-center text-xs text-slate-400 italic">
                               Tidak ada data yang sesuai dengan filter pencarian &quot;{modalSearchQuery}&quot;.
                             </td>
                           </tr>
@@ -4545,59 +4532,38 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                           paginatedRows.map((p: any, idx: number) => (
                             <tr key={p.id || idx} className="hover:bg-slate-50/80 transition-colors text-[11px] sm:text-xs">
                               <td className="py-3 px-3.5 text-center font-bold text-slate-400">{(modalPage - 1) * 10 + idx + 1}</td>
-                              <td className="py-3 px-3.5 font-mono font-bold text-slate-600">{p.id}</td>
-                              <td className="py-3 px-3.5 font-extrabold text-slate-900">{p.nama}</td>
-                              <td className="py-3 px-3.5 font-semibold text-teal-800">{p.profesi}</td>
                               <td className="py-3 px-3.5">
-                                <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                                  {p.sertifikasi}
-                                </span>
-                              </td>
-                              <td className="py-3 px-3.5 font-medium text-slate-600">{p.unit}</td>
-                              <td className="py-3 px-3.5">
-                                <div className="flex flex-col gap-0.5">
-                                  <span className="text-[10px] font-bold text-slate-700">{p.shift}</span>
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black w-fit uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    <CheckCircle2 className="h-2.5 w-2.5" /> {p.status}
+                                {p.foto ? (
+                                  <img src={p.foto} alt={p.nama} className="h-9 w-9 rounded-full object-cover border border-slate-200" />
+                                ) : (
+                                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-400 border border-slate-200">
+                                    <Users className="h-4 w-4" />
                                   </span>
-                                </div>
+                                )}
                               </td>
-                              <td className="py-3 px-3.5 font-mono text-slate-600 font-medium">{p.telp}</td>
+                              <td className="py-3 px-3.5 font-semibold text-teal-800">{p.profesi}</td>
+                              <td className="py-3 px-3.5 font-extrabold text-slate-900">{p.nama}</td>
+                              <td className="py-3 px-3.5">{p.jenisKelamin}</td>
+                              <td className="py-3 px-3.5 font-semibold text-slate-700">{p.usia}</td>
+                              <td className="py-3 px-3.5 font-medium text-slate-600">{p.wilayah}</td>
+                              <td className="py-3 px-3.5">{p.kategori}</td>
+                              <td className="py-3 px-3.5">{p.golongan}</td>
+                              <td className="py-3 px-3.5 text-slate-600">{p.spesifikasiKontak}</td>
                             </tr>
                           ))
                         ) : activeDetailCard === 'Armada Ambulans' ? (
                           paginatedRows.map((a: any, idx: number) => (
                             <tr key={a.kode || idx} className="hover:bg-slate-50/80 transition-colors text-[11px] sm:text-xs">
                               <td className="py-3 px-3.5 text-center font-bold text-slate-400">{(modalPage - 1) * 10 + idx + 1}</td>
-                              <td className="py-3 px-3.5">
-                                <div className="flex flex-col">
-                                  <span className="font-extrabold text-slate-900">{a.nopol}</span>
-                                  <span className="text-[10px] font-mono text-slate-400">{a.kode}</span>
-                                </div>
-                              </td>
+                              <td className="py-3 px-3.5 font-mono font-bold text-slate-700">{a.kode}</td>
+                              <td className="py-3 px-3.5 font-extrabold text-slate-900">{a.nopol}</td>
                               <td className="py-3 px-3.5 font-semibold text-slate-700">{a.tipe}</td>
-                              <td className="py-3 px-3.5 font-medium text-slate-600">{a.pangkalan}</td>
-                              <td className="py-3 px-3.5">
-                                <div className="flex flex-col text-[10px]">
-                                  <span className="font-bold text-slate-800">Driver: {a.driver}</span>
-                                  <span className="text-teal-700 font-semibold">Medis: {a.medis}</span>
-                                </div>
-                              </td>
-                              <td className="py-3 px-3.5">
-                                <span className={`inline-block px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                                  a.status.includes('TKP') || a.status.includes('Tugas')
-                                    ? 'bg-red-50 text-red-700 border border-red-200'
-                                    : a.status.includes('RS')
-                                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                }`}>
-                                  {a.status}
-                                </span>
-                              </td>
-                              <td className="py-3 px-3.5 text-[10px] text-slate-600 max-w-[220px] truncate" title={a.fasilitas}>
-                                {a.fasilitas}
-                              </td>
-                              <td className="py-3 px-3.5 font-medium text-slate-600">{a.lokasi || '-'}</td>
+                              <td className="py-3 px-3.5">{a.kategori}</td>
+                              <td className="py-3 px-3.5">{a.sumberPengadaan}</td>
+                              <td className="py-3 px-3.5">{a.kepemilikan}</td>
+                              <td className="py-3 px-3.5">{a.tahun}</td>
+                              <td className="py-3 px-3.5">{a.kondisiKendaraan}</td>
+                              <td className="py-3 px-3.5 font-medium text-slate-600">{a.penanggungJawab}</td>
                             </tr>
                           ))
                         ) : activeDetailCard === 'Waktu Respons PSC' ? (
@@ -4653,7 +4619,12 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                                     ? 'bg-amber-50 text-amber-700 border border-amber-200'
                                     : 'bg-blue-50 text-blue-700 border border-blue-200'
                                 }`}>
-                                  {r.kategori}
+                                  <div className="flex flex-col gap-0.5">
+                                    <span>{r.jenisLayanan}</span>
+                                    <span className="text-[9px] font-semibold normal-case tracking-normal opacity-70">
+                                      {r.kategori}{r.idJenisLayanan !== undefined && r.idJenisLayanan !== null ? ` · ID ${r.idJenisLayanan}` : ''}
+                                    </span>
+                                  </div>
                                 </span>
                               </td>
                               <td className="py-3 px-3.5 font-bold text-slate-900 max-w-[200px] truncate" title={r.spesifikasi}>

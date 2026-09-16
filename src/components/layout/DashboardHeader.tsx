@@ -18,13 +18,11 @@ import {
   Menu,
   Settings,
   ShieldCheck,
-  UserCircle,
   X,
   RefreshCw,
   Clock,
   LayoutGrid,
   CheckCircle2,
-  ExternalLink,
   AlertTriangle,
   Info,
   // PANTAUAN icons
@@ -330,7 +328,7 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
   const notifRef = useRef<HTMLDivElement>(null)
   const [notificationsList, setNotificationsList] = useState<any[]>([])
   
-  const { token, user, logout, isAuthenticated, isGuest } = useAuthStore()
+  const { user, logout, isAuthenticated } = useAuthStore()
   const { title: headerTitle, description: headerDesc, lastUpdated, sourceLabel, sourceUrl } = useHeaderStore()
   const { getItems, subscribeToItems, addNotificationItem, markAsRead, clearAll, markAllAsRead } = useNotificationItems()
   const { playSound } = useNotificationSound()
@@ -339,10 +337,7 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
 
   const hasUnread = notificationsList.some(n => !n.read)
   
-  const isMasyarakat = user?.level_name?.toLowerCase().includes('masyarakat') || false
   const isUserLoggedIn = isAuthenticated || Boolean(user?.nama_lengkap)
-  const isTamu = !isUserLoggedIn
-  const showAksesSistem = !(isMasyarakat || isTamu)
 
   const handleMarkAllAsRead = () => {
     markAllAsRead()
@@ -408,10 +403,10 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
     }
   }, [user])
   const isUnitAccount = Boolean(user?.username && (user.username.toUpperCase().startsWith('PSC') || user.level_name?.toLowerCase().includes('psc')))
-  const initialName = isUserLoggedIn ? (user?.nama_lengkap || user?.username || 'Pengguna') : 'Tamu (Guest)'
-  const roleName = isUserLoggedIn ? (user?.level_name || (user?.level_user_id === 1 ? 'Super Administrator' : (isUnitAccount ? 'Unit PSC 119' : 'Admin'))) : 'Akses Publik'
-  const userEmail = isUserLoggedIn ? (user?.email || `${user?.username || 'admin'}@faskes.go.id`) : 'guest@faskes.go.id'
-  const accessLabel = isUserLoggedIn ? (user?.wilayah_scope?.access_label || 'Pusat pemantauan nasional fasilitas kesehatan') : 'Pusat pemantauan publik fasilitas kesehatan'
+  const initialName = user?.nama_lengkap || user?.username || 'Pengguna'
+  const roleName = user?.level_name || (user?.level_user_id === 1 ? 'Super Administrator' : (isUnitAccount ? 'Unit PSC 119' : 'Admin'))
+  const userEmail = user?.email || `${user?.username || 'admin'}@faskes.go.id`
+  const accessLabel = user?.wilayah_scope?.access_label || 'Pusat pemantauan nasional fasilitas kesehatan'
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
@@ -512,16 +507,6 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
               >
                 <RefreshCw className={`h-4 w-4 sm:h-[18px] sm:w-[18px] text-slate-600 ${isRefreshing ? 'animate-spin text-teal-650' : ''}`} />
               </button>
-              {showAksesSistem && (
-                <a
-                  href={buildExternalRoute('site/login', token)}
-                  className="relative inline-flex h-10 sm:h-12 items-center gap-1.5 sm:gap-2 rounded-xl border border-slate-200 bg-white/95 px-3 sm:px-4 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-600 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:text-teal-700 hover:shadow-md"
-                  title="Akses Sistem"
-                >
-                  <ExternalLink className="h-3.5 w-3.5 sm:h-4.5 sm:w-4.5 text-slate-600" />
-                  <span className="hidden sm:inline">Akses Sistem</span>
-                </a>
-              )}
               <div className="relative" ref={notifRef}>
                 {hasUnread && (
                   <span className="absolute inset-0 rounded-xl bg-red-500/40 animate-ping pointer-events-none" />
@@ -673,6 +658,7 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
                 </span>
                 <span className="hidden sm:inline">Unduh Laporan</span>
               </Link>
+              {isUserLoggedIn && (
               <div className="relative" ref={profileRef}>
                 <button
                   type="button"
@@ -689,7 +675,6 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
                   <ChevronDown className={`h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-500 transition ${profileOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {profileOpen ? (
-                  isUserLoggedIn ? (
                     <div className="absolute right-0 top-14 z-50 w-72 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
@@ -715,14 +700,6 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
                         <p className="mt-0.5 text-xs text-slate-600">{accessLabel}</p>
                       </div>
                       <div className="mt-3 space-y-2">
-                        <button type="button" className="flex w-full items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-left text-[13px] font-bold uppercase tracking-[0.03em] text-slate-700 transition hover:bg-slate-50">
-                          <UserCircle className="h-4 w-4 text-teal-600" />
-                          Profil Saya
-                        </button>
-                        <Link href="/settings" onClick={() => setProfileOpen(false)} className="flex w-full items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-left text-[13px] font-bold uppercase tracking-[0.03em] text-slate-700 transition hover:bg-slate-50">
-                          <Settings className="h-4 w-4 text-teal-600" />
-                          Pengaturan Akun
-                        </Link>
                         <button 
                           type="button" 
                           onClick={() => {
@@ -736,62 +713,9 @@ export default function DashboardHeader({ onToggleSidebar }: DashboardHeaderProp
                         </button>
                       </div>
                     </div>
-                  ) : (
-                    <div className="absolute right-0 top-14 z-50 w-72 rounded-xl border border-slate-200 bg-white p-4 shadow-2xl">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-extrabold text-slate-800">Akses Pengunjung</p>
-                          <p className="text-xs text-slate-500">Silakan login untuk fitur lengkap.</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setProfileOpen(false)}
-                          className="rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-                          aria-label="Tutup"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <div className="mt-3 rounded-lg border border-teal-100 bg-teal-50 px-3 py-2">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-teal-700">Akses</p>
-                        <p className="mt-0.5 text-xs text-slate-600">{accessLabel}</p>
-                      </div>
-                      <div className="mt-4 space-y-2">
-                        <Link 
-                          href="/login" 
-                          onClick={() => {
-                            logout()
-                            setProfileOpen(false)
-                          }}
-                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 py-2.5 text-center text-xs font-bold uppercase tracking-wider text-white shadow-sm transition hover:bg-teal-800"
-                        >
-                          Masuk (Login)
-                        </Link>
-                        <Link 
-                          href="/register" 
-                          onClick={() => {
-                            logout()
-                            setProfileOpen(false)
-                          }}
-                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-teal-200 bg-white px-4 py-2.5 text-center text-xs font-bold uppercase tracking-wider text-teal-700 shadow-sm transition hover:bg-teal-50"
-                        >
-                          Daftar Sekarang
-                        </Link>
-                        <button 
-                          type="button" 
-                          onClick={() => {
-                            logout()
-                            setProfileOpen(false)
-                          }}
-                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-center text-xs font-bold uppercase tracking-wider text-red-600 shadow-sm transition hover:bg-red-50"
-                        >
-                          Keluar Akses Tamu
-                        </button>
-                      </div>
-                    </div>
-                  )
                 ) : null}
               </div>
+              )}
             </div>
           )}
         </div>

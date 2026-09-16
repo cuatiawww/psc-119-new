@@ -193,6 +193,7 @@ export interface PscCallRecord {
   nama_psc: string
   status_penanganan_code: string
   status_penanganan: string
+  id_jenis_layanan?: string | number | null
   jenis_layanan: string
   kategori_layanan?: string
   spesifikasi_layanan?: string

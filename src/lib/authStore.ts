@@ -8,6 +8,11 @@ export interface User {
   no_telpon?: string
   level_user_id: number
   level_name?: string
+  kode_psc?: string
+  id_reg_psc?: string
+  dmt_provinsi?: string
+  dmt_kabupaten?: string
+  kepemilikan_psc?: string
   wilayah_scope?: WilayahScope
 }
 

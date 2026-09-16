@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { PscCallItem, PscAmbulanceItem, PscHospitalItem, PscCallRecord, PscPersonnelItem } from '@/types/psc'
+import { getPscServiceCategory } from '@/lib/pscServiceCategory'
+import { resolvePscIcd10 } from '@/lib/pscIcd10'
+import { getPscResponseMinutes } from '@/lib/pscResponseTime'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -64,7 +67,7 @@ export async function GET(req: Request) {
     const timeoutId = setTimeout(() => controller.abort(), 15000)
 
     // Ambil data panggilan, ambulan, rumah sakit, personil, dan unit PSC secara paralel
-    const [callsSettled, ambSettled, rsSettled, personilSettled, pscSettled] = await Promise.allSettled([
+    const [callsSettled, ambSettled, rsSettled, personilSettled, pscSettled, jenisAmbulanSettled, kategoriAmbulanSettled] = await Promise.allSettled([
       fetch(`${PSC_API_BASE_URL}/data-pelaporan-panggilan`, {
         method: 'POST',
         headers,
@@ -93,6 +96,16 @@ export async function GET(req: Request) {
         method: 'POST',
         headers,
         body: fdPsc,
+        signal: controller.signal,
+      }),
+      fetch(`${PSC_API_BASE_URL}/data-jenis-ambulan`, {
+        method: 'GET',
+        headers,
+        signal: controller.signal,
+      }),
+      fetch(`${PSC_API_BASE_URL}/data-kategori-ambulan`, {
+        method: 'GET',
+        headers,
         signal: controller.signal,
       }),
     ])
@@ -157,6 +170,30 @@ export async function GET(req: Request) {
       rawAmbulance = ambJson.data || []
       totalAmbulans = ambJson.total_data || rawAmbulance.length
       ambulanceTotalPages = Number(ambJson.total_page || Math.ceil(totalAmbulans / 100)) || 1
+    }
+
+    // Tambahkan label master untuk matriks armada tanpa mengubah nilai ID sumber.
+    const ambulanceTypeLabels: Record<string, string> = {}
+    const ambulanceCategoryLabels: Record<string, string> = {}
+    if (jenisAmbulanSettled.status === 'fulfilled' && jenisAmbulanSettled.value.ok) {
+      const json = await jenisAmbulanSettled.value.json().catch(() => ({}))
+      for (const item of Array.isArray(json?.data) ? json.data : []) {
+        if (item?.id_jenis !== undefined && item?.jenis) ambulanceTypeLabels[String(item.id_jenis)] = item.jenis
+        if (item?.id_j_ambulan !== undefined && item?.j_ambulan) ambulanceCategoryLabels[String(item.id_j_ambulan)] = item.j_ambulan
+      }
+    }
+    if (kategoriAmbulanSettled.status === 'fulfilled' && kategoriAmbulanSettled.value.ok) {
+      const json = await kategoriAmbulanSettled.value.json().catch(() => ({}))
+      for (const item of Array.isArray(json?.data) ? json.data : []) {
+        if (item?.id_j_ambulan !== undefined && item?.j_ambulan) ambulanceCategoryLabels[String(item.id_j_ambulan)] = item.j_ambulan
+      }
+    }
+    if (Object.keys(ambulanceTypeLabels).length > 0 || Object.keys(ambulanceCategoryLabels).length > 0) {
+      rawAmbulance = rawAmbulance.map((item) => ({
+        ...item,
+        jenis: item.jenis || ambulanceTypeLabels[String(item.id_jenis)] || null,
+        j_ambulan: item.j_ambulan || ambulanceCategoryLabels[String(item.id_j_ambulan)] || null,
+      }))
     }
 
     let rawRs: any[] = []
@@ -286,10 +323,10 @@ export async function GET(req: Request) {
 
     // 1. Format Call Records (untuk Matriks Tabel Lengkap)
     const formattedCalls: PscCallRecord[] = calls.map((c, idx) => {
-      const jenisLower = (c.jenis_layanan || '').toLowerCase()
-      const isEmergency = (jenisLower.includes('emergency') && !jenisLower.includes('non')) || ((c as any).is_krisis === 1 && !jenisLower.includes('non'))
-      const isNonEmergency = jenisLower.includes('non') && jenisLower.includes('emergency')
-      const isNonCategory = (jenisLower.includes('non') && (jenisLower.includes('cat') || jenisLower.includes('kat'))) || (!isEmergency && !isNonEmergency && Boolean(jenisLower))
+      const serviceCategory = getPscServiceCategory(c)
+      const isEmergency = serviceCategory === 'Emergency'
+      const isNonEmergency = serviceCategory === 'Non Emergency'
+      const isNonCategory = serviceCategory === 'Non Category'
       const isTrauma = (c.kategori_layanan || '').toLowerCase().includes('trauma')
 
       if (isEmergency) sampleEmergency++
@@ -314,54 +351,12 @@ export async function GET(req: Request) {
       }
 
       // Hitung durasi waktu respons dispatcher ke status penanganan (menit)
-      let callResponseTime: number | null = null
-      if (c.jam_pelaporan_panggilan && c.tgl_status_penanganan) {
-        try {
-          const callTimeParts = c.jam_pelaporan_panggilan.split(':')
-          const statusTimeParts = c.tgl_status_penanganan.split(' ')[1]?.split(':')
-          if (callTimeParts.length >= 2 && statusTimeParts && statusTimeParts.length >= 2) {
-            const callSec = parseInt(callTimeParts[0], 10) * 3600 + parseInt(callTimeParts[1], 10) * 60 + (parseInt(callTimeParts[2], 10) || 0)
-            const statusSec = parseInt(statusTimeParts[0], 10) * 3600 + parseInt(statusTimeParts[1], 10) * 60 + (parseInt(statusTimeParts[2], 10) || 0)
-            const diffMin = (statusSec - callSec) / 60
-            if (diffMin > 0) {
-              callResponseTime = parseFloat(diffMin.toFixed(1))
-              responseTimeList.push(diffMin)
-            }
-          }
-        } catch (e) {}
-      }
+      const callResponseTime = getPscResponseMinutes(c)
+      if (callResponseTime !== null) responseTimeList.push(callResponseTime)
 
-      // Resolusi Diagnosa ICD-10 Kasus Medis
-      let icdName = c.icd_10
-      if (!icdName || icdName === 'N/A' || icdName === '-') {
-        const spec = (c.spesifikasi_layanan || c.kategori_layanan || c.keluhan || '').toLowerCase()
-        if (spec.includes('kll') || spec.includes('kecelakaan') || spec.includes('laka')) {
-          icdName = 'V01-V99 (Kecelakaan Transportasi / KLL)'
-        } else if (spec.includes('kejang') || spec.includes('epilepsi') || spec.includes('konvulsi')) {
-          icdName = 'R56 (Kejang & Konvulsi Akut)'
-        } else if (spec.includes('jantung') || spec.includes('dada') || spec.includes('cardiac')) {
-          icdName = 'I20-I25 (Kedaruratan Kardiovaskular)'
-        } else if (spec.includes('sesak') || spec.includes('napas') || spec.includes('asma')) {
-          icdName = 'J45-J98 (Gangguan Saluran Pernapasan)'
-        } else if (spec.includes('luka') || spec.includes('robek') || spec.includes('fraktur') || spec.includes('patah')) {
-          icdName = 'S00-T14 (Cedera & Trauma Fisik)'
-        } else if (spec.includes('kia') || spec.includes('ibu') || spec.includes('bersalin') || spec.includes('hamil')) {
-          icdName = 'O00-O99 (Kedaruratan Maternal & Neonatal)'
-        } else if (spec.includes('rawat') || spec.includes('perawat')) {
-          icdName = 'Z76 (Pelayanan Medik & Keperawatan)'
-        } else if (spec.includes('non trauma')) {
-          icdName = 'R00-R99 (Gejala & Tanda Medis Akut)'
-        } else if (spec.includes('salah sambung') || spec.includes('palsu')) {
-          icdName = 'Z00 (Konsultasi Non-Klinis)'
-        } else if (/banjir|gempa|longsor|tsunami|erupsi|puting beliung|kebakaran/i.test(c.spesifikasi_layanan || '')) {
-          icdName = 'T75.8 (Dampak Medis Kedaruratan Bencana Alam)'
-        } else if (c.spesifikasi_layanan && c.spesifikasi_layanan !== 'N/A') {
-          icdName = c.spesifikasi_layanan
-        } else {
-          icdName = 'R69 (Kondisi Medis Tidak Terspesifikasi)'
-        }
-      }
-      icdCounts[icdName] = (icdCounts[icdName] || 0) + 1
+      // Resolusi ICD-10 hanya dari diagnosis/keluhan klinis, bukan jenis layanan atau armada.
+      const icdName = resolvePscIcd10(c)
+      if (icdName) icdCounts[icdName] = (icdCounts[icdName] || 0) + 1
 
       const kat = c.kategori_layanan || 'Lainnya'
       kategoriCounts[kat] = (kategoriCounts[kat] || 0) + 1
@@ -416,8 +411,9 @@ export async function GET(req: Request) {
         nama_psc: c.nama_psc || 'PSC 119 Kemenkes',
         status_penanganan_code: c.status_penanganan_code || (isCompleted ? 'Selesai' : 'Diproses'),
         status_penanganan: c.status_penanganan || (isCompleted ? 'Status Selesai - Laporan Selesai' : 'Status Diproses'),
-        jenis_layanan: spesifikasi,
-        kategori_layanan: c.kategori_layanan || (isEmergency ? 'Emergency' : 'Non Emergency'),
+        id_jenis_layanan: c.id_jenis_layanan,
+        jenis_layanan: c.jenis_layanan || serviceCategory,
+        kategori_layanan: c.kategori_layanan || serviceCategory,
         spesifikasi_layanan: spesifikasi,
         tanggal_panggilan: c.tanggal_panggilan || c.tgl_pelaporan_panggilan || '',
         jam_pelaporan_panggilan: c.jam_pelaporan_panggilan || '',
@@ -442,7 +438,7 @@ export async function GET(req: Request) {
     const markers = formattedCalls
       .filter((c): c is typeof c & { lat: number; lng: number } => typeof c.lat === 'number' && typeof c.lng === 'number' && !isNaN(c.lat) && !isNaN(c.lng))
       .map((c) => {
-        const isEmergency = (c.kategori_layanan || '').toLowerCase().includes('emergency') && !(c.kategori_layanan || '').toLowerCase().includes('non')
+        const isEmergency = getPscServiceCategory(c) === 'Emergency'
         return {
           marker_type: 'call' as const,
           kode_trans: c.ticket_id,
@@ -463,6 +459,8 @@ export async function GET(req: Request) {
           sumber_panggilan: (c.raw_psc as any)?.sumber_panggilan || '119',
           spesifikasi_layanan: c.spesifikasi_layanan,
           jenis_layanan: c.jenis_layanan,
+          id_jenis_layanan: c.id_jenis_layanan,
+          kategori_layanan: c.kategori_layanan,
           nama_psc: c.nama_psc,
           ticket_id: c.ticket_id,
           status_penanganan_code: c.status_penanganan_code,
@@ -621,6 +619,8 @@ export async function GET(req: Request) {
       markers,
       calls: formattedCalls,
       personnel: rawPersonil,
+      // Semua record armada untuk card/matriks; `ambulances` tetap khusus marker peta berkoordinat.
+      ambulance_records: rawAmbulance,
       ambulances,
       hospitals,
       centers: rawPsc,
