@@ -1,134 +1,33 @@
 'use client'
 
-import { FormEvent, useCallback, useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { AlertCircle, Eye, EyeOff, Loader2, LockKeyhole, LogIn, UserRound, RefreshCw, Phone, ChevronRight } from 'lucide-react'
-import { useAuthStore, type User } from '@/lib/authStore'
-import { buildApiUrl } from '@/lib/utils/api'
+import { ArrowUpRight, LogIn } from 'lucide-react'
+import { useAuthStore } from '@/lib/authStore'
 
-type LoginResponse = {
-  success?: boolean
-  message?: string
-  token?: string
-  user?: User
-}
-
+const productionLoginUrl = 'https://psc.kemkes.go.id/site/login'
+const localLoginUrl = 'http://localhost/psc-119/site/login'
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
 const localAsset = (path: string) => `${basePath}/${path.replace(/^\/+/, '')}`
-const backendBaseUrl = (process.env.NEXT_PUBLIC_SIPKK_BACKEND_BASE_URL || 'https://sipkk-new.mediaciptainformasi.co.id').replace(/\/+$/, '')
-const backendHost = new URL(backendBaseUrl).host
 
-// Helper to format assets URL from backend
-const getAssetUrl = (url: string) => {
-  if (!url) return ''
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
-    if (url.startsWith('data:')) return url
-    const parsed = new URL(url)
-    const path = parsed.pathname.replace(/^\/+/, '')
-    if (parsed.hostname === backendHost && path.startsWith(`${backendHost}/`)) {
-      parsed.pathname = `/${path.slice(backendHost.length + 1)}`
+function getPscLoginUrl() {
+  const configuredUrl = process.env.NEXT_PUBLIC_PSC_LOGIN_URL?.trim()
+  if (configuredUrl) return configuredUrl
+
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return localLoginUrl
     }
-    return parsed.toString()
   }
-  const path = url.replace(/^\/+/, '')
-  return `${backendBaseUrl}/${path.startsWith(`${backendHost}/`) ? path.slice(backendHost.length + 1) : path}`
-}
 
+  return productionLoginUrl
+}
 
 export default function LoginPage() {
   const router = useRouter()
-  const { isAuthenticated, isInitialized, initialize, login, loginAsPscUnit, logout } = useAuthStore()
-
-  const [loginTab, setLoginTab] = useState<'psc' | 'admin'>('psc')
-  const [kodePscInput, setKodePscInput] = useState('')
-
-  const handlePscSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    const clean = kodePscInput.trim().toUpperCase()
-    if (clean) {
-      setLoading(true)
-      try {
-        let center: any = null
-        try {
-          const res = await fetch(`/api/psc/centers?kode_psc=${encodeURIComponent(clean)}`)
-          if (res.ok) {
-            const json = await res.json()
-            center = json?.data?.[0]
-          }
-        } catch (fetchErr) {
-          console.error('Gagal memuat profil unit psc:', fetchErr)
-        }
-
-        if (!center) {
-          setError('Kode PSC tidak ditemukan atau layanan PSC sedang tidak tersedia.')
-          return
-        }
-
-        loginAsPscUnit(clean, center)
-        router.push(`/?kode_psc=${encodeURIComponent(clean)}`)
-      } finally {
-        setLoading(false)
-      }
-    } else {
-      logout()
-      router.push('/')
-    }
-  }
-
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-
-  const [bgSrc, setBgSrc] = useState<string>(localAsset('bg header.png'))
-  const [logoSrc, setLogoSrc] = useState<string>(localAsset('Logo-Kemenkes.png'))
-  const [showPassword, setShowPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  const [captchaKey, setCaptchaKey] = useState('')
-  const [captchaImage, setCaptchaImage] = useState('')
-  const [captchaQuestion, setCaptchaQuestion] = useState('')
-  const [captchaValue, setCaptchaValue] = useState('')
-  const [loadingCaptcha, setLoadingCaptcha] = useState(false)
-
-  const [settings] = useState({
-    frontend_app_title: 'PUBLIC SAFETY CENTER 119',
-    frontend_app_subtitle: 'Sistem komando dan pemantauan terpadu panggilan gawat darurat medis, penugasan armada ambulans, serta jejaring rujukan pra-rumah sakit SPGDT di seluruh wilayah Indonesia.',
-    frontend_login_card_title: 'Dashboard PSC 119',
-    frontend_login_card_subtitle: 'Silakan pilih metode masuk untuk mengakses pemantauan kedaruratan.',
-    frontend_login_note: 'Akses terbatas untuk petugas dan operator PSC 119 yang berwenang.\nHubungi admin jika mengalami kendala masuk.',
-    frontend_footer_text: '© 2026 Kementerian Kesehatan Republik Indonesia',
-    login_logo: localAsset('Logo-Kemenkes.png'),
-    login_background: localAsset('bg header.png'),
-  })
-
-  const fetchCaptcha = useCallback(async () => {
-    setLoadingCaptcha(true)
-    try {
-      const res = await fetch(buildApiUrl('/api/captcha'), {
-        method: 'GET',
-        cache: 'no-store',
-      })
-      const payload = await res.json()
-
-      if (!res.ok || !payload?.success) {
-        throw new Error('Gagal memuat captcha')
-      }
-
-      setCaptchaKey(payload.captcha_key)
-      setCaptchaImage(payload.captcha_image || '')
-      setCaptchaQuestion(payload.captcha_question || '')
-      setCaptchaValue('')
-    } catch (err) {
-      console.error('Gagal mengambil captcha', err)
-      setCaptchaKey('')
-      setCaptchaImage('')
-      setCaptchaQuestion('')
-    } finally {
-      setLoadingCaptcha(false)
-    }
-  }, [])
+  const { isAuthenticated, isInitialized, initialize } = useAuthStore()
 
   useEffect(() => {
     initialize()
@@ -140,412 +39,70 @@ export default function LoginPage() {
     }
   }, [isInitialized, isAuthenticated, router])
 
-  useEffect(() => {
-    fetchCaptcha()
-  }, [fetchCaptcha])
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setError('')
-
-    const cleanUsername = username.trim()
-    if (!cleanUsername || !password) {
-      setError('Username dan password wajib diisi.')
-      return
-    }
-
-    if (!captchaValue) {
-      setError('Captcha wajib diisi.')
-      return
-    }
-
-    setLoading(true)
-    try {
-      const response = await fetch(buildApiUrl('/api/login'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({
-          username: cleanUsername,
-          password,
-          captcha_key: captchaKey,
-          captcha_value: captchaValue.trim(),
-        }),
-      })
-
-      const payload = (await response.json().catch(() => null)) as LoginResponse | null
-
-      if (!response.ok || !payload?.success || !payload.token || !payload.user) {
-        fetchCaptcha()
-        throw new Error(payload?.message || 'Login gagal. Periksa kembali username, password, dan captcha.')
-      }
-
-      login(payload.token, payload.user)
-      router.replace('/')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login gagal. Silakan coba lagi.')
-    } finally {
-      setLoading(false)
-    }
+  const handlePscRedirect = () => {
+    window.location.assign(getPscLoginUrl())
   }
 
   return (
-    <div className="relative grid min-h-screen overflow-hidden bg-[#f0f7f7] lg:grid-cols-[minmax(0,1fr)_520px]">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f0f7f7] px-5 py-8">
+      <div className="absolute inset-0 bg-gradient-to-br from-teal-950 via-teal-900 to-[#0e6b65] opacity-[0.08]" />
 
-      {/* ── LEFT: Hero Panel ──────────────────────────────────────────────── */}
-      <div className="relative hidden min-h-screen overflow-hidden lg:flex lg:flex-col">
-        {/* Background image */}
-        <Image
-          src={bgSrc || localAsset('bg header.png')}
-          alt="Background PSC 119"
-          fill
-          priority
-          sizes="60vw"
-          className="object-cover object-center"
-          onError={() => setBgSrc(localAsset('bg header.png'))}
-        />
-
-        {/* Overlay gradient — matches dashboard's teal palette */}
-        <div className="absolute inset-0 bg-gradient-to-br from-teal-950/85 via-teal-900/70 to-[#0e6b65]/55" />
-
-        {/* Subtle grid texture overlay */}
-        <div
-          className="absolute inset-0 opacity-[0.04]"
-          style={{
-            backgroundImage:
-              'repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,255,255,1) 39px,rgba(255,255,255,1) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,255,255,1) 39px,rgba(255,255,255,1) 40px)',
-          }}
-        />
-
-        {/* Content */}
-        <div className="relative z-10 flex h-full flex-col justify-between p-10 xl:p-12">
-          {/* Logo */}
-          <div className="flex items-center gap-3">
-            <div className="inline-flex items-center gap-3 rounded-2xl bg-white/95 px-4 py-2.5 shadow-md backdrop-blur-xs border border-white/50">
-              <Image
-                src={logoSrc || localAsset('Logo-Kemenkes.png')}
-                alt="Logo Kemenkes RI"
-                width={140}
-                height={42}
-                className="h-8 w-auto object-contain"
-                priority
-                onError={() => setLogoSrc(localAsset('Logo-Kemenkes.png'))}
-              />
-              <div className="border-l border-teal-600/30 pl-3">
-                <p className="text-[12px] font-black uppercase tracking-wider text-teal-900 leading-tight">PSC 119</p>
-                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-none">Kemenkes RI</p>
-              </div>
+      <section className="relative w-full max-w-[520px] rounded-[24px] border border-[#c8dedd] bg-white p-7 text-center shadow-[0_20px_60px_rgba(15,118,110,0.12)] sm:p-10">
+        <div className="mb-8 flex justify-center">
+          <div className="flex items-center gap-3 rounded-2xl border border-teal-100 bg-white px-4 py-2.5 shadow-sm">
+            <Image
+              src={localAsset('Logo-Kemenkes.png')}
+              alt="Logo Kemenkes RI"
+              width={140}
+              height={42}
+              className="h-9 w-auto object-contain"
+              priority
+            />
+            <div className="border-l border-teal-200 pl-3 text-left">
+              <p className="text-xs font-black uppercase tracking-wider text-teal-800">PSC 119</p>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Kemenkes RI</p>
             </div>
           </div>
-
-          {/* Main copy */}
-          <div className="max-w-xl pb-4">
-            <h1 className="mt-4 text-[40px] font-extrabold leading-[1.15] tracking-tight text-white xl:text-[50px] uppercase">
-              {settings.frontend_app_title}
-            </h1>
-            <p className="mt-4 text-[15px] leading-relaxed text-teal-100/90 xl:text-[16px]">
-              {settings.frontend_app_subtitle}
-            </p>
-          </div>
-
-          {/* Footer credit */}
-          <p className="text-[12px] text-teal-300/60 font-semibold">
-            {settings.frontend_footer_text}
-          </p>
         </div>
-      </div>
 
-      {/* ── RIGHT: Login Panel ────────────────────────────────────────────── */}
-      <section className="flex min-h-screen items-center justify-center bg-[#f0f7f7] px-5 py-8 sm:px-8 lg:bg-white">
-        <div className="w-full max-w-[420px]">
+        <span className="inline-block rounded-full bg-teal-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-teal-700">
+          Portal Akses Terpadu
+        </span>
+        <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+          Login melalui aplikasi PSC 119
+        </h1>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-slate-500">
+          Form login pada dashboard ini sudah dinonaktifkan. Silakan masuk melalui aplikasi PSC 119 untuk melanjutkan.
+        </p>
 
-          {/* Mobile-only logo */}
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="rounded-xl border border-teal-100 bg-white px-3.5 py-2 shadow-sm flex items-center gap-3">
-              <Image
-                src={localAsset('Logo-Kemenkes.png')}
-                alt="Logo Kemenkes PSC 119"
-                width={140}
-                height={40}
-                className="h-8 w-auto object-contain"
-                priority
-              />
-              <div className="border-l border-teal-200 pl-2.5">
-                <p className="text-xs font-black uppercase tracking-wider text-teal-800 leading-tight">PSC 119</p>
-                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none">Kemenkes RI</p>
-              </div>
-            </div>
+        <button
+          type="button"
+          onClick={handlePscRedirect}
+          className="mt-8 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 text-sm font-extrabold uppercase tracking-[0.08em] text-white shadow-[0_8px_24px_rgba(15,118,110,0.28)] transition hover:bg-teal-800 hover:shadow-[0_10px_28px_rgba(15,118,110,0.36)] active:scale-[0.99]"
+        >
+          <LogIn className="h-[18px] w-[18px]" />
+          Lanjut ke Login PSC 119
+          <ArrowUpRight className="h-4 w-4" />
+        </button>
+
+        <div className="mt-6 border-t border-slate-100 pt-5 text-xs text-slate-500">
+          <p className="mb-3 font-semibold">Pilihan alamat login PSC:</p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-center sm:gap-5">
+            <a
+              href={productionLoginUrl}
+              className="font-bold text-teal-700 hover:text-teal-900 hover:underline"
+            >
+              PSC Produksi
+            </a>
+            <a
+              href={localLoginUrl}
+              className="font-bold text-teal-700 hover:text-teal-900 hover:underline"
+            >
+              PSC Lokal
+            </a>
           </div>
-
-          {/* Card */}
-          <div
-            className="w-full rounded-[20px] border border-[#c8dedd] bg-white p-7 shadow-[0_20px_60px_rgba(15,118,110,0.10)] sm:p-8 lg:border-0 lg:shadow-none"
-          >
-            {/* Header */}
-            <div className="mb-6">
-              <span className="inline-block rounded-full bg-teal-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-teal-700">
-                Portal Akses Terpadu
-              </span>
-              <h2 className="mt-3 text-[26px] sm:text-[30px] font-extrabold leading-tight tracking-tight text-slate-900">
-                Dashboard PSC 119
-              </h2>
-              <p className="mt-1 text-[13px] text-slate-500">
-                Silakan pilih metode masuk untuk mengakses pemantauan kedaruratan.
-              </p>
-
-              {/* Tab Selector: Unit PSC 119 vs Operator / Admin */}
-              <div className="mt-4 flex items-center rounded-xl bg-slate-100 p-1 border border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => { setLoginTab('psc'); setError('') }}
-                  className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition ${
-                    loginTab === 'psc'
-                      ? 'bg-teal-700 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-teal-800'
-                  }`}
-                >
-                  Unit PSC 119
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setLoginTab('admin'); setError('') }}
-                  className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition ${
-                    loginTab === 'admin'
-                      ? 'bg-teal-700 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-teal-800'
-                  }`}
-                >
-                  Operator / Admin
-                </button>
-              </div>
-            </div>
-
-            {/* Divider */}
-            <div className="mb-6 h-px bg-slate-100" />
-
-            {loginTab === 'psc' ? (
-              <form onSubmit={handlePscSubmit} className="space-y-4">
-                <div>
-                  <label className="mb-1.5 block text-[13px] font-bold text-slate-700">
-                    Kode Unit PSC 119
-                  </label>
-                  <div className="flex h-12 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 transition-all duration-150 focus-within:border-teal-500 focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(20,184,166,0.12)]">
-                    <Phone className="h-[18px] w-[18px] flex-shrink-0 text-slate-400" />
-                    <input
-                      value={kodePscInput}
-                      onChange={(e) => setKodePscInput(e.target.value)}
-                      className="h-full min-w-0 flex-1 bg-transparent text-[14px] font-mono font-bold uppercase text-slate-900 outline-none placeholder:font-normal placeholder:font-sans placeholder:text-slate-400"
-                      placeholder="Contoh: PSC9287"
-                    />
-                  </div>
-                  <p className="mt-1.5 text-[11px] text-slate-500">
-                    Masukkan kode spesifik PSC atau kosongkan untuk melihat data seluruh wilayah nasional.
-                  </p>
-                </div>
-
-                {/* Quick Unit Presets */}
-                <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-3">
-                  <p className="text-[11px] font-bold text-teal-800 mb-1.5">Akses Cepat Unit:</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setKodePscInput('PSC9287')}
-                      className="rounded-lg border border-teal-200 bg-white px-2.5 py-1 text-[11px] font-bold text-teal-700 hover:bg-teal-50 transition cursor-pointer"
-                    >
-                      PSC9287 (PSC 119 Ciangsana)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setKodePscInput('')}
-                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-                    >
-                      Semua Unit (Nasional)
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="mt-2 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 text-[13px] font-extrabold uppercase tracking-[0.1em] text-white shadow-[0_8px_24px_rgba(15,118,110,0.28)] transition-all hover:bg-teal-800 hover:shadow-[0_10px_28px_rgba(15,118,110,0.36)] active:scale-[0.99]"
-                >
-                  <span>Buka Dashboard PSC 119</span>
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-
-                {/* Divider */}
-                <div className="my-4 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-slate-100" />
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-450">Atau</span>
-                  <div className="h-px flex-1 bg-slate-100" />
-                </div>
-
-              </form>
-            ) : (
-              <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Username */}
-              <div>
-                <label className="mb-1.5 block text-[13px] font-bold text-slate-700">
-                  Username
-                </label>
-                <div
-                  className="flex h-12 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 transition-all duration-150 focus-within:border-teal-500 focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(20,184,166,0.12)]"
-                >
-                  <UserRound className="h-[18px] w-[18px] flex-shrink-0 text-slate-400" />
-                  <input
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    autoComplete="username"
-                    className="h-full min-w-0 flex-1 bg-transparent text-[14px] font-medium text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-400"
-                    placeholder="Masukkan username"
-                    disabled={loading}
-                  />
-                </div>
-              </div>
-
-              {/* Password */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[13px] font-bold text-slate-700">
-                    Password
-                  </label>
-                  <Link
-                    href="/forgot-password"
-                    className="text-[12px] font-semibold text-teal-600 hover:text-teal-750 transition-colors hover:underline"
-                  >
-                    Lupa password?
-                  </Link>
-                </div>
-                <div
-                  className="flex h-12 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 transition-all duration-150 focus-within:border-teal-500 focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(20,184,166,0.12)]"
-                >
-                  <LockKeyhole className="h-[18px] w-[18px] flex-shrink-0 text-slate-400" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete="current-password"
-                    className="h-full min-w-0 flex-1 bg-transparent text-[14px] font-medium text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-400"
-                    placeholder="Masukkan password"
-                    disabled={loading}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-                    aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
-                    disabled={loading}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Captcha */}
-              <div className="space-y-2">
-                <label className="block text-[13px] font-bold text-slate-700">
-                  Keamanan (Captcha)
-                </label>
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-12 flex-1 items-center justify-between rounded-xl border border-slate-200 bg-teal-50/50 px-3 font-bold text-slate-700 shadow-inner overflow-hidden">
-                    {loadingCaptcha ? (
-                      <span className="text-xs font-normal text-slate-400 animate-pulse">Memuat...</span>
-                    ) : captchaImage ? (
-                      <img
-                        src={captchaImage}
-                        alt="CAPTCHA"
-                        className="h-9 w-[110px] rounded border border-slate-200 object-cover"
-                      />
-                    ) : captchaQuestion ? (
-                      <span className="text-sm font-semibold tracking-widest text-slate-700 select-none">
-                        {captchaQuestion}
-                      </span>
-                    ) : (
-                      <span className="text-xs font-normal text-slate-400">Captcha tidak tersedia</span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={fetchCaptcha}
-                      disabled={loading || loadingCaptcha}
-                      className="rounded-lg p-1.5 text-slate-450 hover:bg-teal-50 hover:text-teal-700 transition"
-                      title="Segarkan Captcha"
-                    >
-                      <RefreshCw className={`h-4 w-4 ${loadingCaptcha ? 'animate-spin' : ''}`} />
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    value={captchaValue}
-                    onChange={(e) => setCaptchaValue(e.target.value)}
-                    required
-                    placeholder="Jawaban"
-                    disabled={loading}
-                    className="h-12 w-28 rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-center text-[15px] font-extrabold text-slate-900 outline-none transition duration-150 placeholder:font-normal placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:shadow-[0_0_0_3px_rgba(20,184,166,0.12)]"
-                  />
-                </div>
-              </div>
-
-              {/* Error */}
-              {error && (
-                <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-[13px] font-medium text-red-700">
-                  <AlertCircle className="mt-px h-4 w-4 flex-shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              {/* Submit */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="mt-2 inline-flex h-12 w-full items-center justify-center gap-2.5 rounded-xl bg-teal-700 px-4 text-[13px] font-extrabold uppercase tracking-[0.1em] text-white shadow-[0_8px_24px_rgba(15,118,110,0.28)] transition-all hover:bg-teal-800 hover:shadow-[0_10px_28px_rgba(15,118,110,0.36)] active:scale-[0.99] disabled:cursor-wait disabled:opacity-70"
-              >
-                {loading ? (
-                  <Loader2 className="h-[18px] w-[18px] animate-spin" />
-                ) : (
-                  <LogIn className="h-[18px] w-[18px]" />
-                )}
-                {loading ? 'Memproses...' : 'Masuk'}
-              </button>
-
-              {/* Register Link */}
-              <div className="mt-4 text-center text-[13px] text-slate-500">
-                Belum punya akun?{' '}
-                <Link
-                  href="/register"
-                  className="font-bold text-teal-600 hover:text-teal-700 transition-colors hover:underline"
-                >
-                  Daftar sebagai Masyarakat
-                </Link>
-              </div>
-
-              {/* Divider */}
-              <div className="my-4 flex items-center gap-3">
-                <div className="h-px flex-1 bg-slate-100" />
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-450">Atau</span>
-                <div className="h-px flex-1 bg-slate-100" />
-              </div>
-
-              {/* Akses Sistem — link ke halaman login admin backend */}
-              <div className="mb-4">
-                <a
-                  href={`${process.env.NEXT_PUBLIC_SIPKK_BACKEND_BASE_URL || 'http://localhost/sipkk-baru'}/index.php?r=site/login`}
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 hover:border-teal-300 text-[13px] font-extrabold uppercase tracking-wider transition-all"
-                >
-                  Akses Sistem
-                </a>
-              </div>
-
-            </form>
-          )}
-          </div>
-
-          {/* Footer note */}
-          <p className="mt-5 text-center text-[12px] text-slate-400 whitespace-pre-line">
-            {settings.frontend_login_note}
-          </p>
         </div>
       </section>
-    </div>
+    </main>
   )
 }
