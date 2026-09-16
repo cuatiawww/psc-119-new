@@ -74,9 +74,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Pertahankan konteks unit PSC dari SSO saat berpindah halaman.
     // Sebelumnya nilai ini dihapus setiap kali login sehingga dashboard
     // kembali meminta data nasional setelah membuka halaman detail.
-    const kodePsc = String(user.kode_psc || localStorage.getItem('auth_kode_psc') || '').trim().toUpperCase()
+    const kodePsc = String(user.kode_psc || '').trim().toUpperCase()
     if (kodePsc) {
       localStorage.setItem('auth_kode_psc', kodePsc)
+    } else {
+      // Admin tidak memiliki scope PSC tetap. Bersihkan sisa konteks PSC
+      // dari sesi sebelumnya agar dashboard kembali ke cakupan nasional.
+      localStorage.removeItem('auth_kode_psc')
     }
     set({ token, user, isAuthenticated: true, isGuest: false })
   },
