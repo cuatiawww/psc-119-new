@@ -245,6 +245,7 @@ interface MarkerPopupState {
   data: MarkerData
   x: number   // pixel x di dalam container peta
   y: number   // pixel y di dalam container peta
+  coord?: number[]
 }
 
 interface EocPopupState {
@@ -326,10 +327,10 @@ const cleanKey = (name?: string | null) => {
 /** Ambil nama provinsi dari properties feature OL (berbagai kemungkinan key) */
 const getFeatureName = (feature: any, level: 'provinsi' | 'kabupaten') => {
   if (!feature) return ''
-  const props = feature.getProperties() || {}
+  const props = typeof feature.getProperties === 'function' ? feature.getProperties() : (feature.properties || {})
   const keys = level === 'provinsi'
-    ? ['provinsi', 'PROVINSI', 'nama_prov', 'prov_single', 'prov_multi', 'WADMPR', 'NAME_1', 'NAMOBJ', 'Propinsi']
-    : ['nama_kab', 'NAMA_KAB', 'kabupaten', 'KABUPATEN', 'kab_single', 'kab_multi', 'WADMMP', 'NAME_2', 'NAMOBJ', 'nama']
+    ? ['provinsi', 'PROVINSI', 'nama_prov', 'nama_provinsi', 'nm_prov', 'prov_single', 'prov_multi', 'WADMPR', 'NAME_1', 'NAMOBJ', 'Propinsi', 'PROV', 'prov', 'name', 'NAME']
+    : ['nama_kab', 'NAMA_KAB', 'kabupaten', 'KABUPATEN', 'kab_single', 'kab_multi', 'WADMKK', 'WADMMP', 'NAME_2', 'NAMOBJ', 'nama', 'name', 'KAB_KOTA', 'kab_kota', 'nm_kab', 'nmkab', 'KABKOT', 'kab']
   for (const key of keys) {
     if (props[key] !== undefined && props[key] !== null && String(props[key]).trim() !== '') return String(props[key]).trim()
   }
@@ -1163,6 +1164,17 @@ export default function DisasterMap({
         const name = eocFeature.get('name') || rawItem?.nama || rawItem?.nama_faskes || 'Lokasi Terkait'
 
         if (id && !String(id).startsWith('pulse-circle') && id !== 'route-line' && id !== 'flood' && rawItem) {
+          // Auto zoom ke koordinat titik EOC / faskes / posko
+          const eocGeom = eocFeature.getGeometry() as Point
+          const eocCoords = eocGeom && typeof eocGeom.getCoordinates === 'function' ? eocGeom.getCoordinates() : null
+          if (eocCoords) {
+            map.getView().animate({
+              center: eocCoords,
+              zoom: Math.max(map.getView().getZoom() || 10, 14),
+              duration: 600,
+            })
+          }
+
           const container = mapContainerRef.current
           if (container && mapRef.current) {
             const rect = container.getBoundingClientRect()
@@ -1240,7 +1252,6 @@ export default function DisasterMap({
               x,
               y
             })
-            // NOTE: Routing is triggered only when user clicks "Rute Taktis" button in popup
           }
 
           setMarkerPopup(null)
@@ -1249,7 +1260,7 @@ export default function DisasterMap({
         }
       }
 
-      // 2. Check marker pin (highest priority on main dashboard)
+      // 2. Check marker pin (Titik Panggilan 119 - Auto Zoom)
       const markerFeature = map.forEachFeatureAtPixel(
         evt.pixel,
         (f) => f,
@@ -1258,6 +1269,17 @@ export default function DisasterMap({
       if (markerFeature) {
         const data = markerFeature.get('markerData') as MarkerData
 
+        // Auto zoom ke pin panggilan yang diklik
+        const markerGeom = markerFeature.getGeometry() as Point
+        const coords = markerGeom && typeof markerGeom.getCoordinates === 'function' ? markerGeom.getCoordinates() : null
+        if (coords) {
+          map.getView().animate({
+            center: coords,
+            zoom: Math.max(map.getView().getZoom() || 10, 14.5),
+            duration: 600,
+          })
+        }
+
         // Calculate pixel position relative to map container
         const container = mapContainerRef.current
         if (container && mapRef.current) {
@@ -1265,7 +1287,7 @@ export default function DisasterMap({
           const mapRect = mapRef.current.getBoundingClientRect()
           const x = evt.pixel[0] + (mapRect.left - rect.left)
           const y = evt.pixel[1] + (mapRect.top - rect.top)
-          setMarkerPopup({ data, x, y })
+          setMarkerPopup({ data, x, y, coord: coords || undefined })
         }
 
         setEocPopup(null)
@@ -1275,7 +1297,7 @@ export default function DisasterMap({
         return
       }
 
-      // Check ambulance pin
+      // Check ambulance pin (Armada Ambulans - Auto Zoom)
       const ambulanceFeature = map.forEachFeatureAtPixel(
         evt.pixel,
         (f) => f,
@@ -1283,13 +1305,25 @@ export default function DisasterMap({
       )
       if (ambulanceFeature) {
         const data = ambulanceFeature.get('ambulanceData')
+
+        // Auto zoom ke armada ambulans yang diklik
+        const ambGeom = ambulanceFeature.getGeometry() as Point
+        const coords = ambGeom && typeof ambGeom.getCoordinates === 'function' ? ambGeom.getCoordinates() : null
+        if (coords) {
+          map.getView().animate({
+            center: coords,
+            zoom: Math.max(map.getView().getZoom() || 10, 14.5),
+            duration: 600,
+          })
+        }
+
         const container = mapContainerRef.current
         if (container && mapRef.current) {
           const rect = container.getBoundingClientRect()
           const mapRect = mapRef.current.getBoundingClientRect()
           const x = evt.pixel[0] + (mapRect.left - rect.left)
           const y = evt.pixel[1] + (mapRect.top - rect.top)
-          setAmbulancePopup({ data, x, y })
+          setAmbulancePopup({ data, x, y, coord: coords || undefined })
         }
         setMarkerPopup(null)
         setHospitalPopup(null)
@@ -1298,7 +1332,7 @@ export default function DisasterMap({
         return
       }
 
-      // Check hospital pin
+      // Check hospital pin (RS Rujukan - Auto Zoom)
       const hospitalFeature = map.forEachFeatureAtPixel(
         evt.pixel,
         (f) => f,
@@ -1306,13 +1340,25 @@ export default function DisasterMap({
       )
       if (hospitalFeature) {
         const data = hospitalFeature.get('hospitalData')
+
+        // Auto zoom ke RS rujukan yang diklik
+        const hospGeom = hospitalFeature.getGeometry() as Point
+        const coords = hospGeom && typeof hospGeom.getCoordinates === 'function' ? hospGeom.getCoordinates() : null
+        if (coords) {
+          map.getView().animate({
+            center: coords,
+            zoom: Math.max(map.getView().getZoom() || 10, 14.5),
+            duration: 600,
+          })
+        }
+
         const container = mapContainerRef.current
         if (container && mapRef.current) {
           const rect = container.getBoundingClientRect()
           const mapRect = mapRef.current.getBoundingClientRect()
           const x = evt.pixel[0] + (mapRect.left - rect.left)
           const y = evt.pixel[1] + (mapRect.top - rect.top)
-          setHospitalPopup({ data, x, y })
+          setHospitalPopup({ data, x, y, coord: coords || undefined })
         }
         setMarkerPopup(null)
         setAmbulancePopup(null)
@@ -1321,8 +1367,18 @@ export default function DisasterMap({
         return
       }
 
-      // 3. Check polygon features
-      const polyFeature = map.forEachFeatureAtPixel(evt.pixel, (f) => f)
+      // 3. Check polygon features (Province / Kabupaten - Auto Zoom Wilayah)
+      const polyFeature = map.forEachFeatureAtPixel(evt.pixel, (f, layer) => {
+        if (layer === kabupatenLayerRef.current || layer === provinceLayerRef.current) {
+          return f
+        }
+        const g = f?.getGeometry?.()
+        const t = g?.getType?.()
+        if (t === 'Polygon' || t === 'MultiPolygon') {
+          return f
+        }
+        return null
+      })
 
       if (!polyFeature) {
         setActivePopup(null)
@@ -1342,19 +1398,30 @@ export default function DisasterMap({
       const isProvMode = currentScope?.mode === 'provinsi'
       const isKabMode = currentScope?.mode === 'kabupaten'
 
+      // Selalu auto zoom/fit ke poligon wilayah yang diklik
+      const polyGeom = polyFeature.getGeometry?.()
+      const extent = polyGeom?.getExtent?.()
+      if (extent && extent.length === 4 && isFinite(extent[0]) && isFinite(extent[1]) && isFinite(extent[2]) && isFinite(extent[3])) {
+        map.getView().fit(extent, {
+          padding: [60, 60, 60, 60],
+          duration: 600,
+          maxZoom: isProvMode || isKabMode ? 13 : 8.8,
+        })
+      } else if (evt.coordinate) {
+        map.getView().animate({
+          center: evt.coordinate,
+          zoom: Math.max(map.getView().getZoom() || 6, 8.5),
+          duration: 600,
+        })
+      }
+
       if (!isProvMode && !isKabMode) {
         // National mode → clicked province
-        const provName = getFeatureName(polyFeature, 'provinsi')
+        const provName = getFeatureName(polyFeature, 'provinsi') || polyFeature.get('name') || polyFeature.get('PROVINSI') || polyFeature.get('Propinsi') || ''
         if (!provName) return
 
         const provCleaned = cleanKey(provName)
         const provMarkers = markersRef.current.filter((m) => cleanKey(m.provinsi) === provCleaned)
-        const extent = polyFeature.getGeometry()?.getExtent()
-
-        // Smoothly zoom/fit to the clicked province
-        if (extent) {
-          map.getView().fit(extent, { padding: [50, 50, 50, 50], duration: 600 })
-        }
 
         // Group by kabupaten (PSC metrics: calls, emergency, ambulans, selesai)
         const kabMap = new Map<string, { count: number; emergency: number; ambulans: number; selesai: number }>()
@@ -1402,7 +1469,7 @@ export default function DisasterMap({
         })
       } else {
         // Province/kabupaten mode → clicked kabupaten
-        const kabName = getFeatureName(polyFeature, 'kabupaten')
+        const kabName = getFeatureName(polyFeature, 'kabupaten') || polyFeature.get('name') || polyFeature.get('KABUPATEN') || polyFeature.get('WADMKK') || ''
         if (!kabName) return
 
         const kabCleaned = cleanKey(kabName)
@@ -1413,13 +1480,6 @@ export default function DisasterMap({
           if (kabCleaned !== targetClean && !kabCleaned.includes(targetClean) && !targetClean.includes(kabCleaned)) {
             return
           }
-        }
-
-        const extent = polyFeature.getGeometry()?.getExtent()
-
-        // Auto zoom/focus smoothly to clicked kabupaten
-        if (extent) {
-          map.getView().fit(extent, { padding: [60, 60, 60, 60], duration: 600 })
         }
 
         const kabMarkers = markersRef.current.filter((m) => cleanKey(m.kabupaten) === kabCleaned || cleanKey(m.nama_kab) === kabCleaned)
@@ -1445,11 +1505,6 @@ export default function DisasterMap({
         const allLokasi = lokasiListRef.current || []
         const kabLokasi = allLokasi.filter((l: any) => cleanKey(l.kabupaten) === kabCleaned)
 
-        // NTT Collector Dataset lookup
-        let nttData: any = null
-        if (Array.isArray(nttSituasiRef.current) && nttSituasiRef.current.length > 0) {
-          nttData = nttSituasiRef.current.find((item: any) => cleanKey(item.kabupaten) === kabCleaned)
-        }
         let kabEmergency = 0
         let kabAmbulans = 0
         let kabSelesai = 0
@@ -1481,7 +1536,36 @@ export default function DisasterMap({
       }
     })
 
-    mapInstanceRef.current = map
+    // Sinkronisasi posisi pixel popup saat peta bergerak/zoom
+    const handleMove = () => {
+      if (!mapContainerRef.current || !mapRef.current) return
+      const rect = mapContainerRef.current.getBoundingClientRect()
+      const mapRect = mapRef.current.getBoundingClientRect()
+      const offsetX = mapRect.left - rect.left
+      const offsetY = mapRect.top - rect.top
+
+      setMarkerPopup((prev) => {
+        if (!prev?.coord) return prev
+        const px = map.getPixelFromCoordinate(prev.coord)
+        if (!px) return prev
+        return { ...prev, x: px[0] + offsetX, y: px[1] + offsetY }
+      })
+      setAmbulancePopup((prev: any) => {
+        if (!prev?.coord) return prev
+        const px = map.getPixelFromCoordinate(prev.coord)
+        if (!px) return prev
+        return { ...prev, x: px[0] + offsetX, y: px[1] + offsetY }
+      })
+      setHospitalPopup((prev: any) => {
+        if (!prev?.coord) return prev
+        const px = map.getPixelFromCoordinate(prev.coord)
+        if (!px) return prev
+        return { ...prev, x: px[0] + offsetX, y: px[1] + offsetY }
+      })
+    }
+    map.on('moveend', handleMove)
+
+        mapInstanceRef.current = map
     setMapInstance(map)
 
     // Setup Windy Layer via npm ol-wind (async fetch GFS data)
