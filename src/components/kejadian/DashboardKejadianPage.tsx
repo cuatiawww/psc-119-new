@@ -436,11 +436,7 @@ export default function DashboardKejadianPage() {
   const [activeKodePsc, setActiveKodePsc] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const fromUrl = new URLSearchParams(window.location.search).get('kode_psc')?.trim()
-      if (fromUrl) {
-        localStorage.setItem('auth_kode_psc', fromUrl)
-        return fromUrl
-      }
-      return localStorage.getItem('auth_kode_psc') || ''
+      return fromUrl || localStorage.getItem('auth_kode_psc') || ''
     }
     return ''
   })
@@ -470,11 +466,6 @@ export default function DashboardKejadianPage() {
         if (kabName) setKabupaten(kabName)
         setCakupan('kabupaten-kota')
 
-        // Jangan timpa akun hasil SSO dengan token lokal unit PSC.
-        const authState = useAuthStore.getState()
-        if (!authState.isAuthenticated || authState.isGuest || !authState.token) {
-          authState.loginAsPscUnit(activeKodePsc, center)
-        }
       } catch (err) {
         console.error('Gagal memuat profil unit PSC untuk wilayah operasional:', err)
       }
@@ -1020,16 +1011,26 @@ export default function DashboardKejadianPage() {
             }).toLowerCase()
           : String(selectedEvent.jenis_bencana || 'kejadian').toLowerCase();
         const slug = rawType.replace(/\s+/g, '-').replace(/[^\w\-]+/g, '');
-        const newPath = `${basePath}/detail-kejadian/${slug}/${encryptedId}`;
+        // Pertahankan konteks PSC pada deep-link detail agar refresh/back
+        // tidak mengembalikan dashboard ke cakupan nasional.
+        const search = new URLSearchParams(window.location.search)
+        const kodePsc = activeKodePsc || localStorage.getItem('auth_kode_psc') || ''
+        if (kodePsc) search.set('kode_psc', kodePsc)
+        const query = search.toString()
+        const newPath = `${basePath}/detail-kejadian/${slug}/${encryptedId}${query ? `?${query}` : ''}`;
         
         if (currentEncryptedId !== encryptedId || currentSlug !== slug) {
           window.history.replaceState(null, '', newPath);
         }
       } else if (hadSelectedEventRef.current && path.includes('/detail-kejadian')) {
-        window.history.replaceState(null, '', basePath || '/');
+        const search = new URLSearchParams()
+        const kodePsc = activeKodePsc || localStorage.getItem('auth_kode_psc') || ''
+        if (kodePsc) search.set('kode_psc', kodePsc)
+        const query = search.toString()
+        window.history.replaceState(null, '', `${basePath || '/'}${query ? `?${query}` : ''}`);
       }
     }
-  }, [selectedEvent]);
+  }, [selectedEvent, activeKodePsc]);
 
   // Handle browser back/forward buttons
   useEffect(() => {
@@ -4037,10 +4038,10 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div>
             <h3 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-wide m-0">
-              PANGGILAN TERKINI {dateRangeText ? dateRangeText.replace(/^\s*\(/, '(') : '(15 Aug 2026 s/d 15 Sep 2026)'}
+              MATRIKS PELAPORAN PANGGILAN TAHUN {tahun}
             </h3>
             <p className="text-sm sm:text-base text-slate-600 font-normal mt-1 mb-0">
-              Matriks pemantauan sebaran panggilan darurat 119, keluhan medis, armada ambulans, dan status rujukan faskes.
+              Matriks pelaporan panggilan PSC 119 tahun {tahun}, keluhan medis, armada ambulans, dan status rujukan faskes.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 shrink-0 w-full md:w-auto">
