@@ -319,7 +319,8 @@ export default function TvDashboardContainer({ scopeProvinsi, scopeEventId }: Tv
 
         // Fetch Live NTT Weather for 8 Kabupatens + Kupang
         try {
-          const weatherRes = await fetch('/api/weather-ntt', { cache: 'no-store' })
+          const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
+          const weatherRes = await fetch(`${basePath}/api/weather-ntt`, { cache: 'no-store' })
           if (weatherRes.ok) {
             const wJson = await weatherRes.json()
             if (wJson.success && Array.isArray(wJson.data)) {

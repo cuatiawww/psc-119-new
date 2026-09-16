@@ -773,16 +773,8 @@ export default function DetailKejadianPage({ selectedEvent, onBack, onDetailLoad
     fetchAllNttSipkkReports()
     fetchPenyakitSurveilans()
 
-    // Interval auto-refresh setiap 30 menit (1.800.000 ms)
-    const intervalId = setInterval(() => {
-      fetchNtt()
-      fetchAllNttSipkkReports()
-      fetchPenyakitSurveilans()
-    }, 30 * 60 * 1000)
-
     return () => {
       active = false
-      clearInterval(intervalId)
     }
   }, [isNttEvent])
 

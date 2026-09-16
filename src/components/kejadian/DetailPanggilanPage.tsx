@@ -44,6 +44,14 @@ const numberValue = (...values: any[]) => {
   return Number.isFinite(parsed) && Math.abs(parsed) > 0.00001 ? parsed : null
 }
 
+const proximityScore = (originLat: number | null, originLng: number | null, lat: number | null, lng: number | null) => {
+  if (originLat === null || originLng === null || lat === null || lng === null) return Number.POSITIVE_INFINITY
+  const lngScale = Math.cos((originLat * Math.PI) / 180) || 1
+  const latDelta = (lat - originLat) * 111
+  const lngDelta = (lng - originLng) * 111 * lngScale
+  return Math.sqrt((latDelta * latDelta) + (lngDelta * lngDelta))
+}
+
 const maskName = (value: any) => {
   const name = String(value || '').trim()
   if (!name) return 'Tidak tersedia'
@@ -128,6 +136,7 @@ export default function DetailPanggilanPage({ selectedEvent, onBack, hideBack }:
   const initialCall = useMemo(() => ({ ...selectedRaw, ...selectedEvent }), [selectedEvent, selectedRaw])
   const [call, setCall] = useState<any>(initialCall)
   const [hospitals, setHospitals] = useState<any[]>([])
+  const [resourceAmbulances, setResourceAmbulances] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [routeCoords, setRouteCoords] = useState<number[][]>([])
@@ -184,7 +193,23 @@ export default function DetailPanggilanPage({ selectedEvent, onBack, hideBack }:
 
   const callLat = numberValue(call?.latitude, call?.lat, selectedEvent?.lat)
   const callLng = numberValue(call?.longitude, call?.lng, selectedEvent?.lng)
+  const callKodePsc = String(firstValue(call?.kode_psc, selectedRaw?.kode_psc) || '').trim()
+  const callYear = String(firstValue(call?.tanggal_panggilan, call?.tgl_pelaporan_panggilan, '')).match(/(20\d{2})/)?.[1] || '2026'
   const referralName = String(firstValue(call?.rumahsakit_rujukan, call?.nama_rumahsakit_rujukan, call?.rumah_sakit_tujuan) || '').trim()
+
+  useEffect(() => {
+    if (!callKodePsc) return
+    let active = true
+    fetch(`/api/bencana-stats?kode_psc=${encodeURIComponent(callKodePsc)}&year=${callYear}`, { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload) => {
+        if (!active) return
+        if (Array.isArray(payload?.hospitals) && payload.hospitals.length > 0) setHospitals(payload.hospitals)
+        setResourceAmbulances(Array.isArray(payload?.ambulances) ? payload.ambulances : [])
+      })
+      .catch(() => undefined)
+    return () => { active = false }
+  }, [callKodePsc, callYear])
 
   const normalizedHospitals = useMemo(() => hospitals.map((hospital: any, index: number) => ({
     ...hospital,
@@ -194,6 +219,10 @@ export default function DetailPanggilanPage({ selectedEvent, onBack, hideBack }:
     lng: numberValue(hospital.longitude, hospital.lng, hospital.lon),
   })).filter((hospital: any) => hospital.lat !== null && hospital.lng !== null), [hospitals])
 
+  const nearestHospital = useMemo(() => normalizedHospitals
+    .slice()
+    .sort((a: any, b: any) => proximityScore(callLat, callLng, a.lat, a.lng) - proximityScore(callLat, callLng, b.lat, b.lng))[0] || null, [callLat, callLng, normalizedHospitals])
+
   const referralHospital = useMemo(() => {
     const direct = {
       nama: referralName,
@@ -201,25 +230,46 @@ export default function DetailPanggilanPage({ selectedEvent, onBack, hideBack }:
       lng: numberValue(call?.longitude_rumahsakit, call?.longitude_rs, call?.rs_longitude, call?.rumahsakit_longitude),
     }
     if (direct.nama && direct.lat !== null && direct.lng !== null) return direct
-    if (!referralName) return null
-    const needle = referralName.toLowerCase().replace(/[^a-z0-9]/g, '')
-    return normalizedHospitals.find((hospital: any) => String(hospital.nama).toLowerCase().replace(/[^a-z0-9]/g, '').includes(needle) || needle.includes(String(hospital.nama).toLowerCase().replace(/[^a-z0-9]/g, ''))) || null
-  }, [call, normalizedHospitals, referralName])
+    if (referralName) {
+      const needle = referralName.toLowerCase().replace(/[^a-z0-9]/g, '')
+      const matched = normalizedHospitals.find((hospital: any) => String(hospital.nama).toLowerCase().replace(/[^a-z0-9]/g, '').includes(needle) || needle.includes(String(hospital.nama).toLowerCase().replace(/[^a-z0-9]/g, '')))
+      if (matched) return matched
+    }
+    return nearestHospital
+  }, [call, nearestHospital, normalizedHospitals, referralName])
+
+  const mapHospitals = useMemo(() => {
+    const candidates = [nearestHospital, referralHospital].filter(Boolean) as any[]
+    const unique = new Map<string, any>()
+    candidates.forEach((hospital) => {
+      const key = `${hospital.lat}:${hospital.lng}`
+      if (!unique.has(key)) unique.set(key, hospital)
+    })
+    return Array.from(unique.values())
+  }, [nearestHospital, referralHospital])
 
   const ambulance = useMemo(() => {
-    const lat = numberValue(call?.latitude_ambulan, call?.lat_ambulan, call?.ambulance_latitude, call?.lat_ambulance)
-    const lng = numberValue(call?.longitude_ambulan, call?.lng_ambulan, call?.ambulance_longitude, call?.lng_ambulance)
-    if (lat === null || lng === null) return []
-    return [{
+    const callLatAmbulance = numberValue(call?.latitude_ambulan, call?.lat_ambulan, call?.ambulance_latitude, call?.lat_ambulance)
+    const callLngAmbulance = numberValue(call?.longitude_ambulan, call?.lng_ambulan, call?.ambulance_longitude, call?.lng_ambulance)
+    const callAmbulance = callLatAmbulance !== null && callLngAmbulance !== null ? [{
       id_ambulan: call?.id_ambulan || `dispatch-${ticketId}`,
       kode_ambulan: call?.nomor_kendaraan || call?.id_ambulan || 'Ambulans PSC',
       no_kendaraan: call?.nomor_kendaraan || 'Ambulans PSC 119',
       nama_psc: call?.nama_psc,
       status_aktif: status.completed ? '1' : 'Sedang Bertugas',
-      lat,
-      lng,
-    }]
-  }, [call, status.completed, ticketId])
+      lat: callLatAmbulance,
+      lng: callLngAmbulance,
+    }] : []
+    const apiAmbulances = resourceAmbulances.map((item: any, index: number) => ({
+      ...item,
+      id_ambulan: item.id_ambulan || `ambulance-${index}`,
+      lat: numberValue(item.latitude, item.lat),
+      lng: numberValue(item.longitude, item.lng, item.lon),
+    })).filter((item: any) => item.lat !== null && item.lng !== null)
+    return [...apiAmbulances, ...callAmbulance]
+      .sort((a: any, b: any) => proximityScore(callLat, callLng, a.lat, a.lng) - proximityScore(callLat, callLng, b.lat, b.lng))
+      .slice(0, 1)
+  }, [call, callLat, callLng, resourceAmbulances, status.completed, ticketId])
 
   const marker = useMemo(() => {
     if (callLat === null || callLng === null) return []
@@ -387,9 +437,10 @@ export default function DetailPanggilanPage({ selectedEvent, onBack, hideBack }:
           <DisasterMap
             markers={marker as any}
             ambulances={ambulance}
-            hospitals={normalizedHospitals}
+            hospitals={mapHospitals}
             isGuest={false}
             isFloodEocMode={true}
+            isCallDetailMode={true}
             selectedRouteTarget={routeTarget}
             routeCoords={routeCoords}
             routeInfo={routeInfo}

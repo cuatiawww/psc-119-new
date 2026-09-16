@@ -48,4 +48,5 @@ next-env.d.ts
 
 # NTT collector runtime data
 /data/ntt/*.csv
+code snippet psc dashboard.txt
 /data/ntt/manifest.json

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { formatDisasterName } from '@/lib/utils/disasterUtils'
-import { Loader2, Settings, X, MapPin, Eye, EyeOff, Globe, Layers, Info, Clock, AlertTriangle, Compass, Activity, RotateCcw, Wind, Building2, Tent, Ambulance } from 'lucide-react'
+import { Loader2, Settings, X, MapPin, Eye, EyeOff, Globe, Layers, Info, Clock, AlertTriangle, Compass, Activity, RotateCcw, Wind, Building2, Tent, Ambulance, User, Phone, AlertCircle } from 'lucide-react'
 import { useAuthStore } from '@/lib/authStore'
 
 
@@ -216,6 +216,8 @@ interface DisasterMapProps {
   onSelectEvent?: (event: MarkerData) => void
   // Flood EOC Routing Props
   isFloodEocMode?: boolean
+  /** Mode detail panggilan: peta hanya menampilkan panggilan, ambulans, RS, dan rute. */
+  isCallDetailMode?: boolean
   selectedRouteTarget?: {
     id: string
     name: string
@@ -373,19 +375,54 @@ const pinColor = (totalKorban: number) => {
   return '#dc2626'
 }
 
+/** Style OL untuk marker Titik Panggilan 119 (Ikon Gambar Orang) */
+const getCallerMarkerStyle = (m: any) => {
+  const isEmergency =
+    m?.is_krisis === 1 ||
+    String(m?.kategori_bencana || '') === '1' ||
+    String(m?.kategori_layanan || '').toLowerCase().includes('emergency') ||
+    String(m?.jenis_layanan || '').toLowerCase().includes('emergency')
+
+  const statusStr = String(m?.status_penanganan_code || m?.status_penanganan || '').toLowerCase()
+  const isSelesai = statusStr.includes('selesai')
+
+  // Color coding:
+  // Emergency (Gawat Darurat) -> Rose Red (%23e11d48)
+  // Selesai (Completed) -> Teal Kemenkes (%23047D78)
+  // Non-Emergency / Diproses -> Amber (%23f59e0b)
+  let fillColor = '%23e11d48'
+  if (isSelesai) {
+    fillColor = '%23047D78'
+  } else if (!isEmergency) {
+    fillColor = '%23f59e0b'
+  }
+
+  // Modern SVG: Person icon (Gambar Orang) di dalam lingkaran berbingkai putih rapih
+  const personSvg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36"><circle cx="18" cy="18" r="16" fill="${fillColor}" stroke="%23ffffff" stroke-width="2.5"/><circle cx="18" cy="11.5" r="4.2" fill="%23ffffff"/><path d="M10 25c0-4.4 3.6-8 8-8s8 3.6 8 8v1.5H10V25z" fill="%23ffffff"/></svg>`
+
+  return new Style({
+    image: new Icon({
+      src: personSvg,
+      scale: 0.9,
+    }),
+  })
+}
+
 /** Style OL untuk marker pin */
-const markerStyle = (iconFile: string | undefined, totalKorban: number) => {
-  if (iconFile) {
-    const backendUrl = process.env.NEXT_PUBLIC_SIPKK_BACKEND_BASE_URL || ''
-    const src = iconFile.startsWith('http')
-      ? iconFile
-      : `${backendUrl}/app_asset/icon/data_bencana/${iconFile}`
+const markerStyle = (iconFile: string | undefined, totalKorban: number, markerData?: any) => {
+  if (markerData?.marker_type === 'call' || markerData?.ticket_id || markerData?.sumber_panggilan || markerData?.nomor_kendaraan !== undefined) {
+    return getCallerMarkerStyle(markerData)
+  }
+  if (iconFile && (iconFile.startsWith('data:image') || iconFile.startsWith('http'))) {
     return new Style({
       image: new Icon({
-        src: src,
-        scale: 0.8,
+        src: iconFile,
+        scale: 0.85,
       }),
     })
+  }
+  if (markerData) {
+    return getCallerMarkerStyle(markerData)
   }
   return new Style({
     image: new CircleStyle({
@@ -462,6 +499,7 @@ export default function DisasterMap({
   setMarkerMonths,
   onSelectEvent,
   isFloodEocMode = false,
+  isCallDetailMode = false,
   selectedRouteTarget = null,
   routeCoords = [],
   routeInfo = null,
@@ -482,7 +520,7 @@ export default function DisasterMap({
 
   const [showTckLayer, setShowTckLayer] = useState(false) // Toggle layer TCK Kemkes (default: non-aktif)
   const [showPosko, setShowPosko] = useState(false) // Toggle layer Posko Pengungsian (default: non-aktif)
-  const [showSeismicLayer, setShowSeismicLayer] = useState(true) // Toggle layer Titik Gempa USGS/BMKG
+  const [showSeismicLayer, setShowSeismicLayer] = useState(!isCallDetailMode) // Toggle layer Titik Gempa USGS/BMKG
   const [showAmbulances, setShowAmbulances] = useState(true) // Toggle layer Ambulans PSC
   const [showHospitals, setShowHospitals] = useState(true) // Toggle layer RS Rujukan
   const [ambulancePopup, setAmbulancePopup] = useState<any | null>(null)
@@ -672,12 +710,27 @@ export default function DisasterMap({
   const [showBnpbHillshade, setShowBnpbHillshade] = useState(false)
   const [showBnpbKepadatan, setShowBnpbKepadatan] = useState(false)
   const [showBnpbBanjir, setShowBnpbBanjir] = useState(false)
-  const [showBnpbGempa, setShowBnpbGempa] = useState(true)
+  const [showBnpbGempa, setShowBnpbGempa] = useState(!isCallDetailMode)
   const [showBnpbLongsor, setShowBnpbLongsor] = useState(false)
   const [showBnpbKarhutla, setShowBnpbKarhutla] = useState(false)
 
   // Auto activate matching spatial layer ONLY on Detail Page (when disasterType is provided)
   useEffect(() => {
+    if (isCallDetailMode) {
+      setShowBnpbAdmin(false)
+      setShowBnpbHillshade(false)
+      setShowBnpbKepadatan(false)
+      setShowBnpbBanjir(false)
+      setShowBnpbGempa(false)
+      setShowBnpbLongsor(false)
+      setShowBnpbKarhutla(false)
+      setShowSeismicLayer(false)
+      setShowBmkg(false)
+      setShowTckLayer(false)
+      setShowPosko(false)
+      setShowWindy(false)
+      return
+    }
     if (!disasterType || disasterCategory === 'none') {
       setShowBnpbBanjir(false)
       setShowBnpbGempa(true)
@@ -709,7 +762,7 @@ export default function DisasterMap({
       setShowBnpbKarhutla(false)
       setShowBnpbGempa(false)
     }
-  }, [disasterCategory, disasterType])
+  }, [disasterCategory, disasterType, isCallDetailMode])
 
   const [markerPopup, setMarkerPopup] = useState<MarkerPopupState | null>(null)
   const [eocPopup, setEocPopup] = useState<EocPopupState | null>(null)
@@ -1434,7 +1487,7 @@ export default function DisasterMap({
     // Setup Windy Layer via npm ol-wind (async fetch GFS data)
     async function initWindy() {
       try {
-        const res = await fetch('/api/gfs')
+        const res = await fetch(`${NEXT_BASE_PATH}/api/gfs`)
         if (!res.ok) return
         const windData = await res.json()
         const baseVelocity = 0.01
@@ -1549,14 +1602,15 @@ export default function DisasterMap({
 
   // ── Sync BNPB Layers state ──
   useEffect(() => {
-    if (bnpbAdminLayerRef.current) bnpbAdminLayerRef.current.setVisible(showBnpbAdmin)
-    if (bnpbHillshadeLayerRef.current) bnpbHillshadeLayerRef.current.setVisible(showBnpbHillshade)
-    if (bnpbKepadatanLayerRef.current) bnpbKepadatanLayerRef.current.setVisible(showBnpbKepadatan)
-    if (bnpbBanjirLayerRef.current) bnpbBanjirLayerRef.current.setVisible(showBnpbBanjir)
-    if (bnpbGempaLayerRef.current) bnpbGempaLayerRef.current.setVisible(showBnpbGempa)
-    if (bnpbLongsorLayerRef.current) bnpbLongsorLayerRef.current.setVisible(showBnpbLongsor)
-    if (bnpbKarhutlaLayerRef.current) bnpbKarhutlaLayerRef.current.setVisible(showBnpbKarhutla)
-  }, [showBnpbAdmin, showBnpbHillshade, showBnpbKepadatan, showBnpbBanjir, showBnpbGempa, showBnpbLongsor, showBnpbKarhutla])
+    const visible = !isCallDetailMode
+    if (bnpbAdminLayerRef.current) bnpbAdminLayerRef.current.setVisible(visible && showBnpbAdmin)
+    if (bnpbHillshadeLayerRef.current) bnpbHillshadeLayerRef.current.setVisible(visible && showBnpbHillshade)
+    if (bnpbKepadatanLayerRef.current) bnpbKepadatanLayerRef.current.setVisible(visible && showBnpbKepadatan)
+    if (bnpbBanjirLayerRef.current) bnpbBanjirLayerRef.current.setVisible(visible && showBnpbBanjir)
+    if (bnpbGempaLayerRef.current) bnpbGempaLayerRef.current.setVisible(visible && showBnpbGempa)
+    if (bnpbLongsorLayerRef.current) bnpbLongsorLayerRef.current.setVisible(visible && showBnpbLongsor)
+    if (bnpbKarhutlaLayerRef.current) bnpbKarhutlaLayerRef.current.setVisible(visible && showBnpbKarhutla)
+  }, [isCallDetailMode, showBnpbAdmin, showBnpbHillshade, showBnpbKepadatan, showBnpbBanjir, showBnpbGempa, showBnpbLongsor, showBnpbKarhutla])
 
   // ── Sync Windy Layer state ──
   useEffect(() => {
@@ -1960,7 +2014,7 @@ export default function DisasterMap({
     const source = markerLayer.getSource()!
     source.clear()
 
-    if (!showMarkers || isFloodEocMode) {
+    if (!showMarkers || (isFloodEocMode && !isCallDetailMode)) {
       markerLayer.setVisible(false)
       const map = mapInstanceRef.current
       if (map) {
@@ -1972,25 +2026,53 @@ export default function DisasterMap({
 
     markerLayer.setVisible(true)
 
-    const validMarkers = filteredMarkers.filter((m) => m.lat && m.lng && m.lat !== 0 && m.lng !== 0)
-    const features: Feature<any>[] = validMarkers.map((m) => {
-      const feature = new Feature({
-        geometry: new Point(fromLonLat([m.lng, m.lat])),
-        markerData: m,
-      })
-      feature.setStyle(markerStyle(m.icon_file, m.total_korban))
-      return feature
-    })
-
-    // Clear old pulse overlays
+    // Clear old pulse overlays first
     const map = mapInstanceRef.current
     if (map) {
       pulseOverlaysRef.current.forEach((ov) => map.removeOverlay(ov))
       pulseOverlaysRef.current = []
     }
 
+    const validMarkers = filteredMarkers.filter((m) => {
+      const rawLat = m.lat !== undefined ? m.lat : (m as any).latitude
+      const rawLng = m.lng !== undefined ? m.lng : (m as any).longitude
+      const lat = typeof rawLat === 'number' ? rawLat : parseFloat(String(rawLat || '').trim())
+      const lng = typeof rawLng === 'number' ? rawLng : parseFloat(String(rawLng || '').trim())
+      return !isNaN(lat) && !isNaN(lng) && Math.abs(lat) > 0 && Math.abs(lng) > 0
+    })
+
+    const features: Feature<any>[] = validMarkers.map((m) => {
+      const rawLat = m.lat !== undefined ? m.lat : (m as any).latitude
+      const rawLng = m.lng !== undefined ? m.lng : (m as any).longitude
+      const lat = typeof rawLat === 'number' ? rawLat : parseFloat(String(rawLat || '').trim())
+      const lng = typeof rawLng === 'number' ? rawLng : parseFloat(String(rawLng || '').trim())
+      const feature = new Feature({
+        geometry: new Point(fromLonLat([lng, lat])),
+        markerData: { ...m, lat, lng },
+      })
+      feature.setStyle(getCallerMarkerStyle(m))
+      return feature
+    })
+
+    // Berikan efek radar pulse untuk panggilan gawat darurat aktif
+    validMarkers.slice(0, 6).forEach((m) => {
+      const isEmergency =
+        m.is_krisis === 1 ||
+        String(m.kategori_bencana || '') === '1' ||
+        String(m.kategori_layanan || '').toLowerCase().includes('emergency') ||
+        String(m.jenis_layanan || '').toLowerCase().includes('emergency')
+      const isSelesai = String(m.status_penanganan_code || m.status_penanganan || '').toLowerCase().includes('selesai')
+      const rawLat = m.lat !== undefined ? m.lat : (m as any).latitude
+      const rawLng = m.lng !== undefined ? m.lng : (m as any).longitude
+      const lat = typeof rawLat === 'number' ? rawLat : parseFloat(String(rawLat || '').trim())
+      const lng = typeof rawLng === 'number' ? rawLng : parseFloat(String(rawLng || '').trim())
+      if (isEmergency && !isSelesai && !isNaN(lat) && !isNaN(lng)) {
+        createPulseOverlay(lng, lat, 'danger')
+      }
+    })
+
     // Add BMKG Gempa Terkini Layer
-    if (showBmkg && bmkgGempas.length > 0) {
+    if (!isCallDetailMode && showBmkg && bmkgGempas.length > 0) {
       bmkgGempas.forEach((g) => {
         if (g.Coordinates) {
           const [latStr, lngStr] = g.Coordinates.split(',')
@@ -2120,7 +2202,7 @@ export default function DisasterMap({
     const source = eocLayer.getSource()!
     source.clear()
 
-    if (!isFloodEocMode || !showEocRoute) {
+    if ((!isFloodEocMode && !isCallDetailMode) || !showEocRoute) {
       eocLayer.setVisible(false)
       return
     }
@@ -2193,7 +2275,7 @@ export default function DisasterMap({
     }
 
     // 1. Add disaster location pins and pulsing radius circle ONLY on the main epicenter/target
-    if (showMarkers) {
+    if (showMarkers && !isCallDetailMode) {
       const validDisasterMarkers = Array.isArray(markers) ? markers : []
 
       validDisasterMarkers.forEach((m: any, idx: number) => {
@@ -2264,7 +2346,7 @@ export default function DisasterMap({
     }
 
     // 1.5. Add Real Earthquake Points & Epicenters (from USGS/BMKG API)
-    if (showSeismicLayer && Array.isArray(earthquakePoints) && earthquakePoints.length > 0) {
+    if (!isCallDetailMode && showSeismicLayer && Array.isArray(earthquakePoints) && earthquakePoints.length > 0) {
       // Identify mainshock index (highest magnitude or marked isMainshock)
       let mainshockIdx = 0
       let maxMag = -1
@@ -2501,7 +2583,7 @@ export default function DisasterMap({
       })
 
     // 3. Add Posko List (if enabled)
-    if (showPosko) {
+    if (!isCallDetailMode && showPosko) {
       const pList = Array.isArray(poskoList) ? poskoList : []
       pList.forEach((pos: any, idx: number) => {
         const pLat = Number(pos.latitude || pos.lat || 0)
@@ -2533,7 +2615,7 @@ export default function DisasterMap({
     }
 
     // 4. Add TCK Relawan List (if enabled)
-    if (showTckLayer) {
+    if (!isCallDetailMode && showTckLayer) {
       const tList = Array.isArray(tckList) ? tckList : []
       const nttKabCoords: Record<string, [number, number]> = {
         'mangga': [-8.62, 120.46],
@@ -2663,7 +2745,7 @@ export default function DisasterMap({
         pulseOverlaysRef.current = []
       }
     }
-  }, [showEocRoute, isFloodEocMode, showMarkers, showPosko, showTckLayer, showSeismicLayer, earthquakePoints, tckList, faskesList, faskesRusakList, faskesTypeFilters, poskoList, selectedRouteTarget, routeCoords, markers, mapInstance, pulseRadius])
+  }, [showEocRoute, isFloodEocMode, isCallDetailMode, showMarkers, showPosko, showTckLayer, showSeismicLayer, earthquakePoints, tckList, faskesList, faskesRusakList, faskesTypeFilters, poskoList, selectedRouteTarget, routeCoords, markers, mapInstance, pulseRadius])
 
   // ─────────────────────────────────────────────
   // Legend / UI data
@@ -2681,7 +2763,6 @@ export default function DisasterMap({
     { label: '> 50 kejadian', color: '#991b1b' },
   ]
 
-
   // ─────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────
@@ -2691,23 +2772,62 @@ export default function DisasterMap({
       ref={mapContainerRef}
       className="relative h-full w-full overflow-hidden rounded-2xl border border-slate-200 bg-[#f1fcfc]"
     >
-      {/* Floating Layer Switcher for PSC Map */}
+      {/* Floating Layer Switcher for PSC Map (Dihidden sementara sesuai permintaan user) */}
+      {/*
       <div className="absolute top-3.5 left-3.5 z-20 flex flex-wrap items-center gap-1.5 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-md text-xs font-bold">
         <button
           type="button"
           onClick={() => setShowMarkers((v) => !v)}
           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
             showMarkers
-              ? 'bg-red-50 text-red-700 border border-red-200 shadow-xs'
+              ? 'bg-rose-50 text-rose-700 border border-rose-200 shadow-xs'
               : 'bg-slate-100 text-slate-400 border border-transparent line-through'
           }`}
           title="Tampilkan/Sembunyikan Titik Panggilan 119"
         >
-          <span className={`h-2.5 w-2.5 rounded-full ${showMarkers ? 'bg-red-600 animate-pulse' : 'bg-slate-400'}`} />
-          Panggilan 119
+          <span className={`flex h-4 w-4 items-center justify-center rounded-full ${showMarkers ? 'bg-rose-600 text-white' : 'bg-slate-400 text-slate-100'}`}>
+            <User className="h-2.5 w-2.5" />
+          </span>
+          <span>Titik Panggilan {markers?.length ? `(${markers.length})` : ''}</span>
         </button>
 
+        {ambulances && ambulances.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAmbulances((v) => !v)}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+              showAmbulances
+                ? 'bg-amber-50 text-amber-700 border border-amber-200 shadow-xs'
+                : 'bg-slate-100 text-slate-400 border border-transparent opacity-60'
+            }`}
+            title="Tampilkan/Sembunyikan Armada Ambulans PSC"
+          >
+            <span className={`flex h-4 w-4 items-center justify-center rounded-full ${showAmbulances ? 'bg-amber-500 text-white' : 'bg-slate-400 text-slate-100'}`}>
+              <Ambulance className="h-2.5 w-2.5" />
+            </span>
+            <span>Ambulans ({ambulances.length})</span>
+          </button>
+        )}
+
+        {hospitals && hospitals.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowHospitals((v) => !v)}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+              showHospitals
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs'
+                : 'bg-slate-100 text-slate-400 border border-transparent opacity-60'
+            }`}
+            title="Tampilkan/Sembunyikan RS Rujukan"
+          >
+            <span className={`flex h-4 w-4 items-center justify-center rounded-full ${showHospitals ? 'bg-emerald-600 text-white' : 'bg-slate-400 text-slate-100'}`}>
+              <Building2 className="h-2.5 w-2.5" />
+            </span>
+            <span>RS Rujukan ({hospitals.length})</span>
+          </button>
+        )}
       </div>
+      */}
 
       {/* Floating EOC Route details card on the left side of the map (Hanya tampil saat rute aktif/diklik) */}
       {isFloodEocMode && showEocRoute && selectedRouteTarget && (
@@ -2716,7 +2836,7 @@ export default function DisasterMap({
             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1">
                 <Compass className="h-3.5 w-3.5 text-teal-700" />
-                Info Rujukan Faskes &amp; Evakuasi
+                {isCallDetailMode ? 'Info Rute Panggilan & Rujukan' : 'Info Rujukan Faskes & Evakuasi'}
               </span>
               <button
                 onClick={() => onSelectRouteTarget && onSelectRouteTarget(null, 'clinic')}
@@ -2754,7 +2874,7 @@ export default function DisasterMap({
                 <span className="text-[9px] font-bold text-slate-455 uppercase block">Rute Taktis Darurat</span>
                 <p className="text-[11px] text-slate-650 leading-relaxed font-semibold">
                   {selectedRouteTarget.type === 'hospital'
-                    ? 'Rute evakuasi gawat darurat ambulans menuju Rumah Sakit rujukan utama.'
+                    ? (isCallDetailMode ? 'Rute ambulans dari lokasi panggilan menuju Rumah Sakit rujukan/terdekat.' : 'Rute evakuasi gawat darurat ambulans menuju Rumah Sakit rujukan utama.')
                     : selectedRouteTarget.type === 'shelter'
                       ? 'Jalur penyelamatan dan mobilisasi warga terdampak menuju posko pengungsian terdekat.'
                       : selectedRouteTarget.type === 'tck'
@@ -2790,10 +2910,10 @@ export default function DisasterMap({
               </span>
               <div>
                 <span className="text-[9px] font-black uppercase tracking-wider text-teal-700 block leading-none">
-                  {selectedRouteTarget.type === 'tck' ? 'RUTE MOBILISASI TCK KEMKES' : 'RUTE NAVIGASI DARAT EOC'}
+                  {isCallDetailMode ? 'RUTE AMBULANS KE RUMAH SAKIT' : selectedRouteTarget.type === 'tck' ? 'RUTE MOBILISASI TCK KEMKES' : 'RUTE NAVIGASI DARAT EOC'}
                 </span>
                 <h4 className="text-xs sm:text-sm font-black text-slate-900 leading-tight mt-0.5 truncate max-w-[230px]">
-                  DARI BENCANA ➔ {selectedRouteTarget.name}
+                  {isCallDetailMode ? 'DARI LOKASI PANGGILAN →' : 'DARI BENCANA ➔'} {selectedRouteTarget.name}
                 </h4>
               </div>
             </div>
@@ -2812,7 +2932,7 @@ export default function DisasterMap({
               <span className="h-2.5 w-2.5 rounded-full bg-rose-600 shrink-0 animate-ping" />
               <span className="text-[10px] font-black text-slate-500 uppercase shrink-0 w-10">DARI:</span>
               <span className="font-extrabold text-slate-900 truncate">
-                📍 Titik Kejadian Bencana ({disasterType || 'Bencana'})
+                {isCallDetailMode ? '📍 Titik Panggilan PSC 119' : `📍 Titik Kejadian Bencana (${disasterType || 'Bencana'})`}
               </span>
             </div>
 
@@ -2876,10 +2996,10 @@ export default function DisasterMap({
         <button
           onClick={handleResetCenter}
           className="flex items-center gap-1.5 rounded-xl bg-white/95 border border-slate-300 px-3 py-2 shadow-md text-slate-750 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 transition-all active:scale-95 animate-in fade-in duration-200"
-          title="Kembali ke Titik Pusat Kejadian Bencana (Reset Zoom)"
+          title={isCallDetailMode ? 'Kembali ke Titik Panggilan (Reset Zoom)' : 'Kembali ke Titik Pusat Kejadian Bencana (Reset Zoom)'}
         >
           <RotateCcw className="h-3.5 w-3.5 text-teal-650" />
-          <span className="text-xs font-black tracking-wide hidden sm:inline">Pusat Kejadian</span>
+          <span className="text-xs font-black tracking-wide hidden sm:inline">{isCallDetailMode ? 'Pusat Panggilan' : 'Pusat Kejadian'}</span>
         </button>
 
         {/* Settings button */}
@@ -2929,17 +3049,17 @@ export default function DisasterMap({
                 {/* Toggle marker pins */}
                 <div
                   onClick={() => setShowMarkers((v) => !v)}
-                  className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 hover:bg-teal-50/50 hover:border-teal-100 transition-all"
+                  className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 hover:bg-rose-50/50 hover:border-rose-100 transition-all"
                 >
                   <div className="flex items-center gap-2.5">
-                    <MapPin className="h-4 w-4 text-teal-600" />
+                    <User className="h-4 w-4 text-rose-600" />
                     <div>
-                      <p className="text-xs font-semibold text-slate-800">Tampilkan Pin Marker</p>
-                      <p className="text-[10px] text-slate-400">Titik lokasi kejadian bencana</p>
+                      <p className="text-xs font-semibold text-slate-800">Titik Panggilan 119</p>
+                      <p className="text-[10px] text-slate-400">Titik lokasi pemanggil / kedaruratan (Ikon Orang)</p>
                     </div>
                   </div>
                   <div
-                    className={`relative h-5 w-9 rounded-full transition-colors duration-200 ${showMarkers ? 'bg-teal-600' : 'bg-slate-300'}`}
+                    className={`relative h-5 w-9 rounded-full transition-colors duration-200 ${showMarkers ? 'bg-rose-600' : 'bg-slate-300'}`}
                   >
                     <span
                       className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${showMarkers ? 'translate-x-4' : 'translate-x-0'}`}
@@ -3097,7 +3217,7 @@ export default function DisasterMap({
                     <div className="flex items-center gap-2.5">
                       <Layers className="h-4 w-4 text-teal-600" />
                       <div>
-                        <p className="text-xs font-semibold text-slate-800">Rute Evakuasi &amp; Faskes</p>
+                        <p className="text-xs font-semibold text-slate-800">{isCallDetailMode ? 'Rute Ambulans &amp; Rujukan' : 'Rute Evakuasi &amp; Faskes'}</p>
                         <p className="text-[10px] text-slate-400">Tampilkan jalur rute jalan raya dan pin faskes</p>
                       </div>
                     </div>
@@ -3112,7 +3232,7 @@ export default function DisasterMap({
                 )}
 
                 {/* Sub-Checkbox Filter Faskes (Simple List styled like Jenis Kejadian) */}
-                {isFloodEocMode && showEocRoute && (
+                {isFloodEocMode && showEocRoute && !isCallDetailMode && (
                   <div className="mt-2.5">
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
@@ -3271,7 +3391,7 @@ export default function DisasterMap({
                 )}
 
                 {/* Radius Denyutan Bencana (only when isFloodEocMode is active) */}
-                {isFloodEocMode && (
+                {isFloodEocMode && !isCallDetailMode && (
                   <div className="mt-2.5 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
                     <div className="flex items-center gap-2.5 mb-2.5">
                       <Compass className="h-4 w-4 text-rose-500 shrink-0" />
@@ -3305,7 +3425,7 @@ export default function DisasterMap({
                 )}
 
                 {/* Seleksi Titik Asal Rute (only when isFloodEocMode is active) */}
-                {isFloodEocMode && Array.isArray(markers) && markers.length > 0 && onSelectRouteSource && (
+                {isFloodEocMode && !isCallDetailMode && Array.isArray(markers) && markers.length > 0 && onSelectRouteSource && (
                   <div className="mt-2.5 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
                     <div className="flex items-center gap-2.5 mb-2">
                       <MapPin className="h-4 w-4 text-sky-600 shrink-0" />
@@ -3812,74 +3932,128 @@ export default function DisasterMap({
         </>
       )}
 
-      {/* ── Marker Pin Popup ── */}
+      {/* ── Marker Pin Popup (Titik Panggilan 119 - Ikon Orang) ── */}
       {markerPopup && (
         <div
-          className="absolute z-10 w-[280px] rounded-2xl border border-slate-200 bg-white shadow-[0_12px_40px_rgba(0,0,0,0.12)] transition-all duration-200"
+          className="absolute z-20 w-[310px] rounded-2xl border border-slate-200 bg-white/95 backdrop-blur-md shadow-[0_16px_48px_rgba(0,0,0,0.16)] transition-all duration-200 animate-in fade-in zoom-in-95"
           style={{
-            left: Math.min(markerPopup.x + 10, (mapContainerRef.current?.offsetWidth || 800) - 295),
+            left: Math.min(markerPopup.x + 10, (mapContainerRef.current?.offsetWidth || 800) - 325),
             top: Math.max(markerPopup.y - 10, 8),
           }}
         >
           {/* Header */}
           <div className="flex items-start justify-between border-b border-slate-100 p-3 pb-2.5">
-            <div className="min-w-0">
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-slate-800">
-                <MapPin className="h-2.5 w-2.5" />
-                Lokasi Kejadian
+            <div className="flex items-start gap-2.5 min-w-0">
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                String(markerPopup.data.status_penanganan_code || markerPopup.data.status_penanganan || '').toLowerCase().includes('selesai')
+                  ? 'bg-teal-100 text-teal-800'
+                  : markerPopup.data.is_krisis === 1 || String(markerPopup.data.kategori_bencana) === '1' || String(markerPopup.data.kategori_layanan || '').toLowerCase().includes('emergency')
+                  ? 'bg-rose-100 text-rose-700'
+                  : 'bg-amber-100 text-amber-800'
+              }`}>
+                <User className="h-4 w-4" />
               </span>
-              <h4 className="mt-1 text-[13px] font-extrabold uppercase text-[#1a3535] leading-tight">
-                {formatDisasterName(markerPopup.data.jenis_bencana)}
-              </h4>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-slate-800">
+                    Titik Panggilan 119
+                  </span>
+                  {(markerPopup.data.status_penanganan || markerPopup.data.status_penanganan_code) && (
+                    <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                      String(markerPopup.data.status_penanganan || markerPopup.data.status_penanganan_code).toLowerCase().includes('selesai')
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {markerPopup.data.status_penanganan || markerPopup.data.status_penanganan_code}
+                    </span>
+                  )}
+                </div>
+                <h4 className="mt-1 text-[13px] font-extrabold text-slate-900 leading-snug break-words">
+                  {markerPopup.data.kategori_layanan || markerPopup.data.jenis_layanan || formatDisasterName(markerPopup.data.jenis_bencana) || 'Panggilan Darurat Medis'}
+                </h4>
+              </div>
             </div>
             <button
               onClick={() => setMarkerPopup(null)}
-              className="ml-2 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition flex-shrink-0"
+              className="ml-1 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition shrink-0 cursor-pointer"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
 
           {/* Info rows */}
-          <div className="p-3 space-y-1.5 text-[11px] text-slate-600">
-            <div className="flex items-start gap-2">
-              <span className="w-16 flex-shrink-0 text-[10px] font-bold text-black uppercase">Tanggal</span>
-              <span className="font-semibold text-slate-800">{markerPopup.data.tgl_kejadian || '—'}</span>
-            </div>
-
-            <div className="flex items-start gap-2">
-              <span className="w-16 flex-shrink-0 text-[10px] font-bold text-black uppercase">Lokasi</span>
-              <span className="font-semibold text-slate-800 leading-snug">
-                {[markerPopup.data.kecamatan && `Kec. ${markerPopup.data.kecamatan}`, markerPopup.data.kabupaten].filter(Boolean).join(', ') || markerPopup.data.provinsi || '—'}
-              </span>
-            </div>
-
-            {markerPopup.data.nama_desa && markerPopup.data.nama_desa !== 'Desa Lainnya' && (
-              <div className="flex items-start gap-2">
-                <span className="w-16 flex-shrink-0 text-[10px] font-bold text-black uppercase">Desa/Dusun</span>
-                <span className="font-semibold text-slate-800">{markerPopup.data.nama_desa}</span>
+          <div className="p-3 space-y-2 text-[11px] text-slate-600">
+            {/* Keterangan / Keluhan Kejadian (seperti "Terjadi gigitan ular berbisa") */}
+            {(markerPopup.data.keterangan || (markerPopup.data.raw_psc as any)?.keterangan) && (
+              <div className="rounded-xl border border-amber-200/90 bg-amber-50/70 p-2.5 text-slate-800">
+                <div className="flex items-center gap-1 text-[10px] font-extrabold uppercase text-amber-900 mb-0.5">
+                  <AlertCircle className="h-3 w-3 text-amber-600 shrink-0" />
+                  Keterangan Kejadian
+                </div>
+                <p className="text-[11px] font-medium leading-relaxed text-slate-700 italic">
+                  &ldquo;{markerPopup.data.keterangan || (markerPopup.data.raw_psc as any)?.keterangan}&rdquo;
+                </p>
               </div>
             )}
 
-            {markerPopup.data.topografi && markerPopup.data.topografi !== '-' && (
-              <div className="flex items-start gap-2">
-                <span className="w-16 flex-shrink-0 text-[10px] font-bold text-black uppercase">Topografi</span>
-                <span className="font-semibold text-slate-800">{markerPopup.data.topografi}</span>
+            {/* No. Telepon Pemanggil / Pelapor */}
+            {(markerPopup.data.telp || (markerPopup.data.raw_psc as any)?.telp) && (
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-1.5">
+                <span className="text-slate-500 font-medium flex items-center gap-1.5 text-[10px] uppercase">
+                  <Phone className="h-3 w-3 text-emerald-600" /> Kontak Pelapor
+                </span>
+                <a
+                  href={`tel:${markerPopup.data.telp || (markerPopup.data.raw_psc as any)?.telp}`}
+                  className="font-mono font-bold text-teal-800 hover:text-teal-950 underline"
+                >
+                  {markerPopup.data.telp || (markerPopup.data.raw_psc as any)?.telp}
+                </a>
               </div>
             )}
 
-            <div className="flex items-start gap-2">
-              <span className="w-16 flex-shrink-0 text-[10px] font-bold text-black uppercase">Layanan</span>
-              <span className="font-extrabold text-teal-800 text-[11px]">
-                {markerPopup.data.kategori_layanan || markerPopup.data.jenis_layanan || formatDisasterName(markerPopup.data.jenis_bencana) || 'Panggilan Darurat Medis'}
+            {/* Waktu Lapor */}
+            <div className="flex items-start justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Waktu Lapor</span>
+              <span className="font-semibold text-slate-800 text-right">
+                {markerPopup.data.tgl_kejadian || '—'}
               </span>
             </div>
 
-            {markerPopup.data.jml_titik_lokasi !== undefined && markerPopup.data.jml_titik_lokasi > 0 && !String(markerPopup.data.kode_trans || '').includes('-loc-') && (
-              <div className="flex items-start gap-2">
-                <span className="w-16 flex-shrink-0 text-[10px] font-bold text-black uppercase">Sebaran</span>
-                <span className="font-extrabold text-teal-800">
-                  {markerPopup.data.jml_titik_lokasi} titik lokasi kejadian
+            {/* Lokasi */}
+            <div className="flex items-start justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Lokasi</span>
+              <span className="font-semibold text-slate-800 text-right leading-tight max-w-[190px]">
+                {markerPopup.data.nama_lokasi || markerPopup.data.alamat || markerPopup.data.nama_desa || [markerPopup.data.kecamatan && `Kec. ${markerPopup.data.kecamatan}`, markerPopup.data.kabupaten].filter(Boolean).join(', ') || '—'}
+              </span>
+            </div>
+
+            {/* Ambulans Ditugaskan */}
+            {(markerPopup.data.nomor_kendaraan || markerPopup.data.nama_petugas_ambulan) && (
+              <div className="flex items-start justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Armada Ambulans</span>
+                <span className="font-semibold text-sky-800 text-right text-[10px] leading-tight max-w-[190px]">
+                  {markerPopup.data.nomor_kendaraan ? `[${markerPopup.data.nomor_kendaraan}] ` : ''}
+                  {markerPopup.data.nama_petugas_ambulan || '-'}
+                </span>
+              </div>
+            )}
+
+            {/* RS Rujukan */}
+            {(markerPopup.data.rumahsakit_rujukan || (markerPopup.data.raw_psc as any)?.rumahsakit_rujukan) && (
+              <div className="flex items-start justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">RS Rujukan</span>
+                <span className="font-semibold text-emerald-800 text-right text-[10px] leading-tight max-w-[190px]">
+                  {markerPopup.data.rumahsakit_rujukan || (markerPopup.data.raw_psc as any)?.rumahsakit_rujukan}
+                </span>
+              </div>
+            )}
+
+            {/* Waktu Respons */}
+            {(markerPopup.data.waktu_respons_label || markerPopup.data.waktu_respons || markerPopup.data.response_time_minutes) && (
+              <div className="flex items-start justify-between">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Waktu Respons</span>
+                <span className="font-semibold text-slate-800 text-right text-[10px]">
+                  {markerPopup.data.waktu_respons_label || `${markerPopup.data.waktu_respons || markerPopup.data.response_time_minutes} menit`}
                 </span>
               </div>
             )}
@@ -3894,9 +4068,9 @@ export default function DisasterMap({
                     onSelectEvent(markerPopup.data)
                   }
                 }}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-teal-700 py-2 text-[11px] font-bold text-white shadow-sm transition hover:bg-teal-800"
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-teal-700 py-2 text-[11px] font-bold text-white shadow-sm transition hover:bg-teal-800 cursor-pointer"
               >
-                LIHAT DETAIL
+                LIHAT DETAIL PANGGILAN
                 <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                 </svg>
@@ -4750,22 +4924,53 @@ export default function DisasterMap({
             </div>
           )}
 
-          {/* Pin Marker (Korban) legend */}
+          {/* Pin Marker (Panggilan, Ambulans, RS) legend */}
           {showCasualtyLegend && (
-            <div className="border-t border-slate-100 pt-2">
-              <p className="mb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-teal-800">Tingkat Kedaruratan Panggilan</p>
-              <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9.5px]">
-                {[
-                  { label: 'Informasi / Non-Gadar', color: '#94a3b8' },
-                  { label: 'Urgensi Sedang (P3)', color: '#facc15' },
-                  { label: 'Gawat Darurat (P2)', color: '#f97316' },
-                  { label: 'Kritis / Trauma (P1)', color: '#dc2626' },
-                ].map((b, i) => (
-                  <div key={i} className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-slate-200 shadow-xs animate-pulse" style={{ background: b.color }} />
-                    <span className="text-slate-700 font-semibold">{b.label}</span>
+            <div className="border-t border-slate-100 pt-2 space-y-2">
+              <div>
+                <p className="mb-1 text-[10px] font-extrabold uppercase tracking-widest text-teal-800">
+                  Ikon Layer Peta PSC 119
+                </p>
+                <div className="grid grid-cols-1 gap-1.5 text-[9.5px]">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-white shadow-xs">
+                      <User className="h-2.5 w-2.5" />
+                    </span>
+                    <span className="text-slate-700 font-semibold">Titik Panggilan 119 (Ikon Orang)</span>
                   </div>
-                ))}
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-white shadow-xs">
+                      <Ambulance className="h-2.5 w-2.5" />
+                    </span>
+                    <span className="text-slate-700 font-semibold">Armada Ambulans PSC</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-white shadow-xs">
+                      <Building2 className="h-2.5 w-2.5" />
+                    </span>
+                    <span className="text-slate-700 font-semibold">Rumah Sakit Rujukan</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-500">
+                  Status Titik Panggilan
+                </p>
+                <div className="grid grid-cols-3 gap-1 text-[9px]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-rose-600 shrink-0" />
+                    <span className="text-slate-700 font-medium">Emergency</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-500 shrink-0" />
+                    <span className="text-slate-700 font-medium">Diproses</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-teal-700 shrink-0" />
+                    <span className="text-slate-700 font-medium">Selesai</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}

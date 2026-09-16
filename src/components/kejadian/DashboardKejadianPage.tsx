@@ -854,7 +854,7 @@ export default function DashboardKejadianPage() {
     cutoff.setMonth(cutoff.getMonth() - markerMonths)
 
     return effectiveMarkers.filter((m) => {
-      if (!m.tgl_kejadian) return false
+      if (!m.tgl_kejadian) return true
       const eventDate = parseMarkerDate(m.tgl_kejadian)
       if (!eventDate) return true
       return eventDate >= cutoff
@@ -2414,21 +2414,7 @@ export default function DashboardKejadianPage() {
     return () => {
       window.removeEventListener('sipkk-refresh-data', handleRefresh)
     }
-  }, [fetchData])
-
-  // Polling data otomatis setiap 30 menit agar deteksi kejadian baru bekerja tanpa terlalu sering refresh skeleton
-  const fetchDataRef = useRef(fetchData)
-  useEffect(() => {
-    fetchDataRef.current = fetchData
-  }, [fetchData])
-
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      console.log('[DashboardKejadianPage] Polling new data from backend...')
-      fetchDataRef.current()
-    }, 1800000) // 30 menit (1.800.000 ms)
-    return () => clearInterval(intervalId)
-  }, [])
+  }, [fetchData]) // Auto-refresh interval dinonaktifkan sesuai permintaan pengguna (hanya memuat data saat filter berubah atau di-refresh manual)
 
   // Efek samping untuk otomatis men-generate laporan darurat yang realistis berbasis data aktual EOC dari API
   useEffect(() => {

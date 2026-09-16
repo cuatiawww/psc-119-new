@@ -58,6 +58,7 @@ export interface PscCallItem {
   telp?: string | null
   keterangan?: string | null
   is_krisis?: number
+  [key: string]: any
 }
 
 export interface PscCenterItem {
@@ -207,8 +208,13 @@ export interface PscCallRecord {
   telp?: string | null
   nomor_kendaraan?: string | null
   nama_petugas_ambulan?: string | null
+  nama_petugas_ambulan_lainnya?: string | null
   layanan_ambulance?: string | null
   rumahsakit_rujukan?: string | null
+  id_rumahsakit_rujukan?: string | null
+  waktu_respons?: string | number | null
+  waktu_respons_label?: string | null
+  keterangan?: string | null
   lat?: number | null
   lng?: number | null
   response_time_minutes?: number | null

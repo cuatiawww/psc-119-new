@@ -373,8 +373,14 @@ export async function GET(req: Request) {
       const spesifikasi = c.spesifikasi_layanan || c.kategori_layanan || c.keluhan || 'Gawat Darurat 119'
       spesifikasiCounts[spesifikasi] = (spesifikasiCounts[spesifikasi] || 0) + 1
 
-      let lat = c.latitude && !isNaN(parseFloat(c.latitude)) ? parseFloat(c.latitude) : null
-      let lng = c.longitude && !isNaN(parseFloat(c.longitude)) ? parseFloat(c.longitude) : null
+      const rawLat = c.latitude ?? (c as any).lat ?? (c.raw_psc as any)?.latitude
+      const rawLng = c.longitude ?? (c as any).lng ?? (c.raw_psc as any)?.longitude
+      let lat = rawLat && !isNaN(parseFloat(String(rawLat).trim())) && Math.abs(parseFloat(String(rawLat).trim())) > 0
+        ? parseFloat(String(rawLat).trim())
+        : null
+      let lng = rawLng && !isNaN(parseFloat(String(rawLng).trim())) && Math.abs(parseFloat(String(rawLng).trim())) > 0
+        ? parseFloat(String(rawLng).trim())
+        : null
 
       if (lat === null || lng === null) {
         // Fallback koordinat wilayah agar seluruh panggilan tercatat dalam pemetaan spasial dan tren
@@ -418,15 +424,20 @@ export async function GET(req: Request) {
         tanggal_panggilan: c.tanggal_panggilan || c.tgl_pelaporan_panggilan || '',
         jam_pelaporan_panggilan: c.jam_pelaporan_panggilan || '',
         petugas_pelapor: c.petugas_pelapor || '-',
-        nama_pelapor: c.nama_pelapor || 'Masyarakat',
+        nama_pelapor: c.nama_pelapor || (c as any).nama || 'Masyarakat',
         korban: c.korban || 'Tidak Diketahui',
-        alamat: c.nama_lokasi || c.alamat || '-',
+        alamat: c.alamat || c.nama_lokasi || '-',
         nama_lokasi: c.nama_lokasi || c.alamat || '-',
-        telp: c.telp || null,
+        telp: c.telp || (c as any).no_telp || null,
+        keterangan: c.keterangan || (c as any).keluhan || null,
         nomor_kendaraan: c.nomor_kendaraan || null,
         nama_petugas_ambulan: c.nama_petugas_ambulan || null,
+        nama_petugas_ambulan_lainnya: (c as any).nama_petugas_ambulan_lainnya || null,
         layanan_ambulance: c.layanan_ambulance || null,
         rumahsakit_rujukan: c.rumahsakit_rujukan || null,
+        id_rumahsakit_rujukan: (c as any).id_rumahsakit_rujukan || null,
+        waktu_respons: c.waktu_respons || null,
+        waktu_respons_label: (c as any).waktu_respons_label || (callResponseTime !== null ? `${callResponseTime} menit` : null),
         lat,
         lng,
         response_time_minutes: callResponseTime,
@@ -439,35 +450,46 @@ export async function GET(req: Request) {
       .filter((c): c is typeof c & { lat: number; lng: number } => typeof c.lat === 'number' && typeof c.lng === 'number' && !isNaN(c.lat) && !isNaN(c.lng))
       .map((c) => {
         const isEmergency = getPscServiceCategory(c) === 'Emergency'
+        const rawItem = (c.raw_psc as any) || {}
         return {
           marker_type: 'call' as const,
           kode_trans: c.ticket_id,
+          ticket_id: c.ticket_id,
           tgl_kejadian: c.tanggal_panggilan,
           jenis_bencana: c.spesifikasi_layanan || c.jenis_layanan,
           kategori_bencana: isEmergency ? '1' : '2',
           lat: c.lat!,
           lng: c.lng!,
-          provinsi: (c.raw_psc as any)?.provinsi || '',
-          kabupaten: (c.raw_psc as any)?.kabupaten || '',
-          nama_desa: c.alamat || '',
+          provinsi: rawItem.provinsi || '',
+          kabupaten: rawItem.kabupaten || '',
+          nama_desa: c.alamat || rawItem.nama_lokasi || '',
           kecamatan: c.nama_psc,
           is_krisis: isEmergency ? 1 : 0,
           total_korban: 1,
-          icon_file: isEmergency ? 'icon_krisis_red.png' : 'icon_krisis_yellow.png',
+          icon_file: isEmergency ? 'icon_caller_red.svg' : 'icon_caller_yellow.svg',
           raw_psc: c.raw_psc,
-          extension: (c.raw_psc as any)?.extension || 'Ext 119',
-          sumber_panggilan: (c.raw_psc as any)?.sumber_panggilan || '119',
+          extension: rawItem.extension || 'Ext 119',
+          sumber_panggilan: rawItem.sumber_panggilan || '119',
           spesifikasi_layanan: c.spesifikasi_layanan,
           jenis_layanan: c.jenis_layanan,
           id_jenis_layanan: c.id_jenis_layanan,
           kategori_layanan: c.kategori_layanan,
           nama_psc: c.nama_psc,
-          ticket_id: c.ticket_id,
+          status_penanganan: c.status_penanganan,
           status_penanganan_code: c.status_penanganan_code,
           nomor_kendaraan: c.nomor_kendaraan,
           nama_petugas_ambulan: c.nama_petugas_ambulan,
+          nama_petugas_ambulan_lainnya: c.nama_petugas_ambulan_lainnya || rawItem.nama_petugas_ambulan_lainnya || null,
           layanan_ambulance: c.layanan_ambulance,
+          rumahsakit_rujukan: c.rumahsakit_rujukan || rawItem.rumahsakit_rujukan || null,
+          id_rumahsakit_rujukan: c.id_rumahsakit_rujukan || rawItem.id_rumahsakit_rujukan || null,
           response_time_minutes: c.response_time_minutes,
+          waktu_respons: c.waktu_respons || rawItem.waktu_respons || null,
+          waktu_respons_label: c.waktu_respons_label || rawItem.waktu_respons_label || null,
+          keterangan: c.keterangan || rawItem.keterangan || null,
+          telp: c.telp || rawItem.telp || null,
+          nama_lokasi: c.nama_lokasi || rawItem.nama_lokasi || null,
+          nama_pelapor: c.nama_pelapor || rawItem.nama_pelapor || null,
         }
       })
 
