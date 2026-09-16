@@ -3550,7 +3550,7 @@ export default function DisasterMap({
                 {/* Toggle Real USGS/BMKG Seismic Epicenters */}
                 <div
                   onClick={() => setShowSeismicLayer((v) => !v)}
-                  className="flex cursor-pointer items-center justify-between rounded-xl border border-red-100 bg-red-50/50 px-3 py-2 hover:bg-red-100/50 transition-all"
+                  className="hidden flex cursor-pointer items-center justify-between rounded-xl border border-red-100 bg-red-50/50 px-3 py-2 hover:bg-red-100/50 transition-all"
                 >
                   <div>
                     <p className="text-xs font-semibold text-red-900 flex items-center gap-1.5">
@@ -3576,7 +3576,7 @@ export default function DisasterMap({
                 {/* Toggle TCK Kemkes Layer */}
                 <div
                   onClick={() => setShowTckLayer((v) => !v)}
-                  className="flex cursor-pointer items-center justify-between rounded-xl border border-teal-100 bg-teal-50/50 px-3 py-2 hover:bg-teal-100/50 transition-all"
+                  className="hidden flex cursor-pointer items-center justify-between rounded-xl border border-teal-100 bg-teal-50/50 px-3 py-2 hover:bg-teal-100/50 transition-all"
                 >
                   <div>
                     <p className="text-xs font-semibold text-teal-900 flex items-center gap-1.5">
@@ -3602,7 +3602,7 @@ export default function DisasterMap({
                 {/* Toggle Posko Pengungsian Layer */}
                 <div
                   onClick={() => setShowPosko((v) => !v)}
-                  className="flex cursor-pointer items-center justify-between rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2 hover:bg-sky-100/50 transition-all"
+                  className="hidden flex cursor-pointer items-center justify-between rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2 hover:bg-sky-100/50 transition-all"
                 >
                   <div>
                     <p className="text-xs font-semibold text-sky-900 flex items-center gap-1.5">
@@ -3627,7 +3627,7 @@ export default function DisasterMap({
 
                 <div
                   onClick={() => setShowBmkg((v) => !v)}
-                  className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 hover:bg-teal-50/50 hover:border-teal-100 transition-all"
+                  className="hidden flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 hover:bg-teal-50/50 hover:border-teal-100 transition-all"
                 >
                   <div>
                     <p className="text-xs font-semibold text-slate-800">Layer Gempa Terkini BMKG</p>
@@ -3802,14 +3802,14 @@ export default function DisasterMap({
               <div className={showMarkers ? "space-y-5 transition-opacity" : "space-y-5 opacity-40 pointer-events-none transition-opacity"}>
                 {/* ── Kategori Bencana ── */}
                 <div>
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-3">
+                  <p className="hidden text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-3">
                     Kategori Bencana
                   </p>
                   <div className="space-y-2">
                     {/* Bencana Alam */}
                     <div
                       onClick={() => toggleCategory('1')}
-                      className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2 hover:bg-teal-50/40 hover:border-teal-100 transition-all"
+                      className="hidden flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2 hover:bg-teal-50/40 hover:border-teal-100 transition-all"
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-slate-700">Bencana Alam</span>
@@ -3827,7 +3827,7 @@ export default function DisasterMap({
                     {/* Bencana Non-Alam */}
                     <div
                       onClick={() => toggleCategory('2')}
-                      className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2 hover:bg-teal-50/40 hover:border-teal-100 transition-all"
+                      className="hidden flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2 hover:bg-teal-50/40 hover:border-teal-100 transition-all"
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-slate-700">Bencana Non-Alam</span>
@@ -3845,7 +3845,7 @@ export default function DisasterMap({
                     {/* Bencana Sosial */}
                     <div
                       onClick={() => toggleCategory('3')}
-                      className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2 hover:bg-teal-50/40 hover:border-teal-100 transition-all"
+                      className="hidden flex cursor-pointer items-center justify-between rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2 hover:bg-teal-50/40 hover:border-teal-100 transition-all"
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-slate-700">Bencana Sosial</span>
