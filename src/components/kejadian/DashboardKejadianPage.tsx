@@ -63,6 +63,7 @@ import { useAuthStore } from '@/lib/authStore'
 import { getPscServiceCategory } from '@/lib/pscServiceCategory'
 import { isValidPscIcd10Value, resolvePscIcd10 } from '@/lib/pscIcd10'
 import { getPscResponseMinutes } from '@/lib/pscResponseTime'
+import { hasValidPscCoordinates } from '@/lib/pscCoordinates'
 import FilterDropdownBar, { type FilterSummary } from '@/components/landing/FilterDropdownBar'
 import DetailKejadianPage from './DetailKejadianPage'
 import DetailPanggilanPage from './DetailPanggilanPage'
@@ -783,7 +784,8 @@ export default function DashboardKejadianPage() {
     const markersWithCoordinates = effectiveMarkers.filter(
       (marker): marker is MarkerItem & { lat: number; lng: number } =>
         typeof marker.lat === 'number' && Number.isFinite(marker.lat) &&
-        typeof marker.lng === 'number' && Number.isFinite(marker.lng),
+        typeof marker.lng === 'number' && Number.isFinite(marker.lng) &&
+        hasValidPscCoordinates(marker.lat, marker.lng),
     )
     if (markerMonths === 0 || (!!filterStartDate && !!filterEndDate)) return markersWithCoordinates
 

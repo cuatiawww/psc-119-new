@@ -3,6 +3,7 @@ import type { PscCallItem, PscAmbulanceItem, PscHospitalItem, PscCallRecord, Psc
 import { getPscServiceCategory } from '@/lib/pscServiceCategory'
 import { resolvePscIcd10 } from '@/lib/pscIcd10'
 import { getPscResponseMinutes } from '@/lib/pscResponseTime'
+import { parsePscCoordinate } from '@/lib/pscCoordinates'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -372,12 +373,8 @@ export async function GET(req: Request) {
 
       const rawLat = c.latitude ?? (c as any).lat ?? (c.raw_psc as any)?.latitude
       const rawLng = c.longitude ?? (c as any).lng ?? (c.raw_psc as any)?.longitude
-      const lat = rawLat && !isNaN(parseFloat(String(rawLat).trim())) && Math.abs(parseFloat(String(rawLat).trim())) > 0
-        ? parseFloat(String(rawLat).trim())
-        : null
-      const lng = rawLng && !isNaN(parseFloat(String(rawLng).trim())) && Math.abs(parseFloat(String(rawLng).trim())) > 0
-        ? parseFloat(String(rawLng).trim())
-        : null
+      const lat = parsePscCoordinate(rawLat, 'latitude')
+      const lng = parsePscCoordinate(rawLng, 'longitude')
       const explicitVictimCount = [
         (c as any).total_korban,
         (c as any).jumlah_korban,
