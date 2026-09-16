@@ -583,124 +583,8 @@ export default function UnduhLaporanPage() {
     })
   }, [setHeader])
 
-  // DEFAULT SAMPLE REPORTS (Fallback data panggilan PSC 119)
-  const DEFAULT_SAMPLE_REPORTS: LaporanItem[] = [
-    {
-      id: 1,
-      kode_laporan: 'PSC-119-2026-088921',
-      tgl_kejadian: '2026-09-12T08:30:00Z',
-      tgl_kejadian_formatted: '12 Sep 2026',
-      jam_kejadian: '08:30 WIB',
-      tgl_perkembangan: '2026-09-12T08:42:00Z',
-      tgl_perkembangan_formatted: '12 Sep 2026',
-      jam_perkembangan: '08:42 WIB',
-      tingkat_bencana: 'Emergency (P1)',
-      provinsi: 'JAWA BARAT',
-      kabupaten: 'PSC 119 KAB. BANDUNG',
-      kecamatan: 'Bojongsoang',
-      desa: 'Jl. Terusan Buahbatu No. 45',
-      jenis_bencana: 'Trauma KLL',
-      korban_meninggal: 0,
-      korban_luka_berat: 1,
-      korban_luka_ringan: 1,
-      korban_hilang: 0,
-      penduduk_terdampak: 2,
-      pengungsi: 1,
-      faskes_terdampak: 1,
-      status_verifikasi: 'Diverifikasi',
-      deskripsi: 'Kecelakaan tabrakan motor vs pickup. Tim Ambulans Gadar tiba di TKP (Respon: 8 menit). Pasien fraktur femur kanan distabilisasi dan dirujuk ke RSUD Al-Ihsan.',
-      petugas: 'Dispatcher PSC 119 Bandung',
-      lat: -6.974,
-      lng: 107.632,
-    },
-    {
-      id: 2,
-      kode_laporan: 'PSC-119-2026-088922',
-      tgl_kejadian: '2026-09-12T09:15:00Z',
-      tgl_kejadian_formatted: '12 Sep 2026',
-      jam_kejadian: '09:15 WIB',
-      tgl_perkembangan: '2026-09-12T09:28:00Z',
-      tgl_perkembangan_formatted: '12 Sep 2026',
-      jam_perkembangan: '09:28 WIB',
-      tingkat_bencana: 'Emergency (P1)',
-      provinsi: 'JAWA TIMUR',
-      kabupaten: 'PSC 119 KOTA SURABAYA',
-      kecamatan: 'Wonokromo',
-      desa: 'Jl. Darmo Permai',
-      jenis_bencana: 'Non Trauma - Jantung',
-      korban_meninggal: 0,
-      korban_luka_berat: 1,
-      korban_luka_ringan: 0,
-      korban_hilang: 0,
-      penduduk_terdampak: 1,
-      pengungsi: 1,
-      faskes_terdampak: 1,
-      status_verifikasi: 'Diverifikasi',
-      deskripsi: 'Pasien pria 62 tahun mengalami nyeri dada hebat menjalar ke lengan kiri (Suspek STEMI). Paramedis ambulans memberikan terapi O2 & nitrat, dirujuk ke RSUD Dr. Soetomo.',
-      petugas: 'Dispatcher PSC 119 Surabaya',
-      lat: -7.295,
-      lng: 112.738,
-    },
-    {
-      id: 3,
-      kode_laporan: 'PSC-119-2026-088923',
-      tgl_kejadian: '2026-09-12T10:40:00Z',
-      tgl_kejadian_formatted: '12 Sep 2026',
-      jam_kejadian: '10:40 WIB',
-      tgl_perkembangan: '2026-09-12T10:55:00Z',
-      tgl_perkembangan_formatted: '12 Sep 2026',
-      jam_perkembangan: '10:55 WIB',
-      tingkat_bencana: 'Urgent (P2)',
-      provinsi: 'DKI JAKARTA',
-      kabupaten: 'PSC 119 DKI JAKARTA',
-      kecamatan: 'Kebayoran Baru',
-      desa: 'Jl. Senopati',
-      jenis_bencana: 'Ambulan Gadar',
-      korban_meninggal: 0,
-      korban_luka_berat: 0,
-      korban_luka_ringan: 1,
-      korban_hilang: 0,
-      penduduk_terdampak: 1,
-      pengungsi: 1,
-      faskes_terdampak: 1,
-      status_verifikasi: 'Diverifikasi',
-      deskripsi: 'Lansia pingsan di area publik akibat hipoglikemia. Pemberian dekstrosa intravena oleh paramedis di ambulans. Kondisi sadar penuh, observasi di RS Pusat Pertamina.',
-      petugas: 'Dispatcher AGD 119 Jakarta',
-      lat: -6.238,
-      lng: 106.812,
-    },
-    {
-      id: 4,
-      kode_laporan: 'PSC-119-2026-088924',
-      tgl_kejadian: '2026-09-12T11:20:00Z',
-      tgl_kejadian_formatted: '12 Sep 2026',
-      jam_kejadian: '11:20 WIB',
-      tgl_perkembangan: '2026-09-12T11:35:00Z',
-      tgl_perkembangan_formatted: '12 Sep 2026',
-      jam_perkembangan: '11:35 WIB',
-      tingkat_bencana: 'Emergency (P1)',
-      provinsi: 'DI YOGYAKARTA',
-      kabupaten: 'PSC 119 KAB. SLEMAN',
-      kecamatan: 'Depok',
-      desa: 'Jl. Kaliurang KM 5',
-      jenis_bencana: 'KIA - IBU',
-      korban_meninggal: 0,
-      korban_luka_berat: 1,
-      korban_luka_ringan: 0,
-      korban_hilang: 0,
-      penduduk_terdampak: 2,
-      pengungsi: 1,
-      faskes_terdampak: 1,
-      status_verifikasi: 'Diverifikasi',
-      deskripsi: 'Ibu hamil G2P1A0 usia kehamilan 38 minggu mengalami kejang eklampsia. Ambulans PONEK meluncur, terapi MgSO4 intra-transport, rujukan cito ke RSUP Dr. Sardjito.',
-      petugas: 'Dispatcher PSC 119 Sleman',
-      lat: -7.762,
-      lng: 110.384,
-    }
-  ]
-
   // MULTIPLE SELECT FILTER STATES & LIVE API DATA FETCHING
-  const [reports, setReports] = useState<LaporanItem[]>(DEFAULT_SAMPLE_REPORTS)
+  const [reports, setReports] = useState<LaporanItem[]>([])
   const [reportYear, setReportYear] = useState(() => {
     if (typeof window !== 'undefined') {
       const queryYear = new URLSearchParams(window.location.search).get('year') || new URLSearchParams(window.location.search).get('tahun')
@@ -813,10 +697,10 @@ export default function UnduhLaporanPage() {
             return
           }
         }
-        setReports(reportYear === '2026' ? DEFAULT_SAMPLE_REPORTS : [])
+        setReports([])
       } catch (err) {
-        console.warn('[UnduhLaporanPage] Error loading live reports API, using fallback data:', err)
-        setReports(reportYear === '2026' ? DEFAULT_SAMPLE_REPORTS : [])
+        console.warn('[UnduhLaporanPage] Error loading live reports API:', err)
+        setReports([])
       } finally {
         setLoadingApiReports(false)
       }

@@ -108,18 +108,6 @@ const DisasterMap = dynamic(() => import('./DisasterMap'), {
   ),
 })
 
-const DashboardBanjirEoc = dynamic(() => import('./DashboardBanjirEoc'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex min-h-[500px] w-full items-center justify-center rounded-2xl bg-slate-900 border border-slate-800">
-      <div className="text-center space-y-3">
-        <Loader2 className="mx-auto h-8 w-8 animate-spin text-teal-400" />
-        <p className="text-sm text-slate-400 font-semibold">Memuat peta & modul EOC Banjir...</p>
-      </div>
-    </div>
-  ),
-})
-
 const PROVINCE_CODE_LOOKUP: Record<string, string> = {
   '11': 'Aceh', '12': 'Sumatera Utara', '13': 'Sumatera Barat', '14': 'Riau', '15': 'Jambi',
   '16': 'Sumatera Selatan', '17': 'Bengkulu', '18': 'Lampung', '19': 'Kep. Bangka Belitung',
@@ -128,9 +116,43 @@ const PROVINCE_CODE_LOOKUP: Record<string, string> = {
   '52': 'Nusa Tenggara Barat', '53': 'Nusa Tenggara Timur', '61': 'Kalimantan Barat',
   '62': 'Kalimantan Tengah', '63': 'Kalimantan Selatan', '64': 'Kalimantan Timur',
   '65': 'Kalimantan Utara', '71': 'Sulawesi Utara', '72': 'Sulawesi Tengah',
-  '73': 'Sulawesi Selatan', '74': 'Sulawesi Tenggara', '75': 'Gorontalo', '76': 'Sulawesi Barat',
-  '81': 'Maluku', '82': 'Maluku Utara', '91': 'Papua Barat', '92': 'Papua',
-  '93': 'Papua Selatan', '94': 'Papua Tengah', '95': 'Papua Pegunungan', '96': 'Papua Barat Daya',
+  '73': 'Sulawesi Selatan', '74': 'Sulawesi Tenggara', '75': 'Gorontalo',
+  '76': 'Sulawesi Barat', '81': 'Maluku', '82': 'Maluku Utara', '91': 'Papua Barat',
+  '92': 'Papua', '93': 'Papua Selatan', '94': 'Papua Tengah', '95': 'Papua Pegunungan',
+  '96': 'Papua Barat Daya'
+}
+
+const AMBULANCE_TYPE_LABELS: Record<string, string> = {
+  '2': 'Transportasi',
+  '3': 'Gawat Darurat',
+}
+
+const AMBULANCE_OWNERSHIP_LABELS: Record<string, string> = {
+  '1': 'Milik PSC',
+  '2': 'Milik Jejaring',
+}
+
+const AMBULANCE_SOURCE_LABELS: Record<string, string> = {
+  '1': 'APBN/DAK',
+  '2': 'APBD',
+  '3': 'Hibah/Bantuan',
+}
+
+const AMBULANCE_CONDITION_LABELS: Record<string, string> = {
+  '1': 'Baik',
+  '2': 'Rusak Ringan',
+  '3': 'Rusak Berat',
+}
+
+const displayLookupValue = (label: unknown, id: unknown, labels?: Record<string, string>) => {
+  const text = String(label ?? '').trim()
+  if (text && text.toLowerCase() !== 'n/a' && text !== '-' && text !== '—') return text
+
+  const key = String(id ?? '').trim()
+  if (key && labels?.[key]) return labels[key]
+  if (key && PROVINCE_CODE_LOOKUP[key]) return PROVINCE_CODE_LOOKUP[key]
+  if (key && !/^\d+$/.test(key)) return key
+  return '—'
 }
 
 type SummaryData = {
@@ -212,37 +234,6 @@ const getMarkerServiceCategory = (marker: MarkerItem) => getPscServiceCategory({
   id_jenis_layanan: marker.raw_psc?.id_jenis_layanan ?? marker.id_jenis_layanan,
 })
 
-const AMBULANCE_TYPE_LABELS: Record<string, string> = {
-  '2': 'Transportasi',
-  '3': 'Gawat Darurat',
-}
-
-const AMBULANCE_OWNERSHIP_LABELS: Record<string, string> = {
-  '1': 'Milik PSC',
-  '2': 'Milik Jejaring',
-}
-
-const AMBULANCE_SOURCE_LABELS: Record<string, string> = {
-  '1': 'APBN/DAK',
-  '2': 'APBD',
-  '3': 'Hibah/Bantuan',
-}
-
-const AMBULANCE_CONDITION_LABELS: Record<string, string> = {
-  '1': 'Baik',
-  '2': 'Rusak Ringan',
-  '3': 'Rusak Berat',
-}
-
-const displayLookupValue = (label: unknown, id: unknown, labels?: Record<string, string>) => {
-  const text = String(label ?? '').trim()
-  if (text && text.toLowerCase() !== 'n/a' && text !== '-') return text
-
-  const key = String(id ?? '').trim()
-  if (key && labels?.[key]) return labels[key]
-  if (key) return `ID ${key}`
-  return '-'
-}
 
 const calculateAge = (birthDate: unknown, fallback?: unknown) => {
   const fallbackText = String(fallback ?? '').trim()
@@ -425,7 +416,6 @@ export default function DashboardKejadianPage() {
   const [generatingAi, setGeneratingAi] = useState(false)
   const [aiInsight, setAiInsight] = useState<string | null>(null)
   const [isSyncingMv, setIsSyncingMv] = useState(false)
-  const [dashboardMode, setDashboardMode] = useState<'multibencana' | 'banjir'>('multibencana')
 
   // 1=1bln, 3=3bln, 6=6bln, 12=1thn, 0=semua periode
   const [markerMonths, setMarkerMonths] = useState(1)
@@ -1603,7 +1593,7 @@ export default function DashboardKejadianPage() {
       kepemilikan: displayLookupValue(a.kepemilikan, a.kepemilikan_id, AMBULANCE_OWNERSHIP_LABELS),
       tahun: a.tahun || '—',
       kondisiKendaraan: displayLookupValue(a.kondisi_kendaraan, a.kondisi_kendaraan_id, AMBULANCE_CONDITION_LABELS),
-      penanggungJawab: a.penanggung_jawab || a.nama_penanggung_jawab || a.nama_petugas || (a.id_petugas ? `ID Petugas ${a.id_petugas}` : '—'),
+      penanggungJawab: a.penanggung_jawab || a.nama_penanggung_jawab || a.nama_petugas || '—',
       // Tetap dipertahankan untuk chart popup.
       pangkalan: a.nama_psc || a.kode_psc || '—',
       driver: a.nama_petugas || '—',
@@ -2489,7 +2479,7 @@ Hasil gap analysis operasional dispatch mengidentifikasi tiga fokus penguatan:
 7. Rekomendasi Strategis Terstruktur
 PANDUAN OPERASIONAL & RESPONS CEPAT:
 JANGKA PENDEK:
-- Pastikan ketersediaan nakes dan sopir ambulans siaga 24 jam di posko PSC 119 Ciangsana dan seluruh jejaring daerah.
+- Pastikan ketersediaan nakes dan sopir ambulans siaga 24 jam di posko PSC 119 ${topRegion !== 'Nasional' ? topRegion : 'wilayah operasional'} dan seluruh jejaring daerah.
 - Tingkatkan akurasi triase panggilan awal melalui protokol penapisan cepat (Medical Priority Dispatch System).
 - Koordinasikan jalur hijau lalu lintas bersama kepolisian setempat saat evakuasi kasus darurat trauma kritis.
 
@@ -2530,7 +2520,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
       const totalKorban = meninggal + luka + hilang
       const cfr = totalKorban > 0 ? ((meninggal / totalKorban) * 100).toFixed(2) : '0.00'
 
-      const mockText = `[ANALISIS RISK ASSESSMENT]
+      const analysisText = `[ANALISIS RISK ASSESSMENT]
 
 1. Executive Summary & Situasi Terkini
 Berdasarkan data intelijen terpadu PSC 119 Kementerian Kesehatan RI per tanggal real-time hari ini, tercatat volume ${totalBencana.toLocaleString('id-ID')} panggilan gawat darurat yang masuk dengan ${totalKrisis.toLocaleString('id-ID')} kasus dikategorikan sebagai panggilan Emergency aktif. Kategori layanan kedaruratan yang paling sering dilaporkan adalah ${topDisaster} dengan konsentrasi panggilan tertinggi berasal dari wilayah ${topRegion}. Seluruh panggilan telah dikoordinasikan ke unit PSC setempat dan jejaring faskes rujukan.
@@ -2556,7 +2546,7 @@ Hasil gap analysis operasional dispatch mengidentifikasi tiga fokus penguatan:
 7. Rekomendasi Strategis Terstruktur
 PANDUAN OPERASIONAL & RESPONS CEPAT:
 JANGKA PENDEK:
-- Pastikan ketersediaan nakes dan sopir ambulans siaga 24 jam di posko PSC 119 Ciangsana dan seluruh jejaring daerah.
+- Pastikan ketersediaan nakes dan sopir ambulans siaga 24 jam di posko PSC 119 ${topRegion !== 'Nasional' ? topRegion : 'wilayah operasional'} dan seluruh jejaring daerah.
 - Tingkatkan akurasi triase panggilan awal melalui protokol penapisan cepat (Medical Priority Dispatch System).
 - Koordinasikan jalur hijau lalu lintas bersama kepolisian setempat saat evakuasi kasus darurat trauma kritis.
 
@@ -2573,7 +2563,7 @@ JANGKA PANJANG:
 8. Kesimpulan Strategis EOC
 Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI berjalan tanggap dan terkoordinasi. Pengawasan terhadap kecepatan waktu respons dan ketersediaan ambulans rujukan tetap menjadi prioritas utama demi menjamin keselamatan jiwa masyarakat.`
 
-      setAiInsight(mockText)
+      setAiInsight(analysisText)
     } catch (err) {
       console.warn(err)
     } finally {
@@ -2797,46 +2787,8 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
 
   return (
     <div className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8 bg-[#fbffff]">
-      {/* Tab Selector Mode (Commented out as requested)
-      <div className="flex border-b border-slate-200 pb-2.5 items-center justify-between gap-4">
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200">
-          <button
-            onClick={() => setDashboardMode('multibencana')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-              dashboardMode === 'multibencana'
-                ? 'bg-teal-700 text-white shadow-sm'
-                : 'text-slate-650 hover:text-teal-700'
-            }`}
-          >
-            Dashboard Utama (Multi-Bencana)
-          </button>
-          <button
-            onClick={() => setDashboardMode('banjir')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 ${
-              dashboardMode === 'banjir'
-                ? 'bg-slate-900 text-teal-400 shadow-sm border border-slate-800'
-                : 'text-slate-650 hover:text-slate-900 hover:bg-slate-50'
-            }`}
-          >
-            <CloudRain className="h-3.5 w-3.5 text-teal-600 animate-pulse" />
-            EOC Kesehatan: Bencana Banjir
-          </button>
-        </div>
-        <div className="hidden md:flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-            Sistem Pemantauan Terpadu EOC
-          </span>
-        </div>
-      </div>
-      */}
-
-      {dashboardMode === 'banjir' ? (
-        <DashboardBanjirEoc />
-      ) : (
-        <>
-          {/* Smart Search, Info Filter & Reset Button Grid */}
-          <section className="grid grid-cols-1 md:grid-cols-[8fr_6fr_3fr_3fr] gap-4 w-full items-start z-20 relative">
+      {/* Smart Search, Info Filter & Reset Button Grid */}
+      <section className="grid grid-cols-1 md:grid-cols-[8fr_6fr_3fr_3fr] gap-4 w-full items-start z-20 relative">
 
         {/* Column 1: Smart Search Bar or Locked Unit Status */}
         <div className="relative w-full z-20">
@@ -4886,8 +4838,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
           </div>
         </div>
       )}
-        </>
-      )}
+
       {/* ── AI Analysis Modal ── */}
       {isAiModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">

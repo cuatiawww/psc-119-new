@@ -383,36 +383,13 @@ export async function GET(req: Request) {
         : null
 
       if (lat === null || lng === null) {
-        // Fallback koordinat wilayah agar seluruh panggilan tercatat dalam pemetaan spasial dan tren
-        const prov = (c.provinsi || '').toLowerCase()
-        const kab = (c.kabupaten || '').toLowerCase()
-        if (kab.includes('bogor') || prov.includes('jawa barat')) {
-          lat = -6.5950 + (Math.random() - 0.5) * 0.1
-          lng = 106.8166 + (Math.random() - 0.5) * 0.1
-        } else if (prov.includes('jakarta')) {
-          lat = -6.2088 + (Math.random() - 0.5) * 0.08
-          lng = 106.8456 + (Math.random() - 0.5) * 0.08
-        } else if (prov.includes('banten') || kab.includes('tangerang')) {
-          lat = -6.1783 + (Math.random() - 0.5) * 0.08
-          lng = 106.6319 + (Math.random() - 0.5) * 0.08
-        } else if (prov.includes('jawa tengah') || kab.includes('semarang')) {
-          lat = -7.0051 + (Math.random() - 0.5) * 0.1
-          lng = 110.4381 + (Math.random() - 0.5) * 0.1
-        } else if (prov.includes('jawa timur') || kab.includes('surabaya')) {
-          lat = -7.2575 + (Math.random() - 0.5) * 0.1
-          lng = 112.7521 + (Math.random() - 0.5) * 0.1
-        } else if (prov.includes('bali')) {
-          lat = -8.4095 + (Math.random() - 0.5) * 0.1
-          lng = 115.1889 + (Math.random() - 0.5) * 0.1
-        } else {
-          lat = -6.2000 + (Math.random() - 0.5) * 0.2
-          lng = 106.8166 + (Math.random() - 0.5) * 0.2
-        }
+        lat = 0
+        lng = 0
       }
 
       return {
-        kode_trans: c.ticket_id || c.kode_pelaporan_panggilan || `PSC-${idx}`,
-        ticket_id: c.ticket_id || c.kode_pelaporan_panggilan || `PSC-${idx}`,
+        kode_trans: c.ticket_id || c.kode_pelaporan_panggilan || '—',
+        ticket_id: c.ticket_id || c.kode_pelaporan_panggilan || '—',
         kode_psc: c.kode_psc || '',
         nama_psc: c.nama_psc || 'PSC 119 Kemenkes',
         status_penanganan_code: c.status_penanganan_code || (isCompleted ? 'Selesai' : 'Diproses'),

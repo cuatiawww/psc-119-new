@@ -125,7 +125,7 @@ export async function POST(req: Request) {
       hourlyCounts[jam] = (hourlyCounts[jam] || 0) + 1
     })
 
-    const avgResponseTime = responseTimeCount > 0 ? Math.round(responseTimeSum / responseTimeCount) : 15
+    const avgResponseTime = responseTimeCount > 0 ? Math.round(responseTimeSum / responseTimeCount) : 0
 
     const kategoriDistribution = Object.entries(kategoriCounts)
       .map(([name, count]) => ({
@@ -154,6 +154,8 @@ export async function POST(req: Request) {
       }
     })
 
+    const uniquePscInCalls = new Set(calls.map((c) => c.kode_psc).filter(Boolean)).size
+
     const statsData: PscStatsSummary = {
       totalPanggilan: totalDataNational,
       totalEmergency,
@@ -164,7 +166,7 @@ export async function POST(req: Request) {
       totalSelesai,
       totalDiproses,
       avgResponseTime,
-      totalPscCenters: 450,
+      totalPscCenters: uniquePscInCalls > 0 ? uniquePscInCalls : Number(json.total_psc || 0),
       kategoriDistribution,
       topWilayah,
       hourlyTrend,

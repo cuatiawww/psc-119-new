@@ -24,159 +24,89 @@ export default function BmkgSeismicDetailModal({
   bmkgGempa,
   earthquakeTimeline
 }: BmkgSeismicDetailModalProps) {
-  // Build the complete chronological list of days from disaster start (15 Aug 2026) to date now (26 Aug 2026)
+  const mainMag = useMemo(() => {
+    const raw = parseFloat(eventData?.magnitudo || bmkgGempa?.Magnitude || bmkgGempa?.magnitude || '0')
+    return !isNaN(raw) && raw > 0 ? raw : 0
+  }, [eventData, bmkgGempa])
+
+  // Build the complete chronological list of days from disaster start to date now
   const allDaysData = useMemo(() => {
-    const startStr = eventData?.tgl_kejadian_riil || eventData?.tgl_kejadian || '2026-08-15'
-    const startDate = new Date(startStr)
     const nowWib = new Date()
     const wibOffset = 7 * 60 * 60 * 1000
     const todayWibIso = new Date(nowWib.getTime() + wibOffset).toISOString().slice(0, 10)
 
-    // Base mainshock info
-    const mainMag = parseFloat(eventData?.magnitudo || bmkgGempa?.Magnitude || '7.7')
-    const mainDepth = eventData?.kedalaman || bmkgGempa?.Kedalaman || '15 km'
-    const mainPlace = eventData?.lokasi_detail || bmkgGempa?.Wilayah || 'Laut 30 km Timur Laut Mbay-Nagekeo-NTT'
-    const mainTsunami = eventData?.potensi_tsunami || 'Berpotensi Tsunami (Status Siaga & Waspada)'
-    const mainMmi = eventData?.skala_mmi || bmkgGempa?.Dirasakan || 'VII - VIII MMI (Mbay-Nagekeo, Flores Timur, Ende, Sikka)'
+    if (Array.isArray(earthquakeTimeline) && earthquakeTimeline.length > 0) {
+      return earthquakeTimeline.map((item: any, idx: number) => {
+        const itemDate = item.date ? new Date(item.date) : null
+        const dateIso = itemDate && !isNaN(itemDate.getTime()) ? itemDate.toISOString().slice(0, 10) : (item.dateStr || '')
+        const isEventDay = item.offset === 0 || item.isPeak || idx === 0
+        const isToday = dateIso === todayWibIso
+        const peakMag = parseFloat(String(item.topLabel || '').replace(/[^\d.]/g, '')) || 0
 
-    const rawMmiMatch = String(mainMmi).match(/([I|V|X]+(\s*-\s*[I|V|X]+)?)/i)
-    const mmiShort = rawMmiMatch ? `${rawMmiMatch[1]} MMI` : 'VII - VIII MMI'
+        return {
+          dateStr: dateIso || `day-${idx}`,
+          dayName: item.dayName || (itemDate && !isNaN(itemDate.getTime()) ? itemDate.toLocaleDateString('id-ID', { weekday: 'short' }).toUpperCase() : `H+${idx}`),
+          dateLabel: item.dateLabel || (itemDate && !isNaN(itemDate.getTime()) ? itemDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : `Hari ${idx + 1}`),
+          isEventDay,
+          isToday,
+          peakMag,
+          topLabel: item.topLabel || '-',
+          bottomLabel: item.bottomLabel || 'Tidak ada rekaman'
+        }
+      })
+    }
 
-    // Benchmark realistic BMKG daily earthquake catalogue for the disaster timeline (15 Agu - 26 Agu)
-    const daysCatalog: Array<{
-      dateStr: string
-      dayName: string
-      dateLabel: string
-      isEventDay: boolean
-      isToday: boolean
-      peakMag: number
-      topLabel: string
-      bottomLabel: string
-    }> = [
-      {
-        dateStr: '2026-08-15',
-        dayName: 'SAB',
-        dateLabel: '15 Agu',
-        isEventDay: true,
-        isToday: '2026-08-15' === todayWibIso,
-        peakMag: mainMag,
-        topLabel: `M ${mainMag.toFixed(1)}`,
-        bottomLabel: 'Gempa Utama',
-      },
-      {
-        dateStr: '2026-08-16',
-        dayName: 'MIN',
-        dateLabel: '16 Agu',
-        isEventDay: false,
-        isToday: false,
-        peakMag: 5.5,
-        topLabel: 'M 5.5',
-        bottomLabel: 'Susulan',
-      },
-      {
-        dateStr: '2026-08-17',
-        dayName: 'SEN',
-        dateLabel: '17 Agu',
-        isEventDay: false,
-        isToday: false,
-        peakMag: 5.5,
-        topLabel: 'M 5.5',
-        bottomLabel: 'Susulan',
-      },
-      {
-        dateStr: '2026-08-18',
-        dayName: 'SEL',
-        dateLabel: '18 Agu',
-        isEventDay: false,
-        isToday: false,
-        peakMag: 4.9,
-        topLabel: 'M 4.9',
-        bottomLabel: 'Susulan',
-      },
-      {
-        dateStr: '2026-08-19',
-        dayName: 'RAB',
-        dateLabel: '19 Agu',
-        isEventDay: false,
-        isToday: false,
-        peakMag: 5.8,
-        topLabel: 'M 5.8',
-        bottomLabel: 'Susulan',
-      },
-      {
-        dateStr: '2026-08-20',
-        dayName: 'KAM',
-        dateLabel: '20 Agu',
-        isEventDay: false,
-        isToday: false,
-        peakMag: 5.7,
-        topLabel: 'M 5.7',
-        bottomLabel: 'Susulan',
-      },
-      {
-        dateStr: '2026-08-21',
-        dayName: 'JUM',
-        dateLabel: '21 Agu',
-        isEventDay: false,
-        isToday: false,
-        peakMag: 4.9,
-        topLabel: 'M 4.9',
-        bottomLabel: 'Susulan',
-      },
-      {
-        dateStr: '2026-08-22',
-        dayName: 'SAB',
-        dateLabel: '22 Agu',
-        isEventDay: false,
-        isToday: false,
-        peakMag: 4.2,
-        topLabel: 'M 4.2',
-        bottomLabel: 'Susulan',
-      },
-      {
-        dateStr: '2026-08-23',
-        dayName: 'MIN',
-        dateLabel: '23 Agu',
-        isEventDay: false,
-        isToday: false,
-        peakMag: 4.1,
-        topLabel: 'M 4.1',
-        bottomLabel: 'Susulan',
-      },
-      {
-        dateStr: '2026-08-24',
-        dayName: 'SEN',
-        dateLabel: '24 Agu',
-        isEventDay: false,
-        isToday: false,
-        peakMag: 3.8,
-        topLabel: 'M 3.8',
-        bottomLabel: 'Peluruhan',
-      },
-      {
-        dateStr: '2026-08-25',
-        dayName: 'SEL',
-        dateLabel: '25 Agu',
-        isEventDay: false,
-        isToday: false,
-        peakMag: 3.6,
-        topLabel: 'M 3.6',
-        bottomLabel: 'Peluruhan',
-      },
-      {
-        dateStr: '2026-08-26',
-        dayName: 'RAB',
-        dateLabel: '26 Agu',
-        isEventDay: false,
-        isToday: '2026-08-26' === todayWibIso,
-        peakMag: 3.5,
-        topLabel: 'M 3.5',
-        bottomLabel: 'Peluruhan',
-      },
-    ]
+    const startStr = eventData?.tgl_kejadian_riil || eventData?.tgl_kejadian || ''
+    const startDate = startStr ? new Date(startStr) : new Date()
+    const validStart = !isNaN(startDate.getTime()) ? startDate : new Date()
 
-    return daysCatalog
-  }, [eventData, seismicResult, bmkgGempa])
+    const rawMmi = eventData?.skala_mmi || bmkgGempa?.Dirasakan || ''
+    const rawMmiMatch = String(rawMmi).match(/([I|V|X]+(\s*-\s*[I|V|X]+)?)/i)
+    const mmiShort = rawMmiMatch ? `${rawMmiMatch[1]} MMI` : ''
+
+    const daysList = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(validStart)
+      d.setDate(validStart.getDate() + i)
+      const dateIso = d.toISOString().slice(0, 10)
+
+      const apiItem = Array.isArray(seismicResult?.timeline)
+        ? seismicResult.timeline.find((t: any) => t.dateStr === dateIso || t.offset === i)
+        : null
+
+      let topLabel = '-'
+      let bottomLabel = 'Tidak ada rekaman'
+      let peakMag = 0
+
+      if (i === 0) {
+        if (mainMag > 0) {
+          topLabel = `M ${mainMag.toFixed(1)}`
+          bottomLabel = mmiShort ? `${mmiShort} (Utama)` : 'Gempa Utama'
+          peakMag = mainMag
+        } else if (apiItem && apiItem.magnitude > 0) {
+          topLabel = apiItem.topLabel
+          bottomLabel = apiItem.bottomLabel
+          peakMag = apiItem.magnitude
+        }
+      } else if (apiItem && apiItem.magnitude > 0) {
+        topLabel = apiItem.topLabel
+        bottomLabel = apiItem.bottomLabel
+        peakMag = apiItem.magnitude
+      }
+
+      daysList.push({
+        dateStr: dateIso,
+        dayName: d.toLocaleDateString('id-ID', { weekday: 'short' }).toUpperCase(),
+        dateLabel: d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+        isEventDay: i === 0,
+        isToday: dateIso === todayWibIso,
+        peakMag,
+        topLabel,
+        bottomLabel
+      })
+    }
+    return daysList
+  }, [earthquakeTimeline, eventData, bmkgGempa, seismicResult, mainMag])
 
   // Handle ESC key to close modal
   useEffect(() => {
@@ -213,7 +143,7 @@ export default function BmkgSeismicDetailModal({
               </span>
             </div>
             <p className="text-xs text-teal-100/80 mt-0.5">
-              Pantauan runtutan aktivitas gempa bumi harian dari gempa utama hingga fase peluruhan seismik (15 – 26 Agu 2026)
+              Pantauan runtutan aktivitas gempa bumi harian dari gempa utama hingga fase peluruhan seismik terverifikasi BMKG &amp; InaTEWS.
             </p>
           </div>
 
@@ -298,7 +228,7 @@ export default function BmkgSeismicDetailModal({
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-rose-600"></span>
-              <span className="font-bold text-slate-700">Gempa Utama (M 7.7)</span>
+              <span className="font-bold text-slate-700">Gempa Utama{mainMag > 0 ? ` (M ${mainMag.toFixed(1)})` : ''}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
