@@ -19,6 +19,15 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts', 'date-fns', 'framer-motion'],
   },
+  async redirects() {
+    return [
+      {
+        source: '/login',
+        destination: 'https://psc.kemkes.go.id/site/login',
+        permanent: false,
+      },
+    ]
+  },
   async rewrites() {
     return {
       beforeFiles: [

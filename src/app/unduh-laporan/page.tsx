@@ -700,7 +700,9 @@ export default function UnduhLaporanPage() {
   ]
 
   // MULTIPLE SELECT FILTER STATES & LIVE API DATA FETCHING
-  const [reports, setReports] = useState<LaporanItem[]>(DEFAULT_SAMPLE_REPORTS)
+  // Jangan tampilkan data contoh sebagai data operasional. Sebelum respons API
+  // diterima, tabel harus kosong dan menunggu status loading.
+  const [reports, setReports] = useState<LaporanItem[]>([])
   const [reportYear, setReportYear] = useState(() => {
     if (typeof window !== 'undefined') {
       const queryYear = new URLSearchParams(window.location.search).get('year') || new URLSearchParams(window.location.search).get('tahun')
@@ -737,40 +739,37 @@ export default function UnduhLaporanPage() {
         if (res.ok) {
           const json = await res.json().catch(() => null)
           const sourceCalls = Array.isArray(json?.calls) ? json.calls : (Array.isArray(json?.markers) ? json.markers : [])
-          if (json && Array.isArray(sourceCalls)) {
+          if (json?.success && Array.isArray(sourceCalls)) {
             const mapped: LaporanItem[] = sourceCalls.map((m: any, idx: number) => {
               const raw = m.raw_psc || {}
               const callDate = m.tanggal_panggilan || raw.tanggal_panggilan || m.tgl_kejadian || raw.tgl_pelaporan_panggilan
-              const d = callDate ? new Date(callDate) : new Date()
-              const dateStr = !isNaN(d.getTime())
+              const d = callDate ? new Date(callDate) : null
+              const dateStr = d && !isNaN(d.getTime())
                 ? d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
-                : callDate || 'Tidak tersedia'
-              const timeStr = !isNaN(d.getTime())
+                : callDate || '-'
+              const timeStr = d && !isNaN(d.getTime())
                 ? (m.jam_pelaporan_panggilan || raw.jam_pelaporan_panggilan || d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })) + ' WIB'
-                : (m.jam_pelaporan_panggilan || raw.jam_pelaporan_panggilan || '-') + ' WIB'
+                : (m.jam_pelaporan_panggilan || raw.jam_pelaporan_panggilan || '-')
 
               let jb = (m.spesifikasi_layanan || raw.spesifikasi_layanan || m.jenis_bencana || m.kategori_layanan || raw.kategori_layanan || m.jenis_layanan || raw.jenis_layanan || '').trim()
               if (!jb || jb === '0' || jb.toLowerCase() === 'null') {
-                jb = 'Lainnya'
+                jb = '-'
               }
 
-              const serviceType = String(m.jenis_layanan || raw.jenis_layanan || '').trim() || 'Non Category'
-              const callStatus = String(m.status_penanganan_code || raw.status_penanganan_code || m.status_penanganan || raw.status_penanganan || 'Diproses').trim()
-              const hasAmbulance = Boolean(m.nomor_kendaraan || raw.nomor_kendaraan || m.id_ambulan || raw.id_ambulan)
-              const hasReferral = Boolean(m.rumahsakit_rujukan || raw.rumahsakit_rujukan)
-
+              const serviceType = String(m.jenis_layanan || raw.jenis_layanan || '').trim() || '-'
+              const callStatus = String(m.status_penanganan_code || raw.status_penanganan_code || m.status_penanganan || raw.status_penanganan || '-').trim()
               return {
                 id: idx + 1,
-                kode_laporan: String(m.ticket_id || m.kode_trans || raw.ticket_id || m.id || `LAP-${d.getFullYear()}-${String(idx + 1).padStart(3, '0')}`),
-                tgl_kejadian: callDate || new Date().toISOString(),
+                kode_laporan: String(m.ticket_id || m.kode_trans || raw.ticket_id || m.id || ''),
+                tgl_kejadian: callDate || '',
                 tgl_kejadian_formatted: dateStr,
                 jam_kejadian: timeStr,
-                tgl_perkembangan: m.tgl_status_penanganan || raw.tgl_status_penanganan || callDate || new Date().toISOString(),
+                tgl_perkembangan: m.tgl_status_penanganan || raw.tgl_status_penanganan || callDate || '',
                 tgl_perkembangan_formatted: dateStr,
                 jam_perkembangan: timeStr,
                 tingkat_bencana: serviceType,
                 provinsi: resolveProvinceName(raw.provinsi || m.provinsi),
-                kabupaten: (raw.kabupaten || m.kabupaten || m.nama_psc || raw.nama_psc || 'Lainnya').toUpperCase().trim(),
+                kabupaten: (raw.kabupaten || m.kabupaten || m.nama_psc || raw.nama_psc || '-').toUpperCase().trim(),
                 kecamatan: (m.kecamatan || raw.kecamatan || '').trim() || '-',
                 desa: (m.nama_lokasi || raw.nama_lokasi || m.alamat || raw.alamat || m.nama_desa || '').trim() || '-',
                 jenis_bencana: jb,
@@ -779,11 +778,14 @@ export default function UnduhLaporanPage() {
                 korban_luka_ringan: Number(m.jml_lkringan || m.korban_luka_ringan || raw.jml_lkringan || 0),
                 korban_hilang: Number(m.jml_hilang || m.korban_hilang || raw.jml_hilang || 0),
                 penduduk_terdampak: Number(m.jml_pdk_terdampak || m.penduduk_terdampak || raw.jml_pdk_terdampak || 0),
-                pengungsi: hasAmbulance ? 1 : Number(m.jml_pengungsi || m.pengungsi || 0),
-                faskes_terdampak: hasReferral ? 1 : Number(m.faskes_terdampak || m.jml_faskes || 0),
+                // Endpoint panggilan tidak menyediakan jumlah pengungsi/faskes
+                // terdampak. Jangan mengubah keberadaan armada/rujukan menjadi
+                // angka korban atau faskes.
+                pengungsi: Number(m.jml_pengungsi || m.pengungsi || raw.jml_pengungsi || raw.pengungsi || 0),
+                faskes_terdampak: Number(m.faskes_terdampak || m.jml_faskes || raw.faskes_terdampak || raw.jml_faskes || 0),
                 status_verifikasi: callStatus,
-                deskripsi: m.keluhan || raw.keluhan || m.keterangan || raw.keterangan || `Panggilan ${serviceType} ${jb} dari ${raw.nama_psc || m.nama_psc || 'PSC 119'}.`,
-                petugas: m.petugas_pelapor || raw.petugas_pelapor || m.petugas || m.created_by || 'Petugas PSC 119',
+                deskripsi: m.keluhan || raw.keluhan || m.keterangan || raw.keterangan || '-',
+                petugas: m.petugas_pelapor || raw.petugas_pelapor || m.petugas || m.created_by || '-',
                 lat: m.lat !== undefined && m.lat !== null && m.lat !== '' ? Number(m.lat) : (raw.latitude ? Number(raw.latitude) : undefined),
                 lng: m.lng !== undefined && m.lng !== null && m.lng !== '' ? Number(m.lng) : (raw.longitude ? Number(raw.longitude) : undefined),
                 nama_psc: m.nama_psc || raw.nama_psc || '-',
@@ -813,10 +815,10 @@ export default function UnduhLaporanPage() {
             return
           }
         }
-        setReports(reportYear === '2026' ? DEFAULT_SAMPLE_REPORTS : [])
+        setReports([])
       } catch (err) {
-        console.warn('[UnduhLaporanPage] Error loading live reports API, using fallback data:', err)
-        setReports(reportYear === '2026' ? DEFAULT_SAMPLE_REPORTS : [])
+        console.warn('[UnduhLaporanPage] Error loading live reports API:', err)
+        setReports([])
       } finally {
         setLoadingApiReports(false)
       }
@@ -1699,7 +1701,34 @@ export default function UnduhLaporanPage() {
       console.warn('[CreateDashboard] AI synthesis fetch warning, beralih ke engine fallback lokal:', fetchErr)
     }
 
-    // Fallback instan jika API AI belum siap/offline, agar proses pembuatan dokumen TIDAK PERNAH MACET
+    // Fallback lokal tetap berbasis payload yang sudah dihitung dari API. Metrik
+    // yang tidak dikirim API tidak boleh diisi narasi atau angka perkiraan.
+    if (!aiData) {
+      aiData = {
+        ringkasan_laporan: `Ringkasan berdasarkan respons API mencatat ${totalReports.toLocaleString('id-ID')} panggilan pada cakupan ${filterWilayahText}. Data korban, dampak, coverage, dan response time tidak disimpulkan karena tidak tersedia sebagai metrik terverifikasi.`,
+        poin_utama: [
+          `Total panggilan dari API: ${totalReports.toLocaleString('id-ID')}.`,
+          `Kategori layanan yang dipilih: ${filterBencanaText}.`,
+          `Cakupan wilayah: ${filterWilayahText}.`,
+          'Metrik yang tidak tersedia pada payload API ditandai sebagai tidak tersedia.'
+        ],
+        analisis_spasial_naratif: 'Analisis hotspot dan coverage tidak dibuat tanpa data koordinat serta metrik pendukung yang lengkap.',
+        analisis_tren_epidemiologi: 'Analisis tren epidemiologi tidak tersedia pada payload API panggilan ini.',
+        aktivitas_indikator: [
+          { indikator: 'Volume Panggilan API', tren: '-', level: 'Data API', keterangan: `${totalReports.toLocaleString('id-ID')} record diterima.` },
+          { indikator: 'Korban dan Dampak', tren: '-', level: 'Tidak tersedia', keterangan: 'Tidak ada metrik terverifikasi pada payload panggilan.' },
+          { indikator: 'Response Time', tren: '-', level: 'Tidak tersedia', keterangan: 'Tidak ada metrik terverifikasi pada payload laporan.' }
+        ],
+        analisis_fasyankes_naratif: 'Status dan kapasitas fasilitas kesehatan tidak disimpulkan tanpa field sumber dari API.',
+        rekomendasi_emt: [],
+        analisis_logistik_naratif: 'Status armada dan logistik tidak disimpulkan tanpa field sumber dari API.',
+        landasan_kebijakan_naratif: 'Dokumen ini merupakan ringkasan payload API, bukan penilaian di luar data sumber.',
+        himbauan_masyarakat: []
+      }
+    }
+
+    // Blok lama dipertahankan untuk kompatibilitas struktur, tetapi tidak akan
+    // dijalankan karena fallback data-only di atas selalu mengisi aiData.
     if (!aiData) {
       aiData = {
         ringkasan_laporan: `Analisis intelijen surveilans terpadu mencatat eskalasi sebanyak <b>${totalReports} kejadian bencana</b> di wilayah <b>${filterWilayahText}</b>. Dinamika ancaman hidrometeorologi dan geospasial telah mempengaruhi keselamatan jiwa serta kesinambungan fasilitas layanan kesehatan masyarakat.\n\nTelaah morbiditas mengidentifikasi <b>${totalMeninggal} jiwa korban meninggal dunia</b>, <b>${totalLuka} jiwa korban luka-luka</b>, dan <b>${totalHilang} jiwa korban hilang</b>. Di samping korban langsung, terdapat <b>${totalPengungsi.toLocaleString('id-ID')} jiwa pengungsi</b> dan <b>${totalTerdampak.toLocaleString('id-ID')} jiwa penduduk terdampak</b> yang memerlukan intervensi sanitasi lingkungan darurat dan surveilans penyakit menular secara intensif.\n\nKlaster Kesehatan Kemenkes RI bersama Dinas Kesehatan Provinsi/Kabupaten dan jejaring lintas sektor terus memobilisasi Tenaga Cadangan Kesehatan (TCK) serta buffer stock logistik farmasi untuk menjamin stabilitas pelayanan medik darurat di posko pengungsian.`,

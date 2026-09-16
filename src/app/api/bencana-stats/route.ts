@@ -12,6 +12,178 @@ const PSC_API_TOKEN = process.env.PSC_API_TOKEN || ''
 
 let cachedResponse: { timestamp: number; data: any; key: string } | null = null
 const CACHE_TTL_MS = 45000 // 45 detik cache TTL
+const PAGE_SIZE = 100
+const PAGE_BATCH_SIZE = 4
+const FULL_DATA_CACHE_TTL_MS = 5 * 60 * 1000
+const fullDataCache = new Map<string, { timestamp: number; result: { rows: any[]; totalData: number; totalPages: number } }>()
+const fullDataInFlight = new Map<string, Promise<{ rows: any[]; totalData: number; totalPages: number }>>()
+
+type PscPageResponse = {
+  data?: any[]
+  total_data?: number | string
+  total_page?: number | string
+}
+
+const toPositiveNumber = (value: unknown, fallback = 0) => {
+  const number = Number(value)
+  return Number.isFinite(number) && number >= 0 ? number : fallback
+}
+
+async function fetchPscPage(
+  endpoint: string,
+  fields: Record<string, string>,
+  page: number,
+  headers: Record<string, string>,
+): Promise<PscPageResponse> {
+  let lastError: unknown = null
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const formData = new FormData()
+    Object.entries({ ...fields, page: String(page), per_page: String(PAGE_SIZE) }).forEach(([key, value]) => {
+      if (value) formData.append(key, value)
+    })
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
+    try {
+      const response = await fetch(`${PSC_API_BASE_URL}/${endpoint}`, {
+        method: 'POST',
+        headers,
+        body: formData,
+        signal: controller.signal,
+        cache: 'no-store',
+      })
+      if (!response.ok) {
+        throw new Error(`PSC API ${endpoint} page ${page} mengembalikan HTTP ${response.status}`)
+      }
+      return await response.json() as PscPageResponse
+    } catch (error) {
+      lastError = error
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 250))
+      }
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(`Gagal mengambil ${endpoint} page ${page}`)
+}
+
+async function fetchAllPscPagesUncached(
+  endpoint: string,
+  fields: Record<string, string>,
+  headers: Record<string, string>,
+) {
+  const fullDataCacheKey = `${endpoint}:${JSON.stringify(fields)}`
+  const cached = fullDataCache.get(fullDataCacheKey)
+  if (cached && Date.now() - cached.timestamp < FULL_DATA_CACHE_TTL_MS) {
+    return cached.result
+  }
+
+  const firstPage = await fetchPscPage(endpoint, fields, 1, headers)
+  const firstRows = Array.isArray(firstPage.data) ? firstPage.data : []
+  const totalData = toPositiveNumber(firstPage.total_data, firstRows.length)
+  const totalPages = Math.max(
+    1,
+    toPositiveNumber(firstPage.total_page, Math.ceil(totalData / PAGE_SIZE)),
+    Math.ceil(totalData / PAGE_SIZE),
+  )
+
+  const allRows = [...firstRows]
+  for (let start = 2; start <= totalPages; start += PAGE_BATCH_SIZE) {
+    const pageNumbers = Array.from(
+      { length: Math.min(PAGE_BATCH_SIZE, totalPages - start + 1) },
+      (_, index) => start + index,
+    )
+    const pageResponses = await Promise.all(
+      pageNumbers.map((page) => fetchPscPage(endpoint, fields, page, headers)),
+    )
+    pageResponses.forEach((pageResponse) => {
+      if (Array.isArray(pageResponse.data)) allRows.push(...pageResponse.data)
+    })
+  }
+
+  // Jangan deduplikasi berdasarkan kode/nama: API dapat mengembalikan lebih
+  // dari satu record dengan kode unit yang sama. Setiap baris respons adalah
+  // record sumber dan harus dipertahankan.
+  const rows = allRows
+  if (rows.length < totalData) {
+    throw new Error(`Data ${endpoint} tidak lengkap: API melaporkan ${totalData} record, tetapi hanya ${rows.length} record yang diterima.`)
+  }
+
+  const result = { rows, totalData, totalPages }
+  fullDataCache.set(fullDataCacheKey, { timestamp: Date.now(), result })
+  return result
+}
+
+async function fetchAllPscPages(
+  endpoint: string,
+  fields: Record<string, string>,
+  headers: Record<string, string>,
+) {
+  const fullDataCacheKey = `${endpoint}:${JSON.stringify(fields)}`
+  const cached = fullDataCache.get(fullDataCacheKey)
+  if (cached && Date.now() - cached.timestamp < FULL_DATA_CACHE_TTL_MS) {
+    return cached.result
+  }
+
+  let pending = fullDataInFlight.get(fullDataCacheKey)
+  if (!pending) {
+    pending = fetchAllPscPagesUncached(endpoint, fields, headers)
+    fullDataInFlight.set(fullDataCacheKey, pending)
+  }
+
+  try {
+    return await pending
+  } finally {
+    if (fullDataInFlight.get(fullDataCacheKey) === pending) {
+      fullDataInFlight.delete(fullDataCacheKey)
+    }
+  }
+}
+
+const parsePscDate = (value: unknown): Date | null => {
+  const text = String(value ?? '').replace(/\s*WIB/gi, '').trim()
+  if (!text) return null
+
+  const direct = new Date(text)
+  if (!Number.isNaN(direct.getTime())) return direct
+
+  const match = text.match(/^(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})/)
+  if (!match) return null
+  const months: Record<string, number> = {
+    januari: 0, februari: 1, maret: 2, april: 3, mei: 4, juni: 5,
+    juli: 6, agustus: 7, september: 8, oktober: 9, november: 10, desember: 11,
+  }
+  const month = months[match[2].toLowerCase()]
+  if (month === undefined) return null
+  const parsed = new Date(Number(match[3]), month, Number(match[1]))
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+const callDate = (call: any) => call?.tanggal_panggilan || call?.tgl_pelaporan_panggilan || ''
+
+const normalizeRegionValue = (value: unknown) => String(value ?? '')
+  .trim()
+  .toLowerCase()
+  .replace(/\s*\([^)]*\)/g, '')
+  .replace(/^(provinsi|prov\.?|kabupaten|kab\.?|kota|kecamatan|kec\.?|desa|kelurahan|nagari)\s+/i, '')
+  .replace(/[^a-z0-9]/g, '')
+
+const matchesRegionFilter = (row: any, requested: string, codeKeys: string[], nameKeys: string[]) => {
+  if (!requested) return true
+  const requestedText = normalizeRegionValue(requested)
+  const requestedIsCode = /^\d+$/.test(String(requested).trim())
+  const candidates = requestedIsCode
+    ? codeKeys.map((key) => String(row?.[key] ?? '').trim())
+    : nameKeys.map((key) => normalizeRegionValue(row?.[key]))
+  return candidates.some((candidate) => candidate === (requestedIsCode ? String(requested).trim() : requestedText))
+}
+
+const dateKey = (value: unknown) => {
+  const parsed = parsePscDate(value)
+  if (!parsed) return ''
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`
+}
 
 export async function GET(req: Request) {
   try {
@@ -21,8 +193,10 @@ export async function GET(req: Request) {
     const kode_psc = searchParams.get('kode_psc') || ''
     const province = searchParams.get('province') || ''
     const kabupaten = searchParams.get('kabupaten') || ''
+    const startDate = searchParams.get('start_date') || ''
+    const endDate = searchParams.get('end_date') || ''
 
-    const cacheKey = `${tahun}-${month}-${province}-${kabupaten}-${kode_psc}`
+    const cacheKey = `${tahun}-${month}-${province}-${kabupaten}-${kode_psc}-${startDate}-${endDate}`
     if (cachedResponse && cachedResponse.key === cacheKey && Date.now() - cachedResponse.timestamp < CACHE_TTL_MS) {
       return NextResponse.json(cachedResponse.data)
     }
@@ -30,160 +204,67 @@ export async function GET(req: Request) {
     const headers: Record<string, string> = {}
     if (PSC_API_TOKEN) headers['TTOKEN'] = PSC_API_TOKEN
 
-    // 1. Form data untuk panggilan (Halaman 1)
-    const fdCalls = new FormData()
-    fdCalls.append('tahun', tahun)
-    if (kode_psc) fdCalls.append('kode_psc', kode_psc)
-    if (province) fdCalls.append('kd_prop', province)
-    if (kabupaten) fdCalls.append('kd_kab', kabupaten)
-    fdCalls.append('page', '1')
-    fdCalls.append('per_page', '100')
+    const callFields: Record<string, string> = { tahun }
+    const unitFields: Record<string, string> = {}
+    if (kode_psc) {
+      callFields.kode_psc = kode_psc
+      unitFields.kode_psc = kode_psc
+    }
+    // Endpoint PSC mengharapkan kode wilayah pada kd_prop/kd_kab. Nama wilayah
+    // seperti "JAWA BARAT" atau "BOGOR" dapat memicu HTTP 500, jadi nama
+    // difilter setelah seluruh record API diterima.
+    if (/^\d+$/.test(province.trim())) callFields.kd_prop = province.trim()
+    if (/^\d+$/.test(kabupaten.trim())) callFields.kd_kab = kabupaten.trim()
 
-    // 2. Form data untuk armada ambulan
-    const fdAmb = new FormData()
-    if (kode_psc) fdAmb.append('kode_psc', kode_psc)
-    fdAmb.append('page', '1')
-    fdAmb.append('per_page', '100')
-
-    // 3. Form data untuk sarana rumah sakit
-    const fdRs = new FormData()
-    if (kode_psc) fdRs.append('kode_psc', kode_psc)
-    fdRs.append('page', '1')
-    fdRs.append('per_page', '100')
-
-    // 4. Form data untuk personil operasional PSC 119
-    const fdPersonil = new FormData()
-    if (kode_psc) fdPersonil.append('kode_psc', kode_psc)
-    fdPersonil.append('page', '1')
-    fdPersonil.append('per_page', '100')
-
-    // 5. Form data untuk pusat unit PSC terdaftar
-    const fdPsc = new FormData()
-    if (kode_psc) fdPsc.append('kode_psc', kode_psc)
-    fdPsc.append('page', '1')
-    fdPsc.append('per_page', '100')
-
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15000)
-
-    // Ambil data panggilan, ambulan, rumah sakit, personil, dan unit PSC secara paralel
-    const [callsSettled, ambSettled, rsSettled, personilSettled, pscSettled, jenisAmbulanSettled, kategoriAmbulanSettled] = await Promise.allSettled([
-      fetch(`${PSC_API_BASE_URL}/data-pelaporan-panggilan`, {
-        method: 'POST',
-        headers,
-        body: fdCalls,
-        signal: controller.signal,
-      }),
-      fetch(`${PSC_API_BASE_URL}/data-ambulan-psc`, {
-        method: 'POST',
-        headers,
-        body: fdAmb,
-        signal: controller.signal,
-      }),
-      fetch(`${PSC_API_BASE_URL}/data-rumahsakit-sarana`, {
-        method: 'POST',
-        headers,
-        body: fdRs,
-        signal: controller.signal,
-      }),
-      fetch(`${PSC_API_BASE_URL}/data-personil-psc`, {
-        method: 'POST',
-        headers,
-        body: fdPersonil,
-        signal: controller.signal,
-      }),
-      fetch(`${PSC_API_BASE_URL}/data-psc`, {
-        method: 'POST',
-        headers,
-        body: fdPsc,
-        signal: controller.signal,
-      }),
-      fetch(`${PSC_API_BASE_URL}/data-jenis-ambulan`, {
-        method: 'GET',
-        headers,
-        signal: controller.signal,
-      }),
-      fetch(`${PSC_API_BASE_URL}/data-kategori-ambulan`, {
-        method: 'GET',
-        headers,
-        signal: controller.signal,
-      }),
+    // Semua metrik dashboard harus berasal dari record lengkap, bukan halaman
+    // pertama atau halaman sampel.
+    const callsResult = await fetchAllPscPages('data-pelaporan-panggilan', callFields, headers)
+    const [ambulanceResult, hospitalResult, personnelResult, pscResult, jenisAmbulanResult, kategoriAmbulanResult] = await Promise.all([
+      fetchAllPscPages('data-ambulan-psc', unitFields, headers),
+      fetchAllPscPages('data-rumahsakit-sarana', unitFields, headers),
+      fetchAllPscPages('data-personil-psc', unitFields, headers),
+      fetchAllPscPages('data-psc', unitFields, headers),
+      fetch(`${PSC_API_BASE_URL}/data-jenis-ambulan`, { method: 'GET', headers, cache: 'no-store' })
+        .then(async (response) => response.ok ? await response.json() : {}),
+      fetch(`${PSC_API_BASE_URL}/data-kategori-ambulan`, { method: 'GET', headers, cache: 'no-store' })
+        .then(async (response) => response.ok ? await response.json() : {}),
     ])
-    clearTimeout(timeoutId)
 
-    let calls: PscCallItem[] = []
-    let totalCount = 0
-    let totalPages = 1
-    let ambulanceTotalPages = 1
-    let rsTotalPages = 1
-    let personilTotalPages = 1
-    let pscTotalPages = 1
-
-    if (callsSettled.status === 'fulfilled' && callsSettled.value.ok) {
-      const pscJson = await callsSettled.value.json().catch(() => ({}))
-      calls = pscJson.data || []
-      totalCount = pscJson.total_data || calls.length
-      totalPages = pscJson.total_page || Math.ceil(totalCount / 100)
+    let calls: PscCallItem[] = callsResult.rows as PscCallItem[]
+    if (province) {
+      calls = calls.filter((call) => matchesRegionFilter(
+        call,
+        province,
+        ['kd_prop', 'kode_prop', 'id_propinsi'],
+        ['provinsi', 'nama_prop', 'nama_provinsi'],
+      ))
     }
-
-    // Jika dataset memiliki banyak halaman (skala nasional/provinsi), ambil beberapa halaman representatif sepanjang tahun (Januari s.d September)
-    if (totalPages > 1 && (kode_psc || (totalPages > 4 && !month))) {
-      try {
-        const step = Math.max(1, Math.floor(totalPages / 6))
-        const samplePageIndices = kode_psc
-          ? Array.from({ length: totalPages - 1 }, (_, index) => index + 2)
-          : [step, step * 2, step * 3, step * 4, step * 5, totalPages].filter(p => p > 1 && p <= totalPages)
-        const extraCallsPromises = samplePageIndices.map(p => {
-          const fd = new FormData()
-          fd.append('tahun', tahun)
-          if (kode_psc) fd.append('kode_psc', kode_psc)
-          if (province) fd.append('kd_prop', province)
-          if (kabupaten) fd.append('kd_kab', kabupaten)
-          fd.append('page', String(p))
-          fd.append('per_page', '100')
-          return fetch(`${PSC_API_BASE_URL}/data-pelaporan-panggilan`, { method: 'POST', headers, body: fd }).then(r => r.json()).catch(() => ({}))
-        })
-        const extraRes = await Promise.all(extraCallsPromises)
-        for (const er of extraRes) {
-          if (er && er.data && Array.isArray(er.data)) {
-            calls.push(...er.data)
-          }
-        }
-      } catch (e) {
-        console.error('[bencana-stats] extra pages sample error:', e)
-      }
+    if (kabupaten) {
+      calls = calls.filter((call) => matchesRegionFilter(
+        call,
+        kabupaten,
+        ['kd_kab', 'kode_kab', 'id_kabupaten'],
+        ['kabupaten', 'nama_kab', 'nama_kabupaten'],
+      ))
     }
-
-    let rawPersonil: any[] = []
-    let totalPersonil = 0
-    if (personilSettled.status === 'fulfilled' && personilSettled.value.ok) {
-      const pJson = await personilSettled.value.json().catch(() => ({}))
-      rawPersonil = pJson.data || []
-      totalPersonil = pJson.total_data || rawPersonil.length
-      personilTotalPages = Number(pJson.total_page || Math.ceil(totalPersonil / 100)) || 1
-    }
-
-    let rawAmbulance: any[] = []
-    let totalAmbulans = 0
-    if (ambSettled.status === 'fulfilled' && ambSettled.value.ok) {
-      const ambJson = await ambSettled.value.json().catch(() => ({}))
-      rawAmbulance = ambJson.data || []
-      totalAmbulans = ambJson.total_data || rawAmbulance.length
-      ambulanceTotalPages = Number(ambJson.total_page || Math.ceil(totalAmbulans / 100)) || 1
-    }
+    let totalCount = calls.length
+    const rawPersonil: any[] = personnelResult.rows
+    const totalPersonil = personnelResult.totalData
+    let rawAmbulance: any[] = ambulanceResult.rows
+    const totalAmbulans = ambulanceResult.totalData
 
     // Tambahkan label master untuk matriks armada tanpa mengubah nilai ID sumber.
     const ambulanceTypeLabels: Record<string, string> = {}
     const ambulanceCategoryLabels: Record<string, string> = {}
-    if (jenisAmbulanSettled.status === 'fulfilled' && jenisAmbulanSettled.value.ok) {
-      const json = await jenisAmbulanSettled.value.json().catch(() => ({}))
+    {
+      const json = jenisAmbulanResult
       for (const item of Array.isArray(json?.data) ? json.data : []) {
         if (item?.id_jenis !== undefined && item?.jenis) ambulanceTypeLabels[String(item.id_jenis)] = item.jenis
         if (item?.id_j_ambulan !== undefined && item?.j_ambulan) ambulanceCategoryLabels[String(item.id_j_ambulan)] = item.j_ambulan
       }
     }
-    if (kategoriAmbulanSettled.status === 'fulfilled' && kategoriAmbulanSettled.value.ok) {
-      const json = await kategoriAmbulanSettled.value.json().catch(() => ({}))
+    {
+      const json = kategoriAmbulanResult
       for (const item of Array.isArray(json?.data) ? json.data : []) {
         if (item?.id_j_ambulan !== undefined && item?.j_ambulan) ambulanceCategoryLabels[String(item.id_j_ambulan)] = item.j_ambulan
       }
@@ -196,122 +277,42 @@ export async function GET(req: Request) {
       }))
     }
 
-    let rawRs: any[] = []
-    let totalRs = 0
-    if (rsSettled.status === 'fulfilled' && rsSettled.value.ok) {
-      const rsJson = await rsSettled.value.json().catch(() => ({}))
-      rawRs = rsJson.data || []
-      totalRs = rsJson.total_data || rawRs.length
-      rsTotalPages = Number(rsJson.total_page || Math.ceil(totalRs / 100)) || 1
-    }
+    const rawRs: any[] = hospitalResult.rows
+    const totalRs = hospitalResult.totalData
+    const rawPsc: any[] = pscResult.rows
+    const totalPsc = pscResult.totalData
 
-    let rawPsc: any[] = []
-    let totalPsc = 0
-    if (pscSettled.status === 'fulfilled' && pscSettled.value.ok) {
-      const pscJsonCenters = await pscSettled.value.json().catch(() => ({}))
-      rawPsc = pscJsonCenters.data || []
-      totalPsc = pscJsonCenters.total_data || rawPsc.length
-      pscTotalPages = Number(pscJsonCenters.total_page || Math.ceil(totalPsc / 100)) || 1
-    }
-
-    // Saat admin/tamu memilih satu Kode PSC, ambil seluruh halaman dari
-    // endpoint pendukung agar data unit tidak berhenti di 100 item pertama.
-    if (kode_psc) {
-      const fetchRemainingPages = async (
-        endpoint: string,
-        pageCount: number,
-        buildForm: (form: FormData, page: number) => void,
-      ): Promise<any[]> => {
-        if (pageCount <= 1) return []
-
-        const pageNumbers = Array.from({ length: pageCount - 1 }, (_, index) => index + 2)
-        const pageResults: any[][] = []
-        const batchSize = 5
-
-        for (let index = 0; index < pageNumbers.length; index += batchSize) {
-          const batch = pageNumbers.slice(index, index + batchSize)
-          const results = await Promise.all(batch.map(async (page) => {
-            const form = new FormData()
-            buildForm(form, page)
-            const response = await fetch(`${PSC_API_BASE_URL}/${endpoint}`, {
-              method: 'POST',
-              headers,
-              body: form,
-              signal: controller.signal,
-            })
-            if (!response.ok) return []
-            const json = await response.json().catch(() => ({}))
-            return Array.isArray(json?.data) ? json.data : []
-          }))
-          pageResults.push(...results)
-        }
-
-        return pageResults.flat()
-      }
-
-      try {
-        const [extraAmbulance, extraRs, extraPersonil, extraPsc] = await Promise.all([
-          fetchRemainingPages('data-ambulan-psc', ambulanceTotalPages, (form, page) => {
-            form.append('kode_psc', kode_psc)
-            form.append('page', String(page))
-            form.append('per_page', '100')
-          }),
-          fetchRemainingPages('data-rumahsakit-sarana', rsTotalPages, (form, page) => {
-            form.append('kode_psc', kode_psc)
-            form.append('page', String(page))
-            form.append('per_page', '100')
-          }),
-          fetchRemainingPages('data-personil-psc', personilTotalPages, (form, page) => {
-            form.append('kode_psc', kode_psc)
-            form.append('page', String(page))
-            form.append('per_page', '100')
-          }),
-          fetchRemainingPages('data-psc', pscTotalPages, (form, page) => {
-            form.append('kode_psc', kode_psc)
-            form.append('page', String(page))
-            form.append('per_page', '100')
-          }),
-        ])
-
-        rawAmbulance.push(...extraAmbulance)
-        rawRs.push(...extraRs)
-        rawPersonil.push(...extraPersonil)
-        rawPsc.push(...extraPsc)
-      } catch (e) {
-        console.error('[bencana-stats] pagination data PSC error:', e)
-      }
-    }
-
-    // Filter panggilan berdasarkan bulan jika dipilih
+    // Filter panggilan dari seluruh record API berdasarkan periode yang dipilih.
+    // Filter ini dilakukan sebelum agregasi agar total dan seluruh grafik memakai
+    // himpunan data yang sama.
     if (month && month !== 'all' && month !== 'semua') {
       const monthNum = parseInt(month, 10)
       if (!isNaN(monthNum) && monthNum >= 1 && monthNum <= 12) {
+        calls = calls.filter((c) => parsePscDate(callDate(c))?.getMonth() === monthNum - 1)
+      }
+    }
+
+    if (startDate && endDate) {
+      const start = new Date(`${startDate}T00:00:00`)
+      const end = new Date(`${endDate}T23:59:59.999`)
+      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
         calls = calls.filter((c) => {
-          const dateStr = c.tgl_pelaporan_panggilan || c.tanggal_panggilan || ''
-          if (dateStr.includes('-')) {
-            const parts = dateStr.split('-')
-            if (parts.length >= 2 && parseInt(parts[1], 10) === monthNum) return true
-          }
-          const d = new Date(dateStr)
-          if (!isNaN(d.getTime()) && d.getMonth() + 1 === monthNum) return true
-          return false
+          const parsed = parsePscDate(callDate(c))
+          return parsed !== null && parsed.getTime() >= start.getTime() && parsed.getTime() <= end.getTime()
         })
       }
     }
 
-    let sampleEmergency = 0
-    let sampleNonEmergency = 0
-    let sampleNonCategory = 0
-    let sampleTrauma = 0
-    let totalAmbulansCalls = 0
-    let totalSelesai = 0
+    totalCount = calls.length
+
+    let totalEmergency = 0
+    let totalNonEmergency = 0
+    let totalNonCategory = 0
 
     // Hitung ambulans hari ini & sedang melayani hari ini (sesuai tanggal panggilan terbaru)
     let totalLayananAmbulanHariIni = 0
     let totalAmbulanSedangMelayaniHariIni = 0
-
-    // Identifikasi tanggal hari ini atau tanggal terbaru dalam dataset
-    const todayDateStr = calls[0]?.tanggal_panggilan || calls[0]?.tgl_pelaporan_panggilan || ''
+    const todayDateStr = new Date().toISOString().slice(0, 10)
 
     const kategoriCounts: Record<string, number> = {}
     const wilayahCounts: Record<string, number> = {}
@@ -327,23 +328,19 @@ export async function GET(req: Request) {
       const isEmergency = serviceCategory === 'Emergency'
       const isNonEmergency = serviceCategory === 'Non Emergency'
       const isNonCategory = serviceCategory === 'Non Category'
-      const isTrauma = (c.kategori_layanan || '').toLowerCase().includes('trauma')
 
-      if (isEmergency) sampleEmergency++
-      if (isNonEmergency) sampleNonEmergency++
-      if (isNonCategory) sampleNonCategory++
-      if (isTrauma) sampleTrauma++
+      if (isEmergency) totalEmergency++
+      if (isNonEmergency) totalNonEmergency++
+      if (isNonCategory) totalNonCategory++
 
       const hasAmbulance = Boolean(c.nomor_kendaraan || c.nama_petugas_ambulan || c.id_ambulan || (c.layanan_ambulance && c.layanan_ambulance.trim() !== ''))
-      if (hasAmbulance) totalAmbulansCalls++
 
       const statusLower = (c.status_penanganan_code || c.status_penanganan || '').toLowerCase()
       const isCompleted = statusLower.includes('selesai')
-      if (isCompleted) totalSelesai++
 
       // Hitung layanan ambulans hari ini
       const callDate = c.tanggal_panggilan || c.tgl_pelaporan_panggilan || ''
-      if (hasAmbulance && (callDate === todayDateStr || callDate.includes('15 Sep 2026') || callDate.includes('2026-09-15'))) {
+      if (hasAmbulance && dateKey(callDate) === todayDateStr) {
         totalLayananAmbulanHariIni++
         if (!isCompleted) {
           totalAmbulanSedangMelayaniHariIni++
@@ -358,74 +355,51 @@ export async function GET(req: Request) {
       const icdName = resolvePscIcd10(c)
       if (icdName) icdCounts[icdName] = (icdCounts[icdName] || 0) + 1
 
-      const kat = c.kategori_layanan || 'Lainnya'
+      const kat = c.kategori_layanan || '-'
       kategoriCounts[kat] = (kategoriCounts[kat] || 0) + 1
 
       const wil = c.provinsi || c.kabupaten || 'Nasional'
       wilayahCounts[wil] = (wilayahCounts[wil] || 0) + 1
 
-      const ext = c.extension || (c.id_extension ? `Ext ${c.id_extension}` : (c.nama_psc ? `Ext ${c.nama_psc}` : 'Ext 119'))
+      const ext = c.extension || (c.id_extension ? `Ext ${c.id_extension}` : '-')
       extensionCounts[ext] = (extensionCounts[ext] || 0) + 1
 
-      const sumber = c.sumber_panggilan || 'Masyarakat (119)'
+      const sumber = c.sumber_panggilan || (c.id_sumber_panggilan ? `Sumber ${c.id_sumber_panggilan}` : '-')
       sumberCounts[sumber] = (sumberCounts[sumber] || 0) + 1
 
-      const spesifikasi = c.spesifikasi_layanan || c.kategori_layanan || c.keluhan || 'Gawat Darurat 119'
+      const spesifikasi = c.spesifikasi_layanan || c.kategori_layanan || c.keluhan || '-'
       spesifikasiCounts[spesifikasi] = (spesifikasiCounts[spesifikasi] || 0) + 1
 
       const rawLat = c.latitude ?? (c as any).lat ?? (c.raw_psc as any)?.latitude
       const rawLng = c.longitude ?? (c as any).lng ?? (c.raw_psc as any)?.longitude
-      let lat = rawLat && !isNaN(parseFloat(String(rawLat).trim())) && Math.abs(parseFloat(String(rawLat).trim())) > 0
+      const lat = rawLat && !isNaN(parseFloat(String(rawLat).trim())) && Math.abs(parseFloat(String(rawLat).trim())) > 0
         ? parseFloat(String(rawLat).trim())
         : null
-      let lng = rawLng && !isNaN(parseFloat(String(rawLng).trim())) && Math.abs(parseFloat(String(rawLng).trim())) > 0
+      const lng = rawLng && !isNaN(parseFloat(String(rawLng).trim())) && Math.abs(parseFloat(String(rawLng).trim())) > 0
         ? parseFloat(String(rawLng).trim())
         : null
-
-      if (lat === null || lng === null) {
-        // Fallback koordinat wilayah agar seluruh panggilan tercatat dalam pemetaan spasial dan tren
-        const prov = (c.provinsi || '').toLowerCase()
-        const kab = (c.kabupaten || '').toLowerCase()
-        if (kab.includes('bogor') || prov.includes('jawa barat')) {
-          lat = -6.5950 + (Math.random() - 0.5) * 0.1
-          lng = 106.8166 + (Math.random() - 0.5) * 0.1
-        } else if (prov.includes('jakarta')) {
-          lat = -6.2088 + (Math.random() - 0.5) * 0.08
-          lng = 106.8456 + (Math.random() - 0.5) * 0.08
-        } else if (prov.includes('banten') || kab.includes('tangerang')) {
-          lat = -6.1783 + (Math.random() - 0.5) * 0.08
-          lng = 106.6319 + (Math.random() - 0.5) * 0.08
-        } else if (prov.includes('jawa tengah') || kab.includes('semarang')) {
-          lat = -7.0051 + (Math.random() - 0.5) * 0.1
-          lng = 110.4381 + (Math.random() - 0.5) * 0.1
-        } else if (prov.includes('jawa timur') || kab.includes('surabaya')) {
-          lat = -7.2575 + (Math.random() - 0.5) * 0.1
-          lng = 112.7521 + (Math.random() - 0.5) * 0.1
-        } else if (prov.includes('bali')) {
-          lat = -8.4095 + (Math.random() - 0.5) * 0.1
-          lng = 115.1889 + (Math.random() - 0.5) * 0.1
-        } else {
-          lat = -6.2000 + (Math.random() - 0.5) * 0.2
-          lng = 106.8166 + (Math.random() - 0.5) * 0.2
-        }
-      }
+      const explicitVictimCount = [
+        (c as any).total_korban,
+        (c as any).jumlah_korban,
+        (c as any).jumlah_korban_terdampak,
+      ].map((value) => Number(value)).find((value) => Number.isFinite(value) && value >= 0)
 
       return {
-        kode_trans: c.ticket_id || c.kode_pelaporan_panggilan || `PSC-${idx}`,
-        ticket_id: c.ticket_id || c.kode_pelaporan_panggilan || `PSC-${idx}`,
+        kode_trans: c.ticket_id || c.kode_pelaporan_panggilan || '',
+        ticket_id: c.ticket_id || c.kode_pelaporan_panggilan || '',
         kode_psc: c.kode_psc || '',
-        nama_psc: c.nama_psc || 'PSC 119 Kemenkes',
-        status_penanganan_code: c.status_penanganan_code || (isCompleted ? 'Selesai' : 'Diproses'),
-        status_penanganan: c.status_penanganan || (isCompleted ? 'Status Selesai - Laporan Selesai' : 'Status Diproses'),
+        nama_psc: c.nama_psc || '-',
+        status_penanganan_code: c.status_penanganan_code || '-',
+        status_penanganan: c.status_penanganan || '-',
         id_jenis_layanan: c.id_jenis_layanan,
         jenis_layanan: c.jenis_layanan || serviceCategory,
-        kategori_layanan: c.kategori_layanan || serviceCategory,
+        kategori_layanan: c.kategori_layanan || '-',
         spesifikasi_layanan: spesifikasi,
         tanggal_panggilan: c.tanggal_panggilan || c.tgl_pelaporan_panggilan || '',
         jam_pelaporan_panggilan: c.jam_pelaporan_panggilan || '',
         petugas_pelapor: c.petugas_pelapor || '-',
-        nama_pelapor: c.nama_pelapor || (c as any).nama || 'Masyarakat',
-        korban: c.korban || 'Tidak Diketahui',
+        nama_pelapor: c.nama_pelapor || (c as any).nama || '-',
+        korban: c.korban || '-',
         alamat: c.alamat || c.nama_lokasi || '-',
         nama_lokasi: c.nama_lokasi || c.alamat || '-',
         telp: c.telp || (c as any).no_telp || null,
@@ -438,6 +412,7 @@ export async function GET(req: Request) {
         id_rumahsakit_rujukan: (c as any).id_rumahsakit_rujukan || null,
         waktu_respons: c.waktu_respons || null,
         waktu_respons_label: (c as any).waktu_respons_label || (callResponseTime !== null ? `${callResponseTime} menit` : null),
+        total_korban: explicitVictimCount ?? 0,
         lat,
         lng,
         response_time_minutes: callResponseTime,
@@ -445,10 +420,9 @@ export async function GET(req: Request) {
       }
     })
 
-    // 2. Format Spatial Markers untuk Panggilan (hanya yang memiliki koordinat valid)
-    const markers = formattedCalls
-      .filter((c): c is typeof c & { lat: number; lng: number } => typeof c.lat === 'number' && typeof c.lng === 'number' && !isNaN(c.lat) && !isNaN(c.lng))
-      .map((c) => {
+    // 2. Format record panggilan untuk peta. Record tanpa koordinat tetap
+    // dikirim untuk statistik; frontend hanya menggambar yang koordinatnya valid.
+    const markers = formattedCalls.map((c) => {
         const isEmergency = getPscServiceCategory(c) === 'Emergency'
         const rawItem = (c.raw_psc as any) || {}
         return {
@@ -457,7 +431,9 @@ export async function GET(req: Request) {
           ticket_id: c.ticket_id,
           tgl_kejadian: c.tanggal_panggilan,
           jenis_bencana: c.spesifikasi_layanan || c.jenis_layanan,
-          kategori_bencana: isEmergency ? '1' : '2',
+          // Panggilan PSC bukan data klasifikasi bencana. Jangan memetakan
+          // Emergency/Non Emergency menjadi kategori bencana buatan.
+          kategori_bencana: rawItem.kategori_bencana || undefined,
           lat: c.lat!,
           lng: c.lng!,
           provinsi: rawItem.provinsi || '',
@@ -465,11 +441,11 @@ export async function GET(req: Request) {
           nama_desa: c.alamat || rawItem.nama_lokasi || '',
           kecamatan: c.nama_psc,
           is_krisis: isEmergency ? 1 : 0,
-          total_korban: 1,
+          total_korban: c.total_korban || 0,
           icon_file: isEmergency ? 'icon_caller_red.svg' : 'icon_caller_yellow.svg',
           raw_psc: c.raw_psc,
-          extension: rawItem.extension || 'Ext 119',
-          sumber_panggilan: rawItem.sumber_panggilan || '119',
+          extension: rawItem.extension || (rawItem.id_extension ? `Ext ${rawItem.id_extension}` : '-'),
+          sumber_panggilan: rawItem.sumber_panggilan || (rawItem.id_sumber_panggilan ? `Sumber ${rawItem.id_sumber_panggilan}` : '-'),
           spesifikasi_layanan: c.spesifikasi_layanan,
           jenis_layanan: c.jenis_layanan,
           id_jenis_layanan: c.id_jenis_layanan,
@@ -502,11 +478,11 @@ export async function GET(req: Request) {
       if (rawLat && rawLng && !isNaN(rawLat) && !isNaN(rawLng) && Math.abs(rawLat) > 0) {
         ambulances.push({
           id_ambulan: amb.id_ambulan,
-          kode_ambulan: amb.kode_ambulan || `AMB-${amb.id_ambulan}`,
-          no_kendaraan: amb.no_kendaraan || 'Ambulans 119',
-          nama_psc: amb.kode_psc || 'PSC 119 Unit',
+          kode_ambulan: amb.kode_ambulan || '',
+          no_kendaraan: amb.no_kendaraan || '',
+          nama_psc: amb.nama_psc || amb.kode_psc || '',
           kode_psc: amb.kode_psc || '',
-          status_aktif: amb.status_aktif || '1',
+          status_aktif: amb.status_aktif || '',
           vendor_gps: amb.vendor_gps || '',
           latitude: amb.latitude,
           longitude: amb.longitude,
@@ -516,26 +492,6 @@ export async function GET(req: Request) {
           webservice_api: amb.webservice_api,
           assestment_gawat_darurat: amb.assestment_gawat_darurat,
         })
-      }
-    })
-
-    // Tambahkan juga armada ambulans yang sedang ditugaskan pada panggilan aktif dengan koordinat panggilan
-    formattedCalls.forEach((call) => {
-      if (call.nomor_kendaraan && call.lat && call.lng) {
-        const existing = ambulances.find((a) => a.no_kendaraan === call.nomor_kendaraan)
-        if (!existing) {
-          ambulances.push({
-            id_ambulan: `dispatch-${call.ticket_id}`,
-            kode_ambulan: `DISPATCH-${call.ticket_id.slice(0, 8)}`,
-            no_kendaraan: call.nomor_kendaraan,
-            nama_psc: call.nama_psc,
-            kode_psc: call.kode_psc,
-            status_aktif: call.status_penanganan_code.toLowerCase().includes('selesai') ? '1' : 'Sedang Bertugas',
-            lat: call.lat,
-            lng: call.lng,
-            webservice_api: call.layanan_ambulance || '',
-          })
-        }
       }
     })
 
@@ -592,19 +548,7 @@ export async function GET(req: Request) {
       .map(([nama, jumlah]) => ({ nama, jumlah }))
       .sort((a, b) => b.jumlah - a.jumlah)
 
-    // Hitung kalkulasi dinamis totalEmergency, totalNonEmergency, totalNonCategory berdasarkan proporsi panggilan nyata
-    const sampleTotal = calls.length || 1
-    const totalEmergency = totalCount > calls.length
-      ? Math.round(totalCount * (sampleEmergency / sampleTotal))
-      : sampleEmergency
-    const totalNonEmergency = totalCount > calls.length
-      ? Math.round(totalCount * (sampleNonEmergency / sampleTotal))
-      : sampleNonEmergency
-    const totalNonCategory = totalCount > calls.length
-      ? Math.max(0, totalCount - totalEmergency - totalNonEmergency)
-      : sampleNonCategory
-
-    // Hitung rata-rata waktu respons panggilan PSC dari log riil
+    // Hitung rata-rata waktu respons dari seluruh panggilan yang diterima.
     const avgResponseMin = responseTimeList.length > 0
       ? (responseTimeList.reduce((a, b) => a + b, 0) / responseTimeList.length).toFixed(1)
       : '0.0'
@@ -615,11 +559,14 @@ export async function GET(req: Request) {
       summary: {
         total_bencana: totalCount,
         total_krisis: totalEmergency,
-        total_meninggal: totalNonEmergency,
-        total_luka: totalNonCategory,
+        // Endpoint panggilan PSC mengirim nama korban, bukan jumlah korban
+        // meninggal/luka/hilang/pengungsi. Jangan mengisi indikator ini dengan
+        // jumlah kategori layanan karena akan menghasilkan data palsu.
+        total_meninggal: 0,
+        total_luka: 0,
         total_hilang: 0,
-        total_pengungsi: totalAmbulans,
-        total_terdampak: totalCount,
+        total_pengungsi: 0,
+        total_terdampak: 0,
         total_emergency: totalEmergency,
         total_non_emergency: totalNonEmergency,
         total_non_category: totalNonCategory,

@@ -212,6 +212,7 @@ export interface PscCallRecord {
   layanan_ambulance?: string | null
   rumahsakit_rujukan?: string | null
   id_rumahsakit_rujukan?: string | null
+  total_korban?: number
   waktu_respons?: string | number | null
   waktu_respons_label?: string | null
   keterangan?: string | null

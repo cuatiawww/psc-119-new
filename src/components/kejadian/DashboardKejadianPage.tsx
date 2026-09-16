@@ -152,8 +152,8 @@ type MarkerItem = {
   tgl_kejadian: string
   jenis_bencana: string
   kategori_bencana?: string
-  lat: number
-  lng: number
+  lat: number | null
+  lng: number | null
   provinsi?: string
   kabupaten?: string
   nama_desa?: string
@@ -223,9 +223,10 @@ const AMBULANCE_CONDITION_LABELS: Record<string, string> = {
 
 const displayLookupValue = (label: unknown, id: unknown, labels?: Record<string, string>) => {
   const text = String(label ?? '').trim()
-  if (text && text.toLowerCase() !== 'n/a' && text !== '-') return text
+  const textIsId = /^\d+$/.test(text)
+  if (text && !textIsId && text.toLowerCase() !== 'n/a' && text !== '-') return text
 
-  const key = String(id ?? '').trim()
+  const key = String(id ?? (textIsId ? text : '')).trim()
   if (key && labels?.[key]) return labels[key]
   if (key) return `ID ${key}`
   return '-'
@@ -339,45 +340,6 @@ const earlyWarnings = [
     keterangan: 'Koordinasi posko PSC 119 siaga evakuasi cepat korban bencana alam ke RSUD rujukan terdekat.',
   },
 ]
-
-const getKorbanBreakdown = (total: number, jenis: string) => {
-  const t = total || 0
-  if (t === 0) return { meninggal: 0, luka: 0, hilang: 0, pengungsi: 0 }
-  const seed = (jenis || '').length % 4
-  let meninggal = 0
-  let luka = 0
-  let hilang = 0
-  let pengungsi = 0
-
-  if (seed === 0) {
-    meninggal = Math.floor(t * 0.05)
-    luka = Math.floor(t * 0.40)
-    hilang = Math.floor(t * 0.05)
-    pengungsi = t - meninggal - luka - hilang
-  } else if (seed === 1) {
-    meninggal = Math.floor(t * 0.15)
-    luka = Math.floor(t * 0.50)
-    hilang = 0
-    pengungsi = t - meninggal - luka
-  } else if (seed === 2) {
-    meninggal = 0
-    luka = Math.floor(t * 0.30)
-    hilang = Math.floor(t * 0.10)
-    pengungsi = t - luka - hilang
-  } else {
-    meninggal = Math.floor(t * 0.02)
-    luka = Math.floor(t * 0.15)
-    hilang = 0
-    pengungsi = t - meninggal - luka
-  }
-
-  return {
-    meninggal: Math.max(0, meninggal),
-    luka: Math.max(0, luka),
-    hilang: Math.max(0, hilang),
-    pengungsi: Math.max(0, pengungsi),
-  }
-}
 
 const getDistanceInKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
   const R = 6371
@@ -551,19 +513,11 @@ export default function DashboardKejadianPage() {
 
     let result = data.markers
 
-    // 0. Filter blok tanggal masa depan (kejadian di masa depan tidak valid)
-    const nowMs = Date.now() + 60000 // toleransi 1 menit
-    result = result.filter((m) => {
-      if (!m.tgl_kejadian) return true
-      const d = parseMarkerDate(m.tgl_kejadian)
-      if (d && d.getTime() > nowMs) return false
-      return true
-    })
-
-    // 1. Filter berdasarkan date range (frontend filtering)
+    // Filter tambahan di sisi klien hanya untuk wilayah/date range yang dipilih.
+    // Jangan membuang record API berdasarkan jam komputer pengguna.
     if (filterStartDate && filterEndDate) {
       const startMs = new Date(filterStartDate).getTime()
-      const endMs = Math.min(new Date(filterEndDate).getTime() + 86399999, nowMs)
+      const endMs = new Date(filterEndDate).getTime() + 86399999
       result = result.filter((m) => {
         const d = parseMarkerDate(m.tgl_kejadian)
         if (!d) return true // Jika tanggal tidak bisa diparse, jangan hapus marker dari statistik
@@ -639,11 +593,6 @@ export default function DashboardKejadianPage() {
 
     let total_bencana = effectiveMarkers.length
     let total_krisis = 0
-    let total_meninggal = 0
-    let total_luka = 0
-    let total_hilang = 0
-    let total_pengungsi = 0
-    let total_terdampak = 0
     let total_emergency = 0
     let total_non_emergency = 0
     let total_non_category = 0
@@ -660,13 +609,6 @@ export default function DashboardKejadianPage() {
         total_non_category++
       }
 
-      const korban = m.total_korban || 0
-      total_terdampak += korban
-      const breakdown = getKorbanBreakdown(korban, m.jenis_bencana)
-      total_meninggal += breakdown.meninggal
-      total_luka += breakdown.luka
-      total_hilang += breakdown.hilang
-      total_pengungsi += breakdown.pengungsi
     })
 
     // Hitung rata-rata durasi waktu respons panggilan PSC untuk wilayah terpilih
@@ -688,11 +630,11 @@ export default function DashboardKejadianPage() {
     return {
       total_bencana,
       total_krisis,
-      total_meninggal,
-      total_luka,
-      total_hilang,
-      total_pengungsi,
-      total_terdampak,
+      total_meninggal: 0,
+      total_luka: 0,
+      total_hilang: 0,
+      total_pengungsi: 0,
+      total_terdampak: 0,
       total_emergency,
       total_non_emergency,
       total_non_category,
@@ -838,13 +780,18 @@ export default function DashboardKejadianPage() {
 
   const mapMarkers = useMemo(() => {
     if (!effectiveMarkers) return []
-    if (markerMonths === 0 || (!!filterStartDate && !!filterEndDate)) return effectiveMarkers
+    const markersWithCoordinates = effectiveMarkers.filter(
+      (marker): marker is MarkerItem & { lat: number; lng: number } =>
+        typeof marker.lat === 'number' && Number.isFinite(marker.lat) &&
+        typeof marker.lng === 'number' && Number.isFinite(marker.lng),
+    )
+    if (markerMonths === 0 || (!!filterStartDate && !!filterEndDate)) return markersWithCoordinates
 
     const now = new Date()
     const cutoff = new Date(now)
     cutoff.setMonth(cutoff.getMonth() - markerMonths)
 
-    return effectiveMarkers.filter((m) => {
+    return markersWithCoordinates.filter((m) => {
       if (!m.tgl_kejadian) return true
       const eventDate = parseMarkerDate(m.tgl_kejadian)
       if (!eventDate) return true
@@ -1079,21 +1026,21 @@ export default function DashboardKejadianPage() {
     if (data?.calls && data.calls.length > 0) {
       return data.calls
     }
-    return (effectiveMarkers || []).map((m, idx) => ({
-      kode_trans: m.kode_trans || `PSC-${idx}`,
-      ticket_id: m.ticket_id || m.kode_trans || `PSC-${idx}`,
-      nama_psc: m.nama_psc || m.kecamatan || 'PSC 119 Kemenkes',
-      status_penanganan_code: m.status_penanganan_code || (m.is_krisis === 1 ? 'Diproses' : 'Selesai'),
-      status_penanganan: m.status_penanganan_code || 'Status Selesai',
+    return (effectiveMarkers || []).map((m) => ({
+      kode_trans: m.kode_trans || '',
+      ticket_id: m.ticket_id || m.kode_trans || '',
+      nama_psc: m.nama_psc || m.kecamatan || '-',
+      status_penanganan_code: m.status_penanganan_code || '-',
+      status_penanganan: (m.raw_psc as any)?.status_penanganan || '-',
       id_jenis_layanan: m.id_jenis_layanan ?? (m.raw_psc as any)?.id_jenis_layanan,
-      jenis_layanan: (m.raw_psc as any)?.jenis_layanan || m.jenis_layanan || 'Non Category',
+      jenis_layanan: (m.raw_psc as any)?.jenis_layanan || m.jenis_layanan || '-',
       kategori_layanan: m.kategori_layanan || getMarkerServiceCategory(m),
-      spesifikasi_layanan: m.spesifikasi_layanan || m.jenis_bencana || 'Gawat Darurat 119',
-      tanggal_panggilan: m.tgl_kejadian || '15 Sep 2026',
+      spesifikasi_layanan: m.spesifikasi_layanan || m.jenis_bencana || '-',
+      tanggal_panggilan: m.tgl_kejadian || '',
       jam_pelaporan_panggilan: (m.raw_psc as any)?.jam_pelaporan_panggilan || '',
       petugas_pelapor: (m.raw_psc as any)?.petugas_pelapor || '-',
-      nama_pelapor: (m.raw_psc as any)?.nama_pelapor || 'Masyarakat',
-      korban: (m.raw_psc as any)?.korban || 'Tidak Diketahui',
+      nama_pelapor: (m.raw_psc as any)?.nama_pelapor || '-',
+      korban: (m.raw_psc as any)?.korban || '-',
       alamat: m.nama_desa || (m.raw_psc as any)?.alamat || m.kabupaten || '-',
       telp: (m.raw_psc as any)?.telp || null,
       raw_psc: m.raw_psc,
@@ -1399,7 +1346,7 @@ export default function DashboardKejadianPage() {
       const counts: Record<string, number> = {}
       effectiveMarkers.forEach((m) => {
         const raw = m.raw_psc || (m as any)
-        const ext = raw?.extension || (raw?.id_extension ? `Ext ${raw.id_extension}` : '') || (m.kecamatan ? `Ext ${m.kecamatan}` : 'Ext 119')
+        const ext = raw?.extension || (raw?.id_extension ? `Ext ${raw.id_extension}` : '-')
         counts[ext] = (counts[ext] || 0) + 1
       })
       const items = Object.entries(counts).map(([nama, jumlah]) => ({ nama, jumlah }))
@@ -1414,7 +1361,7 @@ export default function DashboardKejadianPage() {
       const counts: Record<string, number> = {}
       effectiveMarkers.forEach((m) => {
         const raw = m.raw_psc || (m as any)
-        const sumber = raw?.sumber_panggilan || (raw?.id_sumber_panggilan ? `Sumber ${raw.id_sumber_panggilan}` : '') || 'Masyarakat (119)'
+        const sumber = raw?.sumber_panggilan || (raw?.id_sumber_panggilan ? `Sumber ${raw.id_sumber_panggilan}` : '-')
         counts[sumber] = (counts[sumber] || 0) + 1
       })
       const items = Object.entries(counts).map(([nama, jumlah]) => ({ nama, jumlah }))
@@ -1429,7 +1376,7 @@ export default function DashboardKejadianPage() {
       const counts: Record<string, number> = {}
       effectiveMarkers.forEach((m) => {
         const raw = m.raw_psc || (m as any)
-        const spesifikasi = raw?.spesifikasi_layanan || raw?.kategori_layanan || m.jenis_bencana || 'Trauma (KLL)'
+        const spesifikasi = raw?.spesifikasi_layanan || raw?.kategori_layanan || m.jenis_bencana || '-'
         counts[spesifikasi] = (counts[spesifikasi] || 0) + 1
       })
       const items = Object.entries(counts).map(([nama, jumlah]) => ({ nama, jumlah }))
@@ -1543,8 +1490,8 @@ export default function DashboardKejadianPage() {
     return rawPersonnel.map((p, idx) => ({
       no: idx + 1,
       id: `PSN-${p.id_user || idx + 1}`,
-      nama: p.detail_lengkap || p.nama || `Petugas PSC #${idx + 1}`,
-      profesi: p.jabatan || 'Tenaga Medis Reaksi Cepat',
+      nama: p.detail_lengkap || p.nama || '-',
+      profesi: p.jabatan || '-',
       jenisKelamin: p.relawan_jkel || p.jenis_kelamin || '-',
       usia: calculateAge(p.relawan_tanggal_lahir || p.tanggal_lahir, p.usia),
       wilayah: [p.kabupaten, p.provinsi].filter(Boolean).join(', ') ||
@@ -1560,10 +1507,10 @@ export default function DashboardKejadianPage() {
       ].filter(Boolean).join(' | ') || '-',
       foto: p.foto || p.photo || p.photo_personil || p.photo_url || null,
       // Tetap dipertahankan untuk chart popup.
-      sertifikasi: p.relawan_kompetensi || 'Tidak ada data kompetensi',
-      unit: p.kode_psc || p.nama_psc || 'PSC 119 Operasional',
-      shift: p.join_date ? `Bergabung: ${String(p.join_date).split(' ')[0]}` : 'Siaga 24 Jam',
-      status: p.status === 1 || p.status === '1' ? 'Siaga Aktif' : 'Non-Aktif',
+      sertifikasi: p.relawan_kompetensi || '-',
+      unit: p.kode_psc || p.nama_psc || '-',
+      shift: p.join_date ? `Bergabung: ${String(p.join_date).split(' ')[0]}` : '-',
+      status: p.status === 1 || p.status === '1' ? 'Siaga Aktif' : p.status !== undefined && p.status !== null ? 'Non-Aktif' : '-',
       telp: p.relawan_no_telp || p.email || '-',
     }))
   }, [data])
@@ -1573,8 +1520,8 @@ export default function DashboardKejadianPage() {
     const rawAmb: any[] = (data as any)?.ambulance_records || (data as any)?.ambulances || []
     return rawAmb.map((a, idx) => ({
       no: idx + 1,
-      kode: a.kode_ambulan || `AMB-${idx + 1}`,
-      nopol: a.no_kendaraan || 'Plat Dinas Kemenkes',
+      kode: a.kode_ambulan || '-',
+      nopol: a.no_kendaraan || '-',
       tipe: displayLookupValue(a.jenis || a.jenis_ambulan || a.jenis_ambulans, a.id_jenis, AMBULANCE_TYPE_LABELS),
       kategori: displayLookupValue(a.j_ambulan || a.kategori_ambulan || a.kategori, a.id_j_ambulan || a.id_kategori_ambulan),
       sumberPengadaan: displayLookupValue(a.sumber_pengadaan, a.sumber_pengadaan_id, AMBULANCE_SOURCE_LABELS),
@@ -1583,11 +1530,11 @@ export default function DashboardKejadianPage() {
       kondisiKendaraan: displayLookupValue(a.kondisi_kendaraan, a.kondisi_kendaraan_id, AMBULANCE_CONDITION_LABELS),
       penanggungJawab: a.penanggung_jawab || a.nama_penanggung_jawab || a.nama_petugas || (a.id_petugas ? `ID Petugas ${a.id_petugas}` : '-'),
       // Tetap dipertahankan untuk chart popup.
-      pangkalan: a.nama_psc || a.kode_psc || 'PSC 119 Posko Induk',
+      pangkalan: a.nama_psc || a.kode_psc || '-',
       driver: a.nama_petugas || '-',
       medis: a.nama_petugas || '-',
-      status: a.status_aktif === '1' || a.status_aktif === 1 ? 'Siaga Operasional' : 'Sedang Penugasan',
-      lokasi: a.kode_psc || 'Pangkalan Siaga',
+      status: a.status_aktif === '1' || a.status_aktif === 1 ? 'Siaga Operasional' : a.status_aktif !== undefined && a.status_aktif !== null && a.status_aktif !== '' ? String(a.status_aktif) : '-',
+      lokasi: a.kode_psc || '-',
     }))
   }, [data])
 
@@ -1876,54 +1823,23 @@ export default function DashboardKejadianPage() {
     }
 
     if (card === 'Armada Ambulans') {
-      if (realAmbulanceList.length > 0) {
-        return realAmbulanceList
-      }
-      return markers
-        .filter((m) => {
-          const raw = m.raw_psc || (m as any)
-          return Boolean(raw?.nomor_kendaraan || raw?.nama_petugas_ambulan || m.nomor_kendaraan || m.nama_petugas_ambulan)
-        })
-        .map((m, idx) => {
-          const raw = m.raw_psc || (m as any)
-          const nopol = m.nomor_kendaraan || raw?.nomor_kendaraan || `Plat Dinas PSC`
-          const medis = m.nama_petugas_ambulan || raw?.nama_petugas_ambulan || 'Tim Paramedis PSC 119'
-          const loc = m.kabupaten || (m as any).alamat || m.nama_desa || 'Wilayah Pemantauan'
-          return {
-            no: idx + 1,
-            kode: `AMB-${m.ticket_id ? m.ticket_id.slice(-4) : idx + 1}`,
-            nopol,
-            tipe: displayLookupValue(raw?.jenis || raw?.jenis_ambulan || raw?.jenis_ambulans, raw?.id_jenis, AMBULANCE_TYPE_LABELS),
-            kategori: displayLookupValue(raw?.j_ambulan || raw?.kategori_ambulan || raw?.kategori, raw?.id_j_ambulan || raw?.id_kategori_ambulan),
-            sumberPengadaan: displayLookupValue(raw?.sumber_pengadaan, raw?.sumber_pengadaan_id, AMBULANCE_SOURCE_LABELS),
-            kepemilikan: displayLookupValue(raw?.kepemilikan, raw?.kepemilikan_id, AMBULANCE_OWNERSHIP_LABELS),
-            tahun: raw?.tahun || '-',
-            kondisiKendaraan: displayLookupValue(raw?.kondisi_kendaraan, raw?.kondisi_kendaraan_id, AMBULANCE_CONDITION_LABELS),
-            penanggungJawab: raw?.penanggung_jawab || raw?.nama_penanggung_jawab || raw?.nama_petugas || raw?.nama_petugas_ambulan || '-',
-            pangkalan: m.nama_psc || 'PSC 119 Posko Induk',
-            driver: 'Petugas Ambulans 119',
-            medis,
-            status: m.status_penanganan_code === 'Selesai' ? 'Selesai Penugasan' : 'Sedang Penugasan ke TKP',
-            fasilitas: 'Defibrillator, Ventilator Transport, Oksigen Medis',
-            lokasi: loc,
-          }
-        })
+      return realAmbulanceList
     }
 
     if (markers.length > 0) {
       return markers.map((m, idx) => {
         const raw = m.raw_psc || (m as any)
-        const ticket = m.ticket_id || m.kode_trans || `TKT-119-2026-${String(idx + 1).padStart(3, '0')}`
+      const ticket = m.ticket_id || m.kode_trans || '-'
         const tglStr = (m as any).tanggal_panggilan || m.tgl_kejadian || ''
         const jamStr = raw?.jam_pelaporan_panggilan || (m.tgl_kejadian && m.tgl_kejadian.includes(':') ? m.tgl_kejadian.split(' ')[1] : '')
-        const pelapor = (m as any).nama_pelapor || raw?.nama_pelapor || raw?.korban || 'Masyarakat'
+        const pelapor = (m as any).nama_pelapor || raw?.nama_pelapor || raw?.korban || '-'
         const kategori = getMarkerServiceCategory(m)
-        const jenisLayanan = raw?.jenis_layanan || m.jenis_layanan || kategori
+        const jenisLayanan = raw?.jenis_layanan || m.jenis_layanan || '-'
         const idJenisLayanan = raw?.id_jenis_layanan ?? m.id_jenis_layanan
         const spesifikasi = m.spesifikasi_layanan || m.jenis_bencana || raw?.spesifikasi_layanan || ''
-        const sumber = m.sumber_panggilan || raw?.sumber_panggilan || '119'
-        const ext = m.extension || raw?.extension || 'Ext 119'
-        const status = (m as any).status_penanganan || raw?.status_penanganan || (m.status_penanganan_code === 'Selesai' ? 'Selesai' : 'Diproses')
+        const sumber = m.sumber_panggilan || raw?.sumber_panggilan || '-'
+        const ext = m.extension || raw?.extension || '-'
+        const status = (m as any).status_penanganan || raw?.status_penanganan || '-'
         const alamat = (m as any).alamat || m.nama_desa || m.kabupaten || '-'
         const rs = (m as any).rumahsakit_rujukan || raw?.rumahsakit_rujukan || '-'
         const armada = m.nomor_kendaraan || raw?.nomor_kendaraan || '-'
@@ -2337,6 +2253,9 @@ export default function DashboardKejadianPage() {
         queryParams.push(`kabupaten=${encodeURIComponent(kabupaten)}`)
       }
       if (filterStartDate && filterEndDate) {
+        if (tahun && /^\d{4}$/.test(tahun)) {
+          queryParams.push(`year=${encodeURIComponent(tahun)}`)
+        }
         queryParams.push(`start_date=${encodeURIComponent(filterStartDate)}`)
         queryParams.push(`end_date=${encodeURIComponent(filterEndDate)}`)
       } else if (tahun && /^\d{4}$/.test(tahun)) {
@@ -2363,7 +2282,7 @@ export default function DashboardKejadianPage() {
       })
 
       const json = await response.json().catch(() => null)
-      if (json?.summary) {
+      if (response.ok && json?.success && json?.summary) {
         console.log('[fetchData] markers count:', json.markers?.length || 0)
         setData(json)
         return
@@ -2420,8 +2339,8 @@ export default function DashboardKejadianPage() {
   // Efek samping untuk otomatis men-generate laporan darurat yang realistis berbasis data aktual EOC dari API
   useEffect(() => {
     if (data) {
-      const topDisaster = data?.jenis_bencana?.[0]?.nama || 'Kebakaran Hutan dan Lahan'
-      const topRegion = data?.wilayah?.[0]?.nama || 'Jawa Timur'
+      const topDisaster = data?.jenis_bencana?.[0]?.nama || '-'
+      const topRegion = data?.wilayah?.[0]?.nama || '-'
       if (!data.summary) return
       const totalBencana = data.summary.total_bencana
       const totalKrisis = data.summary.total_krisis
@@ -2476,7 +2395,7 @@ JANGKA PANJANG:
 8. Kesimpulan Strategis EOC
 Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI berjalan tanggap dan terkoordinasi. Pengawasan terhadap kecepatan waktu respons dan ketersediaan ambulans rujukan tetap menjadi prioritas utama demi menjamin keselamatan jiwa masyarakat.`
 
-      setAiInsight(mockText)
+      setAiInsight(`Ringkasan berdasarkan respons API: ${totalBencana.toLocaleString('id-ID')} total panggilan, ${totalKrisis.toLocaleString('id-ID')} Emergency, wilayah dominan ${topRegion}, dan layanan dominan ${topDisaster}. Data korban/triase tidak tersedia pada respons API sehingga tidak ditampilkan sebagai angka.`)
     }
   }, [data, tahun])
 
@@ -2487,8 +2406,8 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
       // Menstimulasikan durasi berpikir AI selama 1.5 detik agar terlihat premium
       await new Promise((resolve) => setTimeout(resolve, 1500))
 
-      const topDisaster = data?.jenis_bencana?.[0]?.nama || 'Kebakaran Hutan dan Lahan'
-      const topRegion = data?.wilayah?.[0]?.nama || 'Jawa Timur'
+      const topDisaster = data?.jenis_bencana?.[0]?.nama || '-'
+      const topRegion = data?.wilayah?.[0]?.nama || '-'
       if (!data.summary) return
       const totalBencana = data.summary.total_bencana
       const totalKrisis = data.summary.total_krisis
@@ -2543,7 +2462,7 @@ JANGKA PANJANG:
 8. Kesimpulan Strategis EOC
 Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI berjalan tanggap dan terkoordinasi. Pengawasan terhadap kecepatan waktu respons dan ketersediaan ambulans rujukan tetap menjadi prioritas utama demi menjamin keselamatan jiwa masyarakat.`
 
-      setAiInsight(mockText)
+      setAiInsight(`Ringkasan berdasarkan respons API: ${totalBencana.toLocaleString('id-ID')} total panggilan, ${totalKrisis.toLocaleString('id-ID')} Emergency, wilayah dominan ${topRegion}, dan layanan dominan ${topDisaster}. Data korban/triase tidak tersedia pada respons API sehingga tidak ditampilkan sebagai angka.`)
     } catch (err) {
       console.warn(err)
     } finally {
@@ -4114,7 +4033,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                           kabupaten: (call.raw_psc as any)?.kabupaten || '',
                           nama_desa: call.alamat,
                           kecamatan: call.nama_psc,
-                          total_korban: 1,
+                          total_korban: call.total_korban || 0,
                           is_krisis: isDiproses ? 1 : 0,
                           raw_psc: call.raw_psc,
                           spesifikasi_layanan: call.spesifikasi_layanan,
@@ -4205,7 +4124,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                                 kabupaten: (call.raw_psc as any)?.kabupaten || '',
                                 nama_desa: call.alamat,
                                 kecamatan: call.nama_psc,
-                                total_korban: 1,
+                                total_korban: call.total_korban || 0,
                                 is_krisis: isDiproses ? 1 : 0,
                                 raw_psc: call.raw_psc,
                                 spesifikasi_layanan: call.spesifikasi_layanan,
@@ -4493,9 +4412,9 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                               <th className="py-3 px-3.5">Nama Lengkap</th>
                               <th className="py-3 px-3.5">Jenis Kelamin</th>
                               <th className="py-3 px-3.5">Usia (Th)</th>
-                              <th className="py-3 px-3.5">Wilayah</th>
+                              {/* <th className="py-3 px-3.5">Wilayah</th>
                               <th className="py-3 px-3.5">Kategori</th>
-                              <th className="py-3 px-3.5">Golongan</th>
+                              <th className="py-3 px-3.5">Golongan</th> */}
                               <th className="py-3 px-3.5">Spesifikasi Kontak</th>
                             </>
                           ) : activeDetailCard === 'Armada Ambulans' ? (
@@ -4508,7 +4427,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                               <th className="py-3 px-3.5">Kepemilikan</th>
                               <th className="py-3 px-3.5">Tahun</th>
                               <th className="py-3 px-3.5">Kondisi Kendaraan</th>
-                              <th className="py-3 px-3.5">Penanggung Jawab</th>
+                              {/* <th className="py-3 px-3.5">Penanggung Jawab</th> */}
                             </>
                           ) : activeDetailCard === 'Waktu Respons PSC' ? (
                             <>
@@ -4558,9 +4477,9 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                               <td className="py-3 px-3.5 font-extrabold text-slate-900">{p.nama}</td>
                               <td className="py-3 px-3.5">{p.jenisKelamin}</td>
                               <td className="py-3 px-3.5 font-semibold text-slate-700">{p.usia}</td>
-                              <td className="py-3 px-3.5 font-medium text-slate-600">{p.wilayah}</td>
+                              {/* <td className="py-3 px-3.5 font-medium text-slate-600">{p.wilayah}</td>
                               <td className="py-3 px-3.5">{p.kategori}</td>
-                              <td className="py-3 px-3.5">{p.golongan}</td>
+                              <td className="py-3 px-3.5">{p.golongan}</td> */}
                               <td className="py-3 px-3.5 text-slate-600">{p.spesifikasiKontak}</td>
                             </tr>
                           ))
@@ -4576,7 +4495,7 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                               <td className="py-3 px-3.5">{a.kepemilikan}</td>
                               <td className="py-3 px-3.5">{a.tahun}</td>
                               <td className="py-3 px-3.5">{a.kondisiKendaraan}</td>
-                              <td className="py-3 px-3.5 font-medium text-slate-600">{a.penanggungJawab}</td>
+                              {/* <td className="py-3 px-3.5 font-medium text-slate-600">{a.penanggungJawab}</td> */}
                             </tr>
                           ))
                         ) : activeDetailCard === 'Waktu Respons PSC' ? (
