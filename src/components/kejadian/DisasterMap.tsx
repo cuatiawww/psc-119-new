@@ -1012,6 +1012,7 @@ export default function DisasterMap({
         params: {},
       }),
       visible: showBnpbAdmin,
+      zIndex: 6,
     })
     bnpbAdminLayerRef.current = bnpbAdminLayer
 
@@ -1022,6 +1023,7 @@ export default function DisasterMap({
       }),
       visible: showBnpbHillshade,
       opacity: 0.6,
+      zIndex: 4,
     })
     bnpbHillshadeLayerRef.current = bnpbHillshadeLayer
 
@@ -1032,6 +1034,7 @@ export default function DisasterMap({
       }),
       visible: showBnpbKepadatan,
       opacity: 0.6,
+      zIndex: 5,
     })
     bnpbKepadatanLayerRef.current = bnpbKepadatanLayer
 
@@ -1042,6 +1045,7 @@ export default function DisasterMap({
       }),
       visible: showBnpbBanjir,
       opacity: 0.6,
+      zIndex: 7,
     })
     bnpbBanjirLayerRef.current = bnpbBanjirLayer
 
@@ -1052,6 +1056,7 @@ export default function DisasterMap({
       }),
       visible: showBnpbGempa,
       opacity: 0.6,
+      zIndex: 7,
     })
     bnpbGempaLayerRef.current = bnpbGempaLayer
 
@@ -1062,6 +1067,7 @@ export default function DisasterMap({
       }),
       visible: showBnpbLongsor,
       opacity: 0.6,
+      zIndex: 7,
     })
     bnpbLongsorLayerRef.current = bnpbLongsorLayer
 
@@ -1072,6 +1078,7 @@ export default function DisasterMap({
       }),
       visible: showBnpbKarhutla,
       opacity: 0.6,
+      zIndex: 7,
     })
     bnpbKarhutlaLayerRef.current = bnpbKarhutlaLayer
 
@@ -1576,6 +1583,7 @@ export default function DisasterMap({
         const windData = await res.json()
         const baseVelocity = 0.01
         const windLayer = new WindLayer(windData as any, {
+          zIndex: 8,
           windOptions: {
             velocityScale: baseVelocity,
             paths: 1000,
