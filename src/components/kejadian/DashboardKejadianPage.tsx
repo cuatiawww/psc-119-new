@@ -65,6 +65,7 @@ import { isValidPscIcd10Value, resolvePscIcd10 } from '@/lib/pscIcd10'
 import { getPscResponseMinutes } from '@/lib/pscResponseTime'
 import FilterDropdownBar, { type FilterSummary } from '@/components/landing/FilterDropdownBar'
 import DetailKejadianPage from './DetailKejadianPage'
+import DetailPanggilanPage from './DetailPanggilanPage'
 
 // Client-side obfuscation of query IDs to prevent exposure of raw keys
 function encryptId(id: string): string {
@@ -146,6 +147,7 @@ type PieChartItem = {
 }
 
 type MarkerItem = {
+  marker_type?: string
   kode_trans: string
   tgl_kejadian: string
   jenis_bencana: string
@@ -923,6 +925,8 @@ export default function DashboardKejadianPage() {
         } else {
           setSelectedEvent({
             kode_trans: decryptedId,
+            ticket_id: decryptedId,
+            marker_type: 'call',
             jenis_bencana: slugBencana === 'kejadian' ? '' : slugBencana.replace(/-/g, ' '),
             provinsi: '',
             kabupaten: '',
@@ -953,6 +957,8 @@ export default function DashboardKejadianPage() {
         } else {
           setSelectedEvent({
             kode_trans: initialId,
+            ticket_id: initialId,
+            marker_type: 'call',
             jenis_bencana: '',
             provinsi: '',
             kabupaten: '',
@@ -1006,7 +1012,13 @@ export default function DashboardKejadianPage() {
       if (selectedEvent) {
         hadSelectedEventRef.current = true;
         const encryptedId = encryptId(selectedEvent.kode_trans);
-        const rawType = String(selectedEvent.jenis_bencana || 'kejadian').toLowerCase();
+        const isCall = selectedEvent.marker_type === 'call' || Boolean(selectedEvent.ticket_id || selectedEvent.raw_psc?.ticket_id)
+        const rawType = isCall
+          ? getPscServiceCategory({
+              jenis_layanan: selectedEvent.jenis_layanan || selectedEvent.raw_psc?.jenis_layanan,
+              id_jenis_layanan: selectedEvent.id_jenis_layanan || selectedEvent.raw_psc?.id_jenis_layanan,
+            }).toLowerCase()
+          : String(selectedEvent.jenis_bencana || 'kejadian').toLowerCase();
         const slug = rawType.replace(/\s+/g, '-').replace(/[^\w\-]+/g, '');
         const newPath = `${basePath}/detail-kejadian/${slug}/${encryptedId}`;
         
@@ -1057,7 +1069,7 @@ export default function DashboardKejadianPage() {
             return;
           }
         }
-        setSelectedEvent({ kode_trans: qId, id: qId } as any);
+        setSelectedEvent({ kode_trans: qId, ticket_id: qId, marker_type: 'call', id: qId } as any);
       }
     }
   }, [data?.markers]);
@@ -2735,6 +2747,16 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
     return val.toLocaleString('id-ID')
   }
   if (selectedEvent) {
+    const isPscCall = selectedEvent.marker_type === 'call' || Boolean(selectedEvent.ticket_id || selectedEvent.raw_psc?.ticket_id)
+    if (isPscCall) {
+      return (
+        <DetailPanggilanPage
+          key={selectedEvent.ticket_id || selectedEvent.kode_trans || selectedEvent.raw_psc?.ticket_id}
+          selectedEvent={selectedEvent}
+          onBack={() => setSelectedEvent(null)}
+        />
+      )
+    }
     return (
       <DetailKejadianPage
         selectedEvent={selectedEvent}
@@ -4094,6 +4116,8 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                           isEven ? 'bg-slate-50/50 hover:bg-slate-100/70' : 'bg-white hover:bg-slate-100/70'
                         }`}
                         onClick={() => setSelectedEvent({
+                          ...call,
+                          marker_type: 'call',
                           kode_trans: call.ticket_id || call.kode_trans,
                           tgl_kejadian: call.tanggal_panggilan,
                           jenis_bencana: call.jenis_layanan,
@@ -4183,6 +4207,8 @@ Secara keseluruhan, sistem komando dan operasional PSC 119 SPGDT Kemenkes RI ber
                               type="button"
                               title="Buka Detail Tiket & Rekam Medis"
                               onClick={() => setSelectedEvent({
+                                ...call,
+                                marker_type: 'call',
                                 kode_trans: call.ticket_id || call.kode_trans,
                                 tgl_kejadian: call.tanggal_panggilan,
                                 jenis_bencana: call.jenis_layanan,

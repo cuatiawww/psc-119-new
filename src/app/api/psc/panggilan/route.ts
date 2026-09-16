@@ -19,12 +19,13 @@ export async function POST(req: Request) {
       kd_prop = '',
       kd_kab = '',
       status_penanganan = '',
+      ticket_id = '',
       tahun = '2026',
       page = '1',
       per_page = '50',
     } = body
 
-    const cacheKey = JSON.stringify({ kode_psc, kd_prop, kd_kab, status_penanganan, tahun, page, per_page })
+    const cacheKey = JSON.stringify({ kode_psc, kd_prop, kd_kab, status_penanganan, ticket_id, tahun, page, per_page })
     const cached = cacheMap.get(cacheKey)
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
       return NextResponse.json(cached.data)
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
     if (kd_prop) formData.append('kd_prop', kd_prop)
     if (kd_kab) formData.append('kd_kab', kd_kab)
     if (status_penanganan) formData.append('status_penanganan', status_penanganan)
+    if (ticket_id) formData.append('ticket_id', ticket_id)
     if (tahun) formData.append('tahun', tahun)
     if (page) formData.append('page', String(page))
     if (per_page) formData.append('per_page', String(per_page))
@@ -87,6 +89,7 @@ export async function GET(req: Request) {
     kd_prop: searchParams.get('kd_prop') || '',
     kd_kab: searchParams.get('kd_kab') || '',
     status_penanganan: searchParams.get('status_penanganan') || '',
+    ticket_id: searchParams.get('ticket_id') || '',
     tahun: searchParams.get('tahun') || '2026',
     page: searchParams.get('page') || '1',
     per_page: searchParams.get('per_page') || '50',
