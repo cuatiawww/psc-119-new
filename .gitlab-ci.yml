@@ -15,8 +15,10 @@ deploy-live:
     - cd "$CI_PROJECT_DIR"
     - 'export PSC_API_BASE_URL=${PSC_API_BASE_URL}'
     - 'export PSC_API_TOKEN=${PSC_API_TOKEN}'
+    - 'export PSC_SSO_VERIFY_URL=${PSC_SSO_VERIFY_URL}'
+    - 'export PSC_SSO_CLIENT_SECRET=${PSC_SSO_CLIENT_SECRET}'
     - umask 077
-    - 'printf "NEXT_PUBLIC_BASE_PATH=/dashboard\nPSC_API_BASE_URL=%s\nPSC_API_TOKEN=%s\n" "$PSC_API_BASE_URL" "$PSC_API_TOKEN" > "$CI_PROJECT_DIR/.env"'
+    - 'printf "NEXT_PUBLIC_BASE_PATH=/dashboard\nPSC_API_BASE_URL=%s\nPSC_API_TOKEN=%s\nPSC_SSO_VERIFY_URL=%s\nPSC_SSO_CLIENT_SECRET=%s\n" "$PSC_API_BASE_URL" "$PSC_API_TOKEN" "$PSC_SSO_VERIFY_URL" "$PSC_SSO_CLIENT_SECRET" > "$CI_PROJECT_DIR/.env"'
     - docker compose -f docker-compose.yml build
     - docker compose -f docker-compose.yml down || true
     - docker compose -f docker-compose.yml up -d
