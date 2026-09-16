@@ -706,12 +706,12 @@ export default function DisasterMap({
     })
   }, [isFloodEocMode])
 
-  // BNPB layer visibilities - Bahaya Gempa Bumi aktif default
+  // BNPB layer visibilities - semua layer bahaya nonaktif secara default
   const [showBnpbAdmin, setShowBnpbAdmin] = useState(false)
   const [showBnpbHillshade, setShowBnpbHillshade] = useState(false)
   const [showBnpbKepadatan, setShowBnpbKepadatan] = useState(false)
   const [showBnpbBanjir, setShowBnpbBanjir] = useState(false)
-  const [showBnpbGempa, setShowBnpbGempa] = useState(!isCallDetailMode)
+  const [showBnpbGempa, setShowBnpbGempa] = useState(false)
   const [showBnpbLongsor, setShowBnpbLongsor] = useState(false)
   const [showBnpbKarhutla, setShowBnpbKarhutla] = useState(false)
 
@@ -734,7 +734,7 @@ export default function DisasterMap({
     }
     if (!disasterType || disasterCategory === 'none') {
       setShowBnpbBanjir(false)
-      setShowBnpbGempa(true)
+      setShowBnpbGempa(false)
       setShowBnpbLongsor(false)
       setShowBnpbKarhutla(false)
       return
