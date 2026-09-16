@@ -18,7 +18,7 @@ import TileLayer from 'ol/layer/Tile'
 import OSM from 'ol/source/OSM'
 import TileArcGISRest from 'ol/source/TileArcGISRest'
 import { Fill, Stroke, Style, Circle as CircleStyle, Icon, Text as OlText } from 'ol/style'
-import { fromLonLat } from 'ol/proj'
+import { fromLonLat, toLonLat } from 'ol/proj'
 import { defaults as defaultControls } from 'ol/control'
 import Feature from 'ol/Feature'
 import Point from 'ol/geom/Point'
@@ -2633,10 +2633,12 @@ export default function DisasterMap({
 
     eocLayer.setVisible(true)
 
-    // Start coordinates (center of disaster or kabupaten)
+    // Start coordinates (center of disaster or current view center)
     const firstMarker = markers && markers[0]
-    const startLat = firstMarker ? firstMarker.lat : 1.6833
-    const startLng = firstMarker ? firstMarker.lng : 98.8472
+    const currentCenter = map.getView()?.getCenter()
+    const centerCoords = currentCenter ? toLonLat(currentCenter) : [118.0, -2.5]
+    const startLat = firstMarker ? Number(firstMarker.lat) : Number(centerCoords[1] || -2.5)
+    const startLng = firstMarker ? Number(firstMarker.lng) : Number(centerCoords[0] || 118.0)
 
     const getSvgPin = (color: string, iconType: 'flood' | 'gempa' | 'hospital' | 'clinic' | 'pustu' | 'shelter' | 'disaster' | 'tck' | 'earthquake') => {
       let inner = '<circle cx="12" cy="10" r="3" fill="' + color + '"/>'
@@ -2661,12 +2663,12 @@ export default function DisasterMap({
     }
 
     const getSvgMainshockPin = (mag: number) => {
-      const magText = mag > 0 ? (mag >= 10 ? mag.toFixed(0) : mag.toFixed(1)) : '7.4'
+      const magText = mag > 0 ? (mag >= 10 ? mag.toFixed(0) : mag.toFixed(1)) : ''
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="46" height="54" viewBox="0 0 46 54" fill="none">
         <circle cx="23" cy="20" r="19" fill="rgba(220, 38, 38, 0.25)" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="3 3"/>
         <path d="M23 4C14.16 4 7 11.16 7 20C7 31 23 50 23 50S39 31 39 20C39 11.16 31.84 4 23 4Z" fill="#dc2626" stroke="#ffffff" stroke-width="2.5"/>
         <circle cx="23" cy="20" r="11" fill="#ffffff"/>
-        <text x="23" y="24" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="900" fill="#991b1b">M ${magText}</text>
+        <text x="23" y="24" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="900" fill="#991b1b">${magText ? `M ${magText}` : 'GEMPA'}</text>
       </svg>`
       return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
     }
@@ -2712,7 +2714,7 @@ export default function DisasterMap({
           const disasterFeat = new Feature({
             geometry: new Point(fromLonLat([lng, lat])),
             id: `disaster-${idx}`,
-            name: m.nama || (m.nama_desa ? `Kec. ${m.kecamatan || ''}, Desa ${m.nama_desa}` : (isEpicenter ? 'Pusat Episentrum Gempa NTT' : `Titik Dampak - ${m.kabupaten || 'Kabupaten'}`)),
+            name: m.nama || (m.nama_desa ? `Kec. ${m.kecamatan || ''}, Desa ${m.nama_desa}` : (isEpicenter ? (m.jenis_bencana ? `Pusat Episentrum ${m.jenis_bencana}` : 'Pusat Episentrum Gempa') : `Titik Dampak - ${m.kabupaten || 'Kabupaten'}`)),
             rawItem: m,
             itemType: 'disaster'
           })
@@ -2829,7 +2831,7 @@ export default function DisasterMap({
           const eqFeat = new Feature({
             geometry: new Point(fromLonLat([eqLng, eqLat])),
             id: `eq-point-${idx}`,
-            name: `${isMain ? '★ Episentrum Gempa Utama' : '⚡ Titik Gempa Susulan'} M ${mag.toFixed(1)} - ${eq.place || 'NTT'}`,
+            name: `${isMain ? '★ Episentrum Gempa Utama' : '⚡ Titik Gempa Susulan'} M ${mag.toFixed(1)} - ${eq.place || 'Indonesia'}`,
             rawItem: {
               ...eq,
               latitude: eqLat,
@@ -4739,7 +4741,7 @@ export default function DisasterMap({
           <div className="space-y-1.5 text-[11px] text-slate-600">
             <div className="flex justify-between">
               <span className="text-slate-500">Unit PSC:</span>
-              <span className="font-bold text-slate-800">{ambulancePopup.data.nama_psc || 'PSC 119'}</span>
+              <span className="font-bold text-slate-800">{ambulancePopup.data.nama_psc || '—'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Status Operasional:</span>
@@ -4789,7 +4791,7 @@ export default function DisasterMap({
           </div>
           <div className="space-y-1.5 text-[11px] text-slate-600">
             <div className="text-slate-700 leading-snug">
-              {hospitalPopup.data.alamat || 'Alamat faskes tercatat di database PSC'}
+              {hospitalPopup.data.alamat || '—'}
             </div>
             {hospitalPopup.data.telp && (
               <div className="flex items-center justify-between pt-1">
@@ -5214,16 +5216,16 @@ export default function DisasterMap({
                   </div>
                   <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 divide-y divide-teal-50">
                     {matchedTck.map((tck: any, tIdx: number) => {
-                      const cleanPhone = String(tck.nomor_telp || '081234567890').replace(/[^0-9]/g, '')
+                      const cleanPhone = String(tck.nomor_telp || '').replace(/[^0-9]/g, '')
                       const displayName = tck.nama && String(tck.nama).trim() !== '' && tck.nama !== '-'
                         ? tck.nama
-                        : (tck.nama_relawan || tck.nama_lengkap || (tck.spesifikasi && tck.spesifikasi !== '-' ? `Relawan (${tck.spesifikasi})` : `Relawan TCK #${tIdx + 1}`))
+                        : (tck.nama_relawan || tck.nama_lengkap || (tck.spesifikasi && tck.spesifikasi !== '-' ? `Relawan (${tck.spesifikasi})` : 'Relawan TCK'))
                       const displayRole = (tck.spesifikasi && tck.spesifikasi !== '-')
                         ? tck.spesifikasi
                         : (tck.golongan && tck.golongan !== '-'
                           ? tck.golongan
                           : (tck.pekerjaan && tck.pekerjaan !== '-' ? tck.pekerjaan : 'Tenaga Medis'))
-                      const waUrl = `https://wa.me/${cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone}?text=Halo%20${encodeURIComponent(displayName)},%20kami%20menghubungi%20dari%20EOC%20SIPKK%20Kemenkes%20terkait%20penanganan%20kejadian%20bencana.`
+                      const waUrl = cleanPhone ? `https://wa.me/${cleanPhone.startsWith('0') ? '62' + cleanPhone.slice(1) : cleanPhone}?text=Halo%20${encodeURIComponent(displayName)},%20kami%20menghubungi%20dari%20EOC%20SIPKK%20Kemenkes%20terkait%20penanganan%20kejadian%20bencana.` : ''
                       return (
                         <div key={tIdx} className="flex items-center justify-between p-2 rounded-lg bg-teal-50/60 hover:bg-teal-50 border border-teal-100/80 text-[10px] transition">
                           <div className="min-w-0 pr-1.5 flex-1">
@@ -5247,15 +5249,17 @@ export default function DisasterMap({
                             >
                               Rute
                             </button>
-                            <a
-                              href={waUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[9.5px] transition shadow-xs"
-                              title="Chat WhatsApp"
-                            >
-                              WA
-                            </a>
+                            {cleanPhone && (
+                              <a
+                                href={waUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[9.5px] transition shadow-xs"
+                                title="Chat WhatsApp"
+                              >
+                                WA
+                              </a>
+                            )}
                           </div>
                         </div>
                       )
