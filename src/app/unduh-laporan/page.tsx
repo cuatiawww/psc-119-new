@@ -61,11 +61,31 @@ export type LaporanItem = {
   penduduk_terdampak: number
   pengungsi: number
   faskes_terdampak: number
-  status_verifikasi: 'Diverifikasi' | 'Menunggu Verifikasi' | 'Draft'
+  status_verifikasi: string
   deskripsi: string
   petugas: string
   lat?: number
   lng?: number
+  // Field resmi log panggilan PSC 119 untuk matriks tahunan dan ekspor.
+  nama_psc?: string
+  ticket_id?: string
+  status_penanganan_code?: string
+  status_penanganan?: string
+  jenis_layanan?: string
+  id_jenis_layanan?: string | number | null
+  kategori_layanan?: string
+  spesifikasi_layanan?: string
+  petugas_pelapor?: string
+  nama_pelapor?: string
+  korban?: string
+  nomor_kendaraan?: string
+  nama_petugas_ambulan?: string
+  layanan_ambulance?: string
+  rumahsakit_rujukan?: string
+  waktu_respons?: string | number | null
+  response_time_minutes?: number | null
+  sumber_panggilan?: string
+  extension?: string
 }
 
 // Region Autocomplete Suggestion type
@@ -681,6 +701,13 @@ export default function UnduhLaporanPage() {
 
   // MULTIPLE SELECT FILTER STATES & LIVE API DATA FETCHING
   const [reports, setReports] = useState<LaporanItem[]>(DEFAULT_SAMPLE_REPORTS)
+  const [reportYear, setReportYear] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const queryYear = new URLSearchParams(window.location.search).get('year') || new URLSearchParams(window.location.search).get('tahun')
+      if (queryYear && /^\d{4}$/.test(queryYear)) return queryYear
+    }
+    return String(new Date().getFullYear())
+  })
   const [loadingApiReports, setLoadingApiReports] = useState<boolean>(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
@@ -701,7 +728,7 @@ export default function UnduhLaporanPage() {
         const headers: Record<string, string> = { Accept: 'application/json' }
         if (token) headers['Authorization'] = `Bearer ${token}`
 
-        const res = await fetch(`${basePath}/api/bencana-stats`, {
+        const res = await fetch(`${basePath}/api/bencana-stats?year=${encodeURIComponent(reportYear)}`, {
           method: 'GET',
           headers,
           cache: 'no-store',
@@ -709,67 +736,94 @@ export default function UnduhLaporanPage() {
 
         if (res.ok) {
           const json = await res.json().catch(() => null)
-          if (json?.markers && Array.isArray(json.markers) && json.markers.length > 0) {
-            const mapped: LaporanItem[] = json.markers.map((m: any, idx: number) => {
-              const d = m.tgl_kejadian ? new Date(m.tgl_kejadian) : new Date()
+          const sourceCalls = Array.isArray(json?.calls) ? json.calls : (Array.isArray(json?.markers) ? json.markers : [])
+          if (json && Array.isArray(sourceCalls)) {
+            const mapped: LaporanItem[] = sourceCalls.map((m: any, idx: number) => {
+              const raw = m.raw_psc || {}
+              const callDate = m.tanggal_panggilan || raw.tanggal_panggilan || m.tgl_kejadian || raw.tgl_pelaporan_panggilan
+              const d = callDate ? new Date(callDate) : new Date()
               const dateStr = !isNaN(d.getTime())
                 ? d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
-                : m.tgl_kejadian || 'Terbaru'
+                : callDate || 'Tidak tersedia'
               const timeStr = !isNaN(d.getTime())
-                ? d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB'
-                : '08:00 WIB'
+                ? (m.jam_pelaporan_panggilan || raw.jam_pelaporan_panggilan || d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })) + ' WIB'
+                : (m.jam_pelaporan_panggilan || raw.jam_pelaporan_panggilan || '-') + ' WIB'
 
-              let jb = (m.jenis_bencana || '').trim()
+              let jb = (m.spesifikasi_layanan || raw.spesifikasi_layanan || m.jenis_bencana || m.kategori_layanan || raw.kategori_layanan || m.jenis_layanan || raw.jenis_layanan || '').trim()
               if (!jb || jb === '0' || jb.toLowerCase() === 'null') {
                 jb = 'Lainnya'
               }
 
+              const serviceType = String(m.jenis_layanan || raw.jenis_layanan || '').trim() || 'Non Category'
+              const callStatus = String(m.status_penanganan_code || raw.status_penanganan_code || m.status_penanganan || raw.status_penanganan || 'Diproses').trim()
+              const hasAmbulance = Boolean(m.nomor_kendaraan || raw.nomor_kendaraan || m.id_ambulan || raw.id_ambulan)
+              const hasReferral = Boolean(m.rumahsakit_rujukan || raw.rumahsakit_rujukan)
+
               return {
                 id: idx + 1,
-                kode_laporan: String(m.kode_trans || m.id || `LAP-${d.getFullYear()}-${String(idx + 1).padStart(3, '0')}`),
-                tgl_kejadian: m.tgl_kejadian || new Date().toISOString(),
+                kode_laporan: String(m.ticket_id || m.kode_trans || raw.ticket_id || m.id || `LAP-${d.getFullYear()}-${String(idx + 1).padStart(3, '0')}`),
+                tgl_kejadian: callDate || new Date().toISOString(),
                 tgl_kejadian_formatted: dateStr,
                 jam_kejadian: timeStr,
-                tgl_perkembangan: m.tgl_perkembangan || m.tgl_kejadian || new Date().toISOString(),
+                tgl_perkembangan: m.tgl_status_penanganan || raw.tgl_status_penanganan || callDate || new Date().toISOString(),
                 tgl_perkembangan_formatted: dateStr,
                 jam_perkembangan: timeStr,
-                tingkat_bencana: m.provinsi ? 'Provinsi' : 'Kab/Kota',
-                provinsi: resolveProvinceName(m.provinsi),
-                kabupaten: (m.kabupaten || 'Lainnya').toUpperCase().trim(),
-                kecamatan: (m.kecamatan || m.nama_kecamatan || '').trim() || 'Kecamatan',
-                desa: (m.nama_desa || m.desa || '').trim() || 'Desa',
+                tingkat_bencana: serviceType,
+                provinsi: resolveProvinceName(raw.provinsi || m.provinsi),
+                kabupaten: (raw.kabupaten || m.kabupaten || m.nama_psc || raw.nama_psc || 'Lainnya').toUpperCase().trim(),
+                kecamatan: (m.kecamatan || raw.kecamatan || '').trim() || '-',
+                desa: (m.nama_lokasi || raw.nama_lokasi || m.alamat || raw.alamat || m.nama_desa || '').trim() || '-',
                 jenis_bencana: jb,
-                korban_meninggal: Number(m.jml_meninggal || m.korban_meninggal || 0),
-                korban_luka_berat: Number(m.jml_lkbrt || m.korban_luka_berat || 0),
-                korban_luka_ringan: Number(m.jml_lkringan || m.korban_luka_ringan || 0),
-                korban_hilang: Number(m.jml_hilang || m.korban_hilang || 0),
-                penduduk_terdampak: Number(m.jml_pdk_terdampak || m.penduduk_terdampak || 0),
-                pengungsi: Number(m.jml_pengungsi || m.pengungsi || 0),
-                faskes_terdampak: Number(m.faskes_terdampak || m.jml_faskes || (m.is_krisis ? 1 : 0)),
-                status_verifikasi: (m.status_verifikasi as any) || 'Diverifikasi',
-                deskripsi: m.deskripsi || m.narasi || `Kejadian bencana ${jb} di wilayah ${m.provinsi || ''} ${m.kabupaten || ''}. Tim EOC Krisis Kesehatan melayani pendampingan pasien dan pengungsi.`,
-                petugas: m.petugas || m.created_by || 'Petugas EOC Kemenkes',
-                lat: m.lat !== undefined && m.lat !== null && m.lat !== '' ? Number(m.lat) : (m.latitude ? Number(m.latitude) : undefined),
-                lng: m.lng !== undefined && m.lng !== null && m.lng !== '' ? Number(m.lng) : (m.longitude ? Number(m.longitude) : undefined)
+                korban_meninggal: Number(m.jml_meninggal || m.korban_meninggal || raw.jml_meninggal || 0),
+                korban_luka_berat: Number(m.jml_lkbrt || m.korban_luka_berat || raw.jml_lkbrt || 0),
+                korban_luka_ringan: Number(m.jml_lkringan || m.korban_luka_ringan || raw.jml_lkringan || 0),
+                korban_hilang: Number(m.jml_hilang || m.korban_hilang || raw.jml_hilang || 0),
+                penduduk_terdampak: Number(m.jml_pdk_terdampak || m.penduduk_terdampak || raw.jml_pdk_terdampak || 0),
+                pengungsi: hasAmbulance ? 1 : Number(m.jml_pengungsi || m.pengungsi || 0),
+                faskes_terdampak: hasReferral ? 1 : Number(m.faskes_terdampak || m.jml_faskes || 0),
+                status_verifikasi: callStatus,
+                deskripsi: m.keluhan || raw.keluhan || m.keterangan || raw.keterangan || `Panggilan ${serviceType} ${jb} dari ${raw.nama_psc || m.nama_psc || 'PSC 119'}.`,
+                petugas: m.petugas_pelapor || raw.petugas_pelapor || m.petugas || m.created_by || 'Petugas PSC 119',
+                lat: m.lat !== undefined && m.lat !== null && m.lat !== '' ? Number(m.lat) : (raw.latitude ? Number(raw.latitude) : undefined),
+                lng: m.lng !== undefined && m.lng !== null && m.lng !== '' ? Number(m.lng) : (raw.longitude ? Number(raw.longitude) : undefined),
+                nama_psc: m.nama_psc || raw.nama_psc || '-',
+                ticket_id: m.ticket_id || raw.ticket_id || m.kode_trans,
+                status_penanganan_code: callStatus,
+                status_penanganan: m.status_penanganan || raw.status_penanganan || callStatus,
+                jenis_layanan: serviceType,
+                id_jenis_layanan: m.id_jenis_layanan ?? raw.id_jenis_layanan,
+                kategori_layanan: m.kategori_layanan || raw.kategori_layanan || '-',
+                spesifikasi_layanan: m.spesifikasi_layanan || raw.spesifikasi_layanan || jb,
+                petugas_pelapor: m.petugas_pelapor || raw.petugas_pelapor || '-',
+                nama_pelapor: m.nama_pelapor || raw.nama_pelapor || '-',
+                korban: m.korban || raw.korban || '-',
+                nomor_kendaraan: m.nomor_kendaraan || raw.nomor_kendaraan || '-',
+                nama_petugas_ambulan: m.nama_petugas_ambulan || raw.nama_petugas_ambulan || '-',
+                layanan_ambulance: m.layanan_ambulance || raw.layanan_ambulance || '-',
+                rumahsakit_rujukan: m.rumahsakit_rujukan || raw.rumahsakit_rujukan || '-',
+                waktu_respons: m.waktu_respons ?? raw.waktu_respons,
+                response_time_minutes: m.response_time_minutes ?? raw.response_time_minutes,
+                sumber_panggilan: m.sumber_panggilan || raw.sumber_panggilan || '-',
+                extension: m.extension || raw.extension || '-'
               }
             })
 
             setReports(mapped)
-            console.log('[UnduhLaporanPage] Loaded live reports from API:', mapped.length)
+            console.log(`[UnduhLaporanPage] Loaded calls for year ${reportYear}:`, mapped.length)
             return
           }
         }
-        setReports(DEFAULT_SAMPLE_REPORTS)
+        setReports(reportYear === '2026' ? DEFAULT_SAMPLE_REPORTS : [])
       } catch (err) {
         console.warn('[UnduhLaporanPage] Error loading live reports API, using fallback data:', err)
-        setReports(DEFAULT_SAMPLE_REPORTS)
+        setReports(reportYear === '2026' ? DEFAULT_SAMPLE_REPORTS : [])
       } finally {
         setLoadingApiReports(false)
       }
     }
 
     fetchLiveReports()
-  }, [])
+  }, [reportYear])
 
   // Smart Region Autocomplete Search State (PROV, KAB, KEC, DESA)
   const [regionInputQuery, setRegionInputQuery] = useState('')
@@ -974,6 +1028,15 @@ export default function UnduhLaporanPage() {
     return Array.from(dynamicSet).sort((a, b) => a.localeCompare(b, 'id'))
   }, [reports])
 
+  const availableStatuses = useMemo(() => {
+    const statuses = new Set<string>(['Selesai', 'Diproses'])
+    reports.forEach((report) => {
+      const status = (report.status_penanganan_code || report.status_verifikasi || '').trim()
+      if (status) statuses.add(status)
+    })
+    return Array.from(statuses).sort((a, b) => a.localeCompare(b, 'id'))
+  }, [reports])
+
   // Active filter count computation
   const activeFilterCount = useMemo(() => {
     let count = 0
@@ -1082,7 +1145,7 @@ export default function UnduhLaporanPage() {
               return false
             }
           } else if (selectedDatePreset === 'this_year') {
-            if (itemDate.getFullYear() !== new Date().getFullYear()) {
+            if (itemDate.getFullYear() !== Number(reportYear)) {
               return false
             }
           }
@@ -1091,7 +1154,7 @@ export default function UnduhLaporanPage() {
 
       return true
     })
-  }, [reports, searchQuery, selectedTypes, selectedProvinces, selectedRegionPills, selectedStatuses, filterKorbanOnly, filterFaskesOnly, selectedDatePreset])
+  }, [reports, searchQuery, selectedTypes, selectedProvinces, selectedRegionPills, selectedStatuses, filterKorbanOnly, filterFaskesOnly, selectedDatePreset, reportYear])
 
   // Filtered Province List for Search
   const filteredProvinceList = useMemo(() => {
@@ -1143,26 +1206,21 @@ export default function UnduhLaporanPage() {
 
     const headers = [
       'No',
-      'No Tiket 119',
-      'Tanggal Panggilan',
-      'Jam Panggilan',
-      'Waktu Update',
-      'Triase / Prioritas',
-      'Provinsi',
-      'Pusat PSC 119 / Wilayah',
-      'Kecamatan',
-      'Alamat TKP / Lokasi',
+      'Nama PSC',
+      'Ticket ID',
+      'Status',
+      'Jenis Layanan',
+      'Waktu Panggilan',
+      'Petugas Panggilan',
+      'Nama Pelapor',
+      'Nama Korban',
+      'Alamat',
       'Kategori Layanan',
-      'Korban Meninggal / DOA',
-      'Gawat Darurat (Merah)',
-      'Non-Gawat (Kuning/Hijau)',
-      'Korban Hilang',
-      'Pasien Tertangani',
-      'Ambulans Dispatched',
+      'Spesifikasi Kasus',
+      'Response Time (Menit)',
+      'Sumber Panggilan',
+      'Ambulans',
       'RS Rujukan',
-      'Status Penanganan',
-      'Dispatcher Pelapor',
-      'Deskripsi Penanganan Medis',
     ]
 
     const csvRows = [headers.join(',')]
@@ -1170,26 +1228,21 @@ export default function UnduhLaporanPage() {
     filteredReports.forEach((item, index) => {
       const row = [
         index + 1,
-        `"${item.kode_laporan}"`,
-        `"${item.tgl_kejadian_formatted}"`,
-        `"${item.jam_kejadian}"`,
-        `"${item.tgl_perkembangan_formatted}"`,
-        `"${item.tingkat_bencana}"`,
-        `"${item.provinsi}"`,
-        `"${item.kabupaten}"`,
-        `"${item.kecamatan}"`,
-        `"${item.desa}"`,
-        `"${item.jenis_bencana}"`,
-        item.korban_meninggal,
-        item.korban_luka_berat,
-        item.korban_luka_ringan,
-        item.korban_hilang,
-        item.penduduk_terdampak,
-        item.pengungsi,
-        item.faskes_terdampak,
-        `"${item.status_verifikasi}"`,
-        `"${item.petugas}"`,
-        `"${item.deskripsi.replace(/"/g, '""')}"`,
+        `"${item.nama_psc || ''}"`,
+        `"${item.ticket_id || item.kode_laporan}"`,
+        `"${item.status_penanganan_code || item.status_verifikasi || ''}"`,
+        `"${item.jenis_layanan || ''}"`,
+        `"${item.tgl_kejadian_formatted} ${item.jam_kejadian}"`,
+        `"${item.petugas_pelapor || ''}"`,
+        `"${item.nama_pelapor || ''}"`,
+        `"${item.korban || ''}"`,
+        `"${item.desa || ''}"`,
+        `"${item.kategori_layanan || ''}"`,
+        `"${item.spesifikasi_layanan || item.jenis_bencana || ''}"`,
+        item.response_time_minutes ?? item.waktu_respons ?? '',
+        `"${item.sumber_panggilan || ''}"`,
+        `"${item.layanan_ambulance || item.nomor_kendaraan || ''}"`,
+        `"${item.rumahsakit_rujukan || ''}"`,
       ]
       csvRows.push(row.join(','))
     })
@@ -1342,7 +1395,7 @@ export default function UnduhLaporanPage() {
       <html lang="id">
         <head>
           <meta charset="UTF-8">
-          <title>Rekap Laporan Dispatch Kedaruratan Medis - PSC 119 SPGDT Kemenkes RI</title>
+          <title>Matriks Pelaporan Panggilan Tahun ${reportYear} - PSC 119 SPGDT Kemenkes RI</title>
           <style>
             @page {
               size: A4 portrait;
@@ -1377,7 +1430,7 @@ export default function UnduhLaporanPage() {
           </div>
 
           <h2>KEMENTERIAN KESEHATAN REPUBLIK INDONESIA</h2>
-          <p>PUSAT KOMANDO NASIONAL PSC 119 — SISTEM PENANGGULANGAN GAWAT DARURAT TERPADU (BERDASARKAN ${groupByLabel})</p>
+          <p>PUSAT KOMANDO NASIONAL PSC 119 — MATRIKS PELAPORAN PANGGILAN TAHUN ${reportYear} (REKAP BERDASARKAN ${groupByLabel})</p>
           <div class="meta-box">
             <strong>Total Panggilan Terfilter:</strong> ${filteredReports.length} Panggilan (${sortedRegions.length} ${groupByLabel}) | 
             <strong>Kasus Gawat Darurat:</strong> ${metrics.totalLuka} Pasien | 
@@ -3015,6 +3068,31 @@ export default function UnduhLaporanPage() {
               )}
             </div>
 
+            {/* SECTION 0: TAHUN PELAPORAN */}
+            <div className="space-y-2">
+              <label htmlFor="report-year" className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-[#047D78]" />
+                Tahun Pelaporan
+              </label>
+              <select
+                id="report-year"
+                value={reportYear}
+                onChange={(e) => {
+                  setReportYear(e.target.value)
+                  setSelectedDatePreset('all')
+                  setCurrentPage(1)
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs font-bold text-slate-700 focus:border-[#047D78] focus:outline-none focus:ring-1 focus:ring-[#047D78]"
+              >
+                {Array.from({ length: 7 }, (_, index) => String(new Date().getFullYear() - index)).map((year) => (
+                  <option key={year} value={year}>Tahun {year}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-slate-400">Data matriks dan semua unduhan mengikuti tahun ini.</p>
+            </div>
+
+            <hr className="border-slate-100" />
+
             {/* SECTION 1: SMART AUTOCOMPLETE REGION SEARCH (FULL: PROV, KAB, KEC, DESA) */}
             <div className="space-y-3 relative" ref={regionDropdownRef}>
               <div
@@ -3260,7 +3338,7 @@ export default function UnduhLaporanPage() {
                     { id: 'all', label: 'Semua Tanggal' },
                     { id: '7days', label: '7 Hari Terakhir' },
                     { id: '30days', label: '30 Hari Terakhir' },
-                    { id: 'this_year', label: 'Tahun 2026 (Tahun Ini)' },
+                    { id: 'this_year', label: `Tahun ${reportYear}` },
                   ].map((preset) => (
                     <label
                       key={preset.id}
@@ -3305,7 +3383,7 @@ export default function UnduhLaporanPage() {
 
               {expandedSection.status && (
                 <div className="space-y-1.5 pt-1">
-                  {['Diverifikasi', 'Menunggu Verifikasi'].map((st) => {
+                  {availableStatuses.map((st) => {
                     const isChecked = selectedStatuses.includes(st)
                     return (
                       <label
@@ -3394,8 +3472,8 @@ export default function UnduhLaporanPage() {
               {/* Header Title & Subtitle */}
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-slate-100">
                 <div>
-                  <h1 className="text-lg font-black text-slate-900 uppercase tracking-tight">DAFTAR LAPORAN KEJADIAN BENCANA</h1>
-                  <p className="text-xs text-slate-500 mt-0.5">Daftar rekapitulasi data laporan kejadian bencana kesehatan yang siap difilter dan diunduh.</p>
+                  <h1 className="text-lg font-black text-slate-900 uppercase tracking-tight">MATRIKS PELAPORAN PANGGILAN TAHUN {reportYear}</h1>
+                  <p className="text-xs text-slate-500 mt-0.5">Matriks log pelaporan panggilan PSC 119 tahun {reportYear}; filter, matriks, dan unduhan menggunakan dataset yang sama.</p>
                 </div>
 
                 {/* Export Action Buttons */}
@@ -3482,7 +3560,7 @@ export default function UnduhLaporanPage() {
 
                   {selectedDatePreset !== 'all' && (
                     <span className="inline-flex items-center gap-1 rounded-lg bg-indigo-700 text-white px-2 py-0.5 text-xs font-semibold">
-                      Periode: {selectedDatePreset === '7days' ? '7 Hari Terakhir' : selectedDatePreset === '30days' ? '30 Hari Terakhir' : selectedDatePreset === 'this_year' ? 'Tahun 2026' : selectedDatePreset}
+                      Periode: {selectedDatePreset === '7days' ? '7 Hari Terakhir' : selectedDatePreset === '30days' ? '30 Hari Terakhir' : selectedDatePreset === 'this_year' ? `Tahun ${reportYear}` : selectedDatePreset}
                       <button onClick={() => { setSelectedDatePreset('all'); setCurrentPage(1); }} className="hover:text-rose-200">
                         <X className="h-3 w-3" />
                       </button>
@@ -3572,13 +3650,15 @@ export default function UnduhLaporanPage() {
                   <thead>
                     <tr className="bg-[#047D78] text-white uppercase text-[10px] tracking-wider font-extrabold">
                       <th className="py-3 px-3 border-b border-[#036662] text-center w-10">NO</th>
+                      <th className="py-3 px-3 border-b border-[#036662]">NAMA PSC</th>
+                      <th className="py-3 px-3 border-b border-[#036662]">TICKET ID</th>
+                      <th className="py-3 px-3 border-b border-[#036662] text-center">STATUS</th>
+                      <th className="py-3 px-3 border-b border-[#036662]">JENIS LAYANAN</th>
                       <th className="py-3 px-3 border-b border-[#036662]">WAKTU PANGGILAN</th>
-                      <th className="py-3 px-3 border-b border-[#036662]">UPDATE DISPATCH</th>
-                      <th className="py-3 px-3 border-b border-[#036662]">PUSAT PSC 119 & LOKASI TKP</th>
-                      <th className="py-3 px-3 border-b border-[#036662]">KATEGORI LAYANAN</th>
-                      <th className="py-3 px-3 border-b border-[#036662] text-center">PASIEN / KORBAN</th>
-                      <th className="py-3 px-3 border-b border-[#036662] text-center">AMBULANS DISPATCH</th>
-                      <th className="py-3 px-3 border-b border-[#036662] text-center">RS RUJUKAN</th>
+                      <th className="py-3 px-3 border-b border-[#036662]">PETUGAS PANGGILAN</th>
+                      <th className="py-3 px-3 border-b border-[#036662]">NAMA PELAPOR</th>
+                      <th className="py-3 px-3 border-b border-[#036662]">NAMA KORBAN</th>
+                      <th className="py-3 px-3 border-b border-[#036662]">ALAMAT</th>
                       <th className="py-3 px-3 border-b border-[#036662] text-center">DETAIL</th>
                     </tr>
                   </thead>
@@ -3599,7 +3679,7 @@ export default function UnduhLaporanPage() {
                       ))
                     ) : paginatedReports.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="py-12 text-center text-slate-400">
+                        <td colSpan={10} className="py-12 text-center text-slate-400">
                           <Info className="mx-auto h-8 w-8 opacity-40 mb-2" />
                           <p className="text-sm font-semibold">Tidak ada log panggilan PSC 119 yang sesuai dengan kriteria filter lokasi/kategori layanan.</p>
                           <button
@@ -3620,66 +3700,24 @@ export default function UnduhLaporanPage() {
                             {/* NO */}
                             <td className="py-3 px-3 text-center font-bold text-slate-600">{globalIndex}</td>
 
-                            {/* TGL KEJADIAN */}
+                            <td className="py-3 px-3 font-bold text-slate-800 max-w-[160px] truncate" title={item.nama_psc}>{item.nama_psc || '-'}</td>
+                            <td className="py-3 px-3 font-mono font-semibold text-slate-600 text-[11px] whitespace-nowrap">{item.ticket_id || item.kode_laporan}</td>
+                            <td className="py-3 px-3 text-center whitespace-nowrap">
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold ${
+                                (item.status_penanganan_code || '').toLowerCase().includes('proses')
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                  : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              }`}>{item.status_penanganan_code || item.status_verifikasi || '-'}</span>
+                            </td>
+                            <td className="py-3 px-3 font-semibold text-slate-700 max-w-[150px] truncate" title={item.jenis_layanan}>{item.jenis_layanan || '-'}</td>
                             <td className="py-3 px-3 whitespace-nowrap">
                               <p className="font-extrabold text-slate-800">{item.tgl_kejadian_formatted}</p>
                               <span className="text-[10px] text-slate-400 font-medium">{item.jam_kejadian}</span>
                             </td>
-
-                            {/* TGL PERKEMBANGAN */}
-                            <td className="py-3 px-3 whitespace-nowrap">
-                              <p className="font-extrabold text-slate-800">{item.tgl_perkembangan_formatted}</p>
-                              <span className="text-[10px] text-slate-400 font-medium">{item.jam_perkembangan}</span>
-                            </td>
-
-                            {/* LEVEL / LOKASI DEEP HIERARCHY */}
-                            <td className="py-3 px-3">
-                              <span className="inline-block text-[9px] font-bold text-rose-600 uppercase tracking-wider mb-0.5">
-                                {item.tingkat_bencana}
-                              </span>
-                              <p className="font-extrabold text-slate-900 leading-snug">{item.kabupaten}</p>
-                              <p className="text-[10px] text-slate-600 font-semibold">
-                                Kec. {item.kecamatan}, <span className="text-teal-700 font-bold">{item.desa}</span>
-                              </p>
-                              <p className="text-[9px] text-slate-400 uppercase">Prov. {item.provinsi}</p>
-                            </td>
-
-                            {/* JENIS BENCANA */}
-                            <td className="py-3 px-3">
-                              <span className="inline-flex items-center gap-1 font-semibold text-slate-800">
-                                {item.jenis_bencana}
-                              </span>
-                            </td>
-
-                            {/* KORBAN */}
-                            <td className="py-3 px-3 text-center whitespace-nowrap">
-                              <span className={`inline-block font-extrabold px-2 py-0.5 rounded-lg text-xs ${item.korban_meninggal > 0
-                                ? 'bg-rose-100 text-rose-700'
-                                : 'text-slate-700'
-                                }`}>
-                                {item.korban_meninggal + item.korban_luka_berat + item.korban_luka_ringan + item.korban_hilang}
-                              </span>
-                            </td>
-
-                            {/* PENDUDUK TERDAMPAK */}
-                            <td className="py-3 px-3 text-center whitespace-nowrap font-semibold text-slate-800">
-                              {item.penduduk_terdampak + item.pengungsi > 0 ? (
-                                item.penduduk_terdampak + item.pengungsi
-                              ) : (
-                                <span className="text-slate-400">-</span>
-                              )}
-                            </td>
-
-                            {/* FASKES TERDAMPAK */}
-                            <td className="py-3 px-3 text-center whitespace-nowrap font-semibold">
-                              {item.faskes_terdampak > 0 ? (
-                                <span className="rounded-full bg-cyan-50 border border-cyan-200 px-2 py-0.5 text-xs font-bold text-cyan-800">
-                                  {item.faskes_terdampak} Unit
-                                </span>
-                              ) : (
-                                <span className="text-slate-400">-</span>
-                              )}
-                            </td>
+                            <td className="py-3 px-3 font-medium text-slate-700 max-w-[130px] truncate" title={item.petugas_pelapor}>{item.petugas_pelapor || '-'}</td>
+                            <td className="py-3 px-3 font-medium text-slate-700 max-w-[130px] truncate" title={item.nama_pelapor}>{item.nama_pelapor || '-'}</td>
+                            <td className="py-3 px-3 font-medium text-slate-700 max-w-[130px] truncate" title={item.korban}>{item.korban || '-'}</td>
+                            <td className="py-3 px-3 text-slate-600 max-w-[200px] truncate" title={item.desa}>{item.desa || '-'}</td>
 
                             {/* DETAIL FORMULIR BUTTON */}
                             <td className="py-3 px-3 text-center whitespace-nowrap">

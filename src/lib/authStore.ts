@@ -71,7 +71,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.setItem('auth_token', token)
     localStorage.setItem('auth_user', JSON.stringify(user))
     localStorage.removeItem('auth_guest')
-    localStorage.removeItem('auth_kode_psc')
+    // Pertahankan konteks unit PSC dari SSO saat berpindah halaman.
+    // Sebelumnya nilai ini dihapus setiap kali login sehingga dashboard
+    // kembali meminta data nasional setelah membuka halaman detail.
+    const kodePsc = String(user.kode_psc || localStorage.getItem('auth_kode_psc') || '').trim().toUpperCase()
+    if (kodePsc) {
+      localStorage.setItem('auth_kode_psc', kodePsc)
+    }
     set({ token, user, isAuthenticated: true, isGuest: false })
   },
   loginAsGuest: () => {
@@ -190,62 +196,22 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
   initialize: () => {
     if (typeof window === 'undefined') return
-    const urlKodePsc = new URLSearchParams(window.location.search).get('kode_psc')?.trim()
-    const storedKodePsc = localStorage.getItem('auth_kode_psc')
-    const activeKode = urlKodePsc || storedKodePsc
-
     const token = localStorage.getItem('auth_token')
     const userStr = localStorage.getItem('auth_user')
     const isGuestStr = localStorage.getItem('auth_guest')
 
-    // Jika ada kode unit PSC dari URL atau local storage, pulihkan sesi unit sebagai akun terotentikasi
-    if (activeKode) {
-      localStorage.setItem('auth_kode_psc', activeKode.toUpperCase())
-      let userObj: User | null = null
-      if (userStr) {
-        try {
-          const parsed = JSON.parse(userStr)
-          if (parsed?.username?.toUpperCase() === activeKode.toUpperCase()) {
-            userObj = parsed
-          }
-        } catch {
-          // ignore parsing error
-        }
-      }
-
-      if (!userObj) {
-        userObj = {
-          id_user: 9287,
-          username: activeKode.toUpperCase(),
-          email: `${activeKode.toLowerCase()}@psc119.kemkes.go.id`,
-          nama_lengkap: `PSC 119 ${activeKode.toUpperCase()}`,
-          level_user_id: 2,
-          level_name: 'Unit PSC 119',
-        }
-      }
-
-      const unitToken = token || `psc-unit-${activeKode.toUpperCase()}`
-      localStorage.setItem('auth_token', unitToken)
-      localStorage.setItem('auth_user', JSON.stringify(userObj))
-      localStorage.removeItem('auth_guest')
-
-      set({
-        token: unitToken,
-        user: userObj,
-        isAuthenticated: true,
-        isGuest: false,
-        isInitialized: true,
-      })
-      return
-    }
-
     if (token && userStr) {
       try {
         const user = JSON.parse(userStr)
+        // kode_psc pada URL hanya boleh menjadi filter setelah sesi valid.
+        // URL tersebut tidak boleh membuat sesi PSC baru.
+        const userKodePsc = String(user?.kode_psc || '').trim().toUpperCase()
+        if (userKodePsc) localStorage.setItem('auth_kode_psc', userKodePsc)
         set({ token, user, isAuthenticated: true, isGuest: false, isInitialized: true })
       } catch {
         localStorage.removeItem('auth_token')
         localStorage.removeItem('auth_user')
+        localStorage.removeItem('auth_kode_psc')
         set({ token: null, user: null, isAuthenticated: false, isGuest: true, isInitialized: true })
       }
     } else if (isGuestStr === 'true') {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useState, useEffect } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/authStore'
 import DashboardHeader, { DashboardSidebar } from './DashboardHeader'
 import Footer from './Footer'
@@ -16,7 +16,8 @@ export default function AppShell({ children }: AppShellProps) {
   const closeSidebar = useCallback(() => setSidebarOpen(false), [])
 
   const pathname = usePathname()
-  const { isAuthenticated, isGuest, isInitialized, initialize } = useAuthStore()
+  const router = useRouter()
+  const { isAuthenticated, isInitialized, initialize } = useAuthStore()
 
   const publicRoutes = ['/login', '/register', '/forgot-password', '/sso']
   const isPublicRoute = publicRoutes.includes(pathname)
@@ -31,6 +32,12 @@ export default function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     initialize()
   }, [initialize])
+
+  useEffect(() => {
+    if (isInitialized && !isPublicRoute && !isTvRoute && !isAuthenticated) {
+      router.replace('/login')
+    }
+  }, [isAuthenticated, isInitialized, isPublicRoute, isTvRoute, router])
 
   // Intercept global fetch to automatically prefix basePath to relative api calls
   useEffect(() => {
@@ -83,7 +90,7 @@ export default function AppShell({ children }: AppShellProps) {
     return <main className="min-h-screen bg-slate-50">{children}</main>
   }
 
-  if (!isAuthenticated && !isGuest) {
+  if (!isAuthenticated) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#fbffff]">
         <Loader2 className="h-8 w-8 animate-spin text-[#047D78]" />

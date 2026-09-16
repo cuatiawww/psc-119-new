@@ -39,7 +39,7 @@ const getAssetUrl = (url: string) => {
 
 export default function LoginPage() {
   const router = useRouter()
-  const { isAuthenticated, isInitialized, initialize, login, loginAsGuest, loginAsPscUnit, logout } = useAuthStore()
+  const { isAuthenticated, isInitialized, initialize, login, loginAsPscUnit, logout } = useAuthStore()
 
   const [loginTab, setLoginTab] = useState<'psc' | 'admin'>('psc')
   const [kodePscInput, setKodePscInput] = useState('')
@@ -59,6 +59,11 @@ export default function LoginPage() {
           }
         } catch (fetchErr) {
           console.error('Gagal memuat profil unit psc:', fetchErr)
+        }
+
+        if (!center) {
+          setError('Kode PSC tidak ditemukan atau layanan PSC sedang tidak tersedia.')
+          return
         }
 
         loginAsPscUnit(clean, center)
@@ -376,19 +381,6 @@ export default function LoginPage() {
                   <div className="h-px flex-1 bg-slate-100" />
                 </div>
 
-                {/* Guest Login */}
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      loginAsGuest()
-                      router.replace('/')
-                    }}
-                    className="inline-flex items-center gap-2 text-[13px] font-extrabold text-teal-700 hover:text-teal-800 transition-colors hover:underline"
-                  >
-                    Masuk sebagai Tamu (Akses Publik)
-                  </button>
-                </div>
               </form>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -544,19 +536,6 @@ export default function LoginPage() {
                 </a>
               </div>
 
-              {/* Guest Login */}
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    loginAsGuest()
-                    router.replace('/')
-                  }}
-                  className="inline-flex items-center gap-2 text-[13px] font-extrabold text-teal-700 hover:text-teal-800 transition-colors hover:underline"
-                >
-                  Masuk sebagai Tamu (Akses Publik)
-                </button>
-              </div>
             </form>
           )}
           </div>
