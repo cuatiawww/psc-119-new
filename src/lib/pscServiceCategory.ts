@@ -23,7 +23,8 @@ export function getPscServiceCategory({
 }: PscServiceCategoryInput): PscServiceCategory {
   const label = String(jenis_layanan ?? '').trim().toLowerCase()
 
-  if (label.includes('non') && label.includes('category')) return 'Non Category'
+  if (SERVICE_CATEGORY_BY_ID[label]) return SERVICE_CATEGORY_BY_ID[label]
+  if (label.includes('non') && (label.includes('category') || label.includes('kategori'))) return 'Non Category'
   if (label.includes('non') && label.includes('emergency')) return 'Non Emergency'
   if (label.includes('emergency')) return 'Emergency'
 

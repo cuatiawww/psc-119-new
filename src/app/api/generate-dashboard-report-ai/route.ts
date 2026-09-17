@@ -1,5 +1,55 @@
 import { NextResponse } from 'next/server'
 
+function generateDataOnlyReport(body: any) {
+  const number = (value: unknown) => {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+  }
+  const totalReports = number(body?.totalReports)
+  const totalFaskes = number(body?.totalFaskes)
+  const wilayah = Array.isArray(body?.topRegions) ? body.topRegions
+    .filter((item: any) => item?.name)
+    .slice(0, 5)
+    .map((item: any) => `${item.name}: ${number(item.total_laporan)}`)
+    .join(', ') : '-'
+  const layanan = Array.isArray(body?.topJenis) ? body.topJenis
+    .filter((item: any) => item?.name)
+    .slice(0, 5)
+    .map((item: any) => `${item.name}: ${number(item.count)}`)
+    .join(', ') : '-'
+  const markerCount = Array.isArray(body?.markers) ? body.markers.length : 0
+
+  return {
+    ringkasan_laporan: `Ringkasan berdasarkan respons API mencatat ${totalReports.toLocaleString('id-ID')} panggilan pada cakupan ${body?.filterWilayahText || '-'}. Kategori layanan dan wilayah ditampilkan sesuai agregasi record yang diterima. Data korban, coverage, dan kinerja response time tidak disimpulkan karena tidak tersedia sebagai metrik terverifikasi pada payload ini.`,
+    poin_utama: [
+      `Total panggilan dari API: ${totalReports.toLocaleString('id-ID')}.`,
+      `Kategori layanan terbanyak dari API: ${layanan}.`,
+      `Wilayah dengan jumlah record terbanyak dari API: ${wilayah}.`,
+      `Record dengan koordinat yang dikirim untuk visualisasi: ${markerCount.toLocaleString('id-ID')}.`,
+      `Data fasilitas kesehatan yang diterima: ${totalFaskes.toLocaleString('id-ID')} record.`,
+      'Metrik korban, pengungsi, kondisi lapangan, dan response time tidak ditampilkan sebagai klaim apabila tidak ada field sumbernya.'
+    ],
+    analisis_spasial_naratif: `Payload API mengirim ${markerCount.toLocaleString('id-ID')} record untuk visualisasi lokasi. Tidak ada kesimpulan hotspot, radius coverage, atau durasi tempuh yang dibuat tanpa data koordinat dan metrik pendukung yang lengkap.`,
+    analisis_tren_epidemiologi: 'Analisis tren epidemiologi tidak tersedia pada respons API panggilan ini dan tidak dibuat secara estimasi.',
+    aktivitas_indikator: [
+      { indikator: 'Volume Panggilan API', tren: '-', level: 'Data API', keterangan: `${totalReports.toLocaleString('id-ID')} record diterima dari respons API.` },
+      { indikator: 'Kategori Layanan', tren: '-', level: 'Data API', keterangan: layanan },
+      { indikator: 'Sebaran Wilayah', tren: '-', level: 'Data API', keterangan: wilayah },
+      { indikator: 'Korban dan Dampak', tren: '-', level: 'Tidak tersedia', keterangan: 'Tidak ada metrik korban/dampak terverifikasi pada payload panggilan.' },
+      { indikator: 'Response Time', tren: '-', level: 'Tidak tersedia', keterangan: 'Tidak ada metrik response time terverifikasi pada payload laporan ini.' }
+    ],
+    analisis_fasyankes_naratif: `Respons API mengirim ${totalFaskes.toLocaleString('id-ID')} record fasilitas kesehatan. Tidak ada klaim status kesiapan atau kapasitas fasilitas yang dibuat tanpa field sumbernya.`,
+    rekomendasi_emt: [
+      { fase: 'Validasi Data', tindakan: 'Verifikasi field sumber yang kosong pada sistem PSC sebelum menyimpulkan korban, kondisi lapangan, atau kinerja layanan.' },
+      { fase: 'Operasional', tindakan: 'Gunakan kategori, wilayah, dan jumlah record pada payload API sebagai dasar monitoring operasional.' },
+      { fase: 'Pelaporan', tindakan: 'Tandai metrik yang tidak tersedia sebagai tidak tersedia, bukan mengisinya dengan angka perkiraan.' }
+    ],
+    analisis_logistik_naratif: 'Status armada, logistik, dan kesiapan peralatan tidak disimpulkan karena tidak tersedia sebagai metrik terverifikasi dalam payload laporan.',
+    landasan_kebijakan_naratif: 'Laporan ini merupakan ringkasan teknis dari payload API dan bukan penilaian klinis atau operasional di luar field yang dikirim sistem.',
+    himbauan_masyarakat: []
+  }
+}
+
 /**
  * Fallback generator saat GEMINI_API_KEY belum diisi atau kuota habis.
  * Menghasilkan analisis terstruktur komprehensif berbasis data metrik PSC 119 SPGDT Kemenkes RI.
@@ -122,7 +172,7 @@ export async function POST(req: Request) {
       console.log('[generate-dashboard-report-ai] Menghasilkan laporan sintesis resmi PSC 119 SPGDT.')
       return NextResponse.json({
         success: true,
-        data: generateFallbackReport(body),
+        data: generateDataOnlyReport(body),
         source: 'template-psc119-ready',
       })
     }
@@ -229,14 +279,14 @@ Susun respons HANYA dalam format JSON murni yang valid tanpa pembungkus markdown
 
     return NextResponse.json({
       success: true,
-      data: generateFallbackReport(body),
+      data: generateDataOnlyReport(body),
       source: 'fallback-ai'
     })
   } catch (err: any) {
     console.warn('[generate-dashboard-report-ai] Error or timeout, using local fallback:', err?.message)
     return NextResponse.json({
       success: true,
-      data: generateFallbackReport(body),
+      data: generateDataOnlyReport(body),
       source: 'error-fallback'
     })
   }
